@@ -1,0 +1,18 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        - (io.Writer).Write
+        - (*net/http.Response.Body).Close
+        - (io.Closer).Close
+        - os.Setenv
+        - os.Unsetenv
+        - os.Remove
+        - os.WriteFile
+        - (*os.File).Close

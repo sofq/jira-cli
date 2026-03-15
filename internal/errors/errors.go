@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"strconv"
 )
 
 // Exit code constants for structured error handling.
@@ -119,13 +121,23 @@ func HintFromStatus(status int) string {
 }
 
 // NewFromHTTP constructs an APIError from an HTTP response status, body text,
-// and the originating request method and path.
-func NewFromHTTP(status int, body string, method, path string) *APIError {
+// the originating request method and path, and the HTTP response (for header parsing).
+// The resp parameter may be nil.
+func NewFromHTTP(status int, body string, method, path string, resp *http.Response) *APIError {
+	var retryAfter *int
+	if resp != nil {
+		if ra := resp.Header.Get("Retry-After"); ra != "" {
+			if seconds, err := strconv.Atoi(ra); err == nil {
+				retryAfter = &seconds
+			}
+		}
+	}
 	return &APIError{
-		ErrorType: ErrorTypeFromStatus(status),
-		Status:    status,
-		Message:   body,
-		Hint:      HintFromStatus(status),
+		ErrorType:  ErrorTypeFromStatus(status),
+		Status:     status,
+		Message:    body,
+		Hint:       HintFromStatus(status),
+		RetryAfter: retryAfter,
 		Request: &RequestInfo{
 			Method: method,
 			Path:   path,

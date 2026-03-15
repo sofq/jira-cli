@@ -22,6 +22,19 @@ var schemaCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		listFlag, _ := cmd.Flags().GetBool("list")
 
+		compactFlag, _ := cmd.Flags().GetBool("compact")
+
+		if compactFlag {
+			allOps := generated.AllSchemaOps()
+			compact := make(map[string][]string)
+			for _, op := range allOps {
+				compact[op.Resource] = append(compact[op.Resource], op.Verb)
+			}
+			data, _ := json.Marshal(compact)
+			fmt.Println(string(data))
+			return nil
+		}
+
 		if listFlag || len(args) == 0 {
 			data, _ := json.Marshal(generated.AllResources())
 			fmt.Println(string(data))
@@ -71,5 +84,6 @@ var schemaCmd = &cobra.Command{
 
 func init() {
 	schemaCmd.Flags().Bool("list", false, "list all resource names")
+	schemaCmd.Flags().Bool("compact", false, "compact output: resource → verbs mapping only")
 	rootCmd.AddCommand(schemaCmd)
 }

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
@@ -562,5 +563,184 @@ func TestFromContext_Missing(t *testing.T) {
 	_, err := client.FromContext(context.Background())
 	if err == nil {
 		t.Error("expected error when client is not in context, got nil")
+	}
+}
+
+// Test 11: HTTP 429 with Retry-After header populates retry_after in error JSON.
+func TestDo_429RetryAfter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(429)
+		fmt.Fprintln(w, `{"message":"rate limited"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 5 {
+		t.Fatalf("expected exit code 5 (rate limit), got %d", code)
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr not valid JSON: %s", stderr.String())
+	}
+	if errObj["retry_after"] != float64(60) {
+		t.Errorf("expected retry_after=60, got %v", errObj["retry_after"])
+	}
+}
+
+// Test 12: Verbose output is structured JSON.
+func TestDo_VerboseStructuredJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Verbose = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines in stderr, got %d: %s", len(lines), stderr.String())
+	}
+
+	var reqLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &reqLog); err != nil {
+		t.Fatalf("request log line not valid JSON: %s", lines[0])
+	}
+	if reqLog["type"] != "request" {
+		t.Errorf("expected type=request, got %v", reqLog["type"])
+	}
+
+	var respLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[1]), &respLog); err != nil {
+		t.Fatalf("response log line not valid JSON: %s", lines[1])
+	}
+	if respLog["type"] != "response" {
+		t.Errorf("expected type=response, got %v", respLog["type"])
+	}
+}
+
+// Test 12b: OAuth2 client credentials flow.
+func TestDo_OAuth2Auth(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"oauth-token-123","token_type":"Bearer","expires_in":3600}`)
+	}))
+	defer tokenServer.Close()
+
+	var gotAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		ClientID:     "my-client-id",
+		ClientSecret: "my-client-secret",
+		TokenURL:     tokenServer.URL,
+	}
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	if gotAuth != "Bearer oauth-token-123" {
+		t.Errorf("expected 'Bearer oauth-token-123', got: %q", gotAuth)
+	}
+}
+
+// Test 13: --fields adds fields query param to GET requests.
+func TestDo_FieldsQueryParam(t *testing.T) {
+	var gotFields string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFields = r.URL.Query().Get("fields")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"TEST-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary,status"
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/TEST-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if gotFields != "key,summary,status" {
+		t.Errorf("expected fields=key,summary,status, got %q", gotFields)
+	}
+}
+
+// Test 13b: --fields not applied to POST requests.
+func TestDo_FieldsNotAppliedToPost(t *testing.T) {
+	var gotQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary"
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if strings.Contains(gotQuery, "fields=") {
+		t.Errorf("fields should not be applied to POST, got query: %s", gotQuery)
+	}
+}
+
+// Test 14: Cache hit skips server call.
+func TestDo_CacheHit(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"data":"fresh"}`)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.CacheTTL = 5 * time.Minute
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/cached-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "GET", "/rest/api/3/cached-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Errorf("expected still 1 server call (cache hit), got %d", callCount)
 	}
 }

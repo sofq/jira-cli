@@ -3,6 +3,7 @@ package errors_test
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -87,7 +88,7 @@ func TestHintFromStatus(t *testing.T) {
 }
 
 func TestAPIErrorError(t *testing.T) {
-	err := jrerrors.NewFromHTTP(404, "issue not found", "GET", "/issue/ABC-123")
+	err := jrerrors.NewFromHTTP(404, "issue not found", "GET", "/issue/ABC-123", nil)
 	if err.Error() == "" {
 		t.Error("APIError.Error() returned empty string")
 	}
@@ -104,7 +105,7 @@ func TestAPIErrorExitCode(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := jrerrors.NewFromHTTP(tt.status, "some error", "GET", "/path")
+		err := jrerrors.NewFromHTTP(tt.status, "some error", "GET", "/path", nil)
 		got := err.ExitCode()
 		if got != tt.expected {
 			t.Errorf("NewFromHTTP(%d).ExitCode() = %d, want %d", tt.status, got, tt.expected)
@@ -113,7 +114,7 @@ func TestAPIErrorExitCode(t *testing.T) {
 }
 
 func TestAPIErrorWriteJSON(t *testing.T) {
-	err := jrerrors.NewFromHTTP(404, "issue not found", "GET", "/issue/ABC-123")
+	err := jrerrors.NewFromHTTP(404, "issue not found", "GET", "/issue/ABC-123", nil)
 
 	var buf bytes.Buffer
 	err.WriteJSON(&buf)
@@ -135,7 +136,7 @@ func TestAPIErrorWriteJSON(t *testing.T) {
 }
 
 func TestAPIErrorWriteJSONWithRequest(t *testing.T) {
-	err := jrerrors.NewFromHTTP(422, "validation failed", "POST", "/issue")
+	err := jrerrors.NewFromHTTP(422, "validation failed", "POST", "/issue", nil)
 
 	var buf bytes.Buffer
 	err.WriteJSON(&buf)
@@ -158,7 +159,7 @@ func TestAPIErrorWriteJSONWithRequest(t *testing.T) {
 }
 
 func TestAPIErrorHintOmittedWhenEmpty(t *testing.T) {
-	err := jrerrors.NewFromHTTP(404, "not found", "GET", "/issue/XYZ-1")
+	err := jrerrors.NewFromHTTP(404, "not found", "GET", "/issue/XYZ-1", nil)
 
 	var buf bytes.Buffer
 	err.WriteJSON(&buf)
@@ -174,7 +175,7 @@ func TestAPIErrorHintOmittedWhenEmpty(t *testing.T) {
 }
 
 func TestAPIErrorHintIncludedWhenPresent(t *testing.T) {
-	err := jrerrors.NewFromHTTP(401, "unauthorized", "GET", "/myself")
+	err := jrerrors.NewFromHTTP(401, "unauthorized", "GET", "/myself", nil)
 
 	var buf bytes.Buffer
 	err.WriteJSON(&buf)
@@ -190,7 +191,7 @@ func TestAPIErrorHintIncludedWhenPresent(t *testing.T) {
 }
 
 func TestNewFromHTTPFields(t *testing.T) {
-	err := jrerrors.NewFromHTTP(429, "rate limited", "POST", "/issue")
+	err := jrerrors.NewFromHTTP(429, "rate limited", "POST", "/issue", nil)
 
 	if err.Status != 429 {
 		t.Errorf("Status = %d, want 429", err.Status)
@@ -212,6 +213,31 @@ func TestNewFromHTTPFields(t *testing.T) {
 	}
 	if err.RetryAfter != nil {
 		t.Errorf("RetryAfter should be nil when not provided, got %v", err.RetryAfter)
+	}
+}
+
+func TestNewFromHTTPRetryAfter(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: 429,
+		Header:     http.Header{"Retry-After": []string{"30"}},
+	}
+	apiErr := jrerrors.NewFromHTTP(429, "rate limited", "GET", "/issue", resp)
+	if apiErr.RetryAfter == nil {
+		t.Fatal("expected RetryAfter to be set")
+	}
+	if *apiErr.RetryAfter != 30 {
+		t.Errorf("expected RetryAfter=30, got %d", *apiErr.RetryAfter)
+	}
+}
+
+func TestNewFromHTTPRetryAfterMissing(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: 429,
+		Header:     http.Header{},
+	}
+	apiErr := jrerrors.NewFromHTTP(429, "rate limited", "GET", "/issue", resp)
+	if apiErr.RetryAfter != nil {
+		t.Errorf("expected RetryAfter=nil, got %d", *apiErr.RetryAfter)
 	}
 }
 

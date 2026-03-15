@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
@@ -32,6 +34,8 @@ type Client struct {
 	DryRun     bool      // output request as JSON, don't execute
 	Verbose    bool      // log request/response to stderr
 	Pretty     bool      // pretty-print JSON
+	Fields     string        // --fields comma-separated field names for GET
+	CacheTTL   time.Duration // --cache duration; 0 means no caching
 }
 
 // NewContext stores the client in the given context and returns the new context.
@@ -64,21 +68,60 @@ func QueryFromFlags(cmd *cobra.Command, names ...string) url.Values {
 	return q
 }
 
-// applyAuth sets authentication headers on the request according to the
+// ApplyAuth sets authentication headers on the request according to the
 // client's Auth configuration.
-func (c *Client) applyAuth(req *http.Request) {
+func (c *Client) ApplyAuth(req *http.Request) {
 	switch strings.ToLower(c.Auth.Type) {
 	case "basic":
 		req.SetBasicAuth(c.Auth.Username, c.Auth.Token)
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+c.Auth.Token)
+	case "oauth2":
+		token, err := c.fetchOAuth2Token()
+		if err == nil && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
+}
+
+// fetchOAuth2Token performs a client_credentials grant and returns the access token.
+func (c *Client) fetchOAuth2Token() (string, error) {
+	data := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {c.Auth.ClientID},
+		"client_secret": {c.Auth.ClientSecret},
+	}
+	if c.Auth.Scopes != "" {
+		data.Set("scope", c.Auth.Scopes)
+	}
+
+	resp, err := c.HTTPClient.Post(c.Auth.TokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("oauth2 token request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("oauth2 token response decode failed: %w", err)
+	}
+	return tokenResp.AccessToken, nil
 }
 
 // Do executes an HTTP request and returns an exit code. It constructs the URL
 // from BaseURL+path+query, applies auth, handles pagination, jq filtering, and
 // pretty-printing. Errors are written as structured JSON to Stderr.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body io.Reader) int {
+	// Append --fields as query param for GET requests.
+	if c.Fields != "" && method == "GET" {
+		if query == nil {
+			query = url.Values{}
+		}
+		query.Set("fields", c.Fields)
+	}
+
 	rawURL := c.BaseURL + path
 	if len(query) > 0 {
 		rawURL = rawURL + "?" + query.Encode()
@@ -105,6 +148,15 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 
 // doOnce performs a single HTTP request and writes the response to Stdout.
 func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body io.Reader) int {
+	// Cache check for GET requests.
+	var cacheKey string
+	if c.CacheTTL > 0 && method == "GET" {
+		cacheKey = cache.Key(method, rawURL)
+		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
+			return c.writeOutput(data)
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
 	if err != nil {
 		apiErr := &jrerrors.APIError{
@@ -120,11 +172,9 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c.applyAuth(req)
+	c.ApplyAuth(req)
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
-	}
+	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -138,9 +188,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 	defer resp.Body.Close()
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
-	}
+	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -155,9 +203,14 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 
 	// HTTP error (>=400): write structured error to stderr.
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return apiErr.ExitCode()
+	}
+
+	// Cache successful GET responses.
+	if cacheKey != "" {
+		cache.Set(cacheKey, respBody)
 	}
 
 	return c.writeOutput(respBody)
@@ -284,11 +337,9 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 		return nil, jrerrors.ExitError
 	}
 	req.Header.Set("Accept", "application/json")
-	c.applyAuth(req)
+	c.ApplyAuth(req)
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
-	}
+	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -302,9 +353,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 	defer resp.Body.Close()
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
-	}
+	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -318,12 +367,21 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return nil, apiErr.ExitCode()
 	}
 
 	return body, jrerrors.ExitOK
+}
+
+// verboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.
+func (c *Client) verboseLog(fields map[string]any) {
+	if !c.Verbose {
+		return
+	}
+	data, _ := json.Marshal(fields)
+	fmt.Fprintf(c.Stderr, "%s\n", data)
 }
 
 // writeOutput applies optional JQ filtering and pretty-printing, then writes

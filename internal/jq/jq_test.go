@@ -103,6 +103,26 @@ func TestApply_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestApply_MultipleResults(t *testing.T) {
+	out, err := jq.Apply(issuesJSON, ".issues[].key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var result []string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("expected JSON array, got %s; err: %v", out, err)
+	}
+	expected := []string{"PROJ-1", "PROJ-2", "PROJ-3"}
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d items, got %d", len(expected), len(result))
+	}
+	for i, v := range expected {
+		if result[i] != v {
+			t.Errorf("index %d: expected %q, got %q", i, v, result[i])
+		}
+	}
+}
+
 func TestApply_NoResults(t *testing.T) {
 	// A filter that produces no output (empty stream) — use `empty`
 	out, err := jq.Apply(sampleJSON, "empty")
