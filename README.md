@@ -193,7 +193,7 @@ jr project search --cache 5m --jq '[.values[].key]'
 
 ## 600+ commands, auto-generated
 
-Commands are generated from the [official Jira OpenAPI v3 spec](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/). A weekly CI job detects spec drift and opens PRs automatically — so jr stays in sync with Jira's API.
+Commands are generated from the [official Jira OpenAPI v3 spec](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/). A daily CI job detects spec drift and opens PRs automatically — so jr stays in sync with Jira's API.
 
 ```bash
 jr issue get --issueIdOrKey PROJ-1
