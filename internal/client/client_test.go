@@ -564,3 +564,29 @@ func TestFromContext_Missing(t *testing.T) {
 		t.Error("expected error when client is not in context, got nil")
 	}
 }
+
+// Test 11: HTTP 429 with Retry-After header populates retry_after in error JSON.
+func TestDo_429RetryAfter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(429)
+		fmt.Fprintln(w, `{"message":"rate limited"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 5 {
+		t.Fatalf("expected exit code 5 (rate limit), got %d", code)
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr not valid JSON: %s", stderr.String())
+	}
+	if errObj["retry_after"] != float64(60) {
+		t.Errorf("expected retry_after=60, got %v", errObj["retry_after"])
+	}
+}

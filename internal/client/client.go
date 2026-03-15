@@ -155,7 +155,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 
 	// HTTP error (>=400): write structured error to stderr.
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return apiErr.ExitCode()
 	}
@@ -318,7 +318,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return nil, apiErr.ExitCode()
 	}
