@@ -31,6 +31,7 @@ export JR_AUTH_TOKEN=your-api-token
 # Named profiles for multiple Jira instances
 jr configure --base-url https://work.atlassian.net --token TOKEN --profile work
 jr issue get --profile work --issueIdOrKey PROJ-1
+jr configure --profile work --delete   # remove a profile
 ```
 
 If you get exit code 2 (auth error), the token is likely expired or wrong. Ask the user to generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens.
@@ -40,13 +41,15 @@ If you get exit code 2 (auth error), the token is likely expired or wrong. Ask t
 `jr` has 600+ commands auto-generated from Jira's OpenAPI spec. You don't need to memorize them — discover at runtime:
 
 ```bash
-jr schema --list              # all resource names (issue, project, search, ...)
-jr schema --compact           # resource → verbs mapping (most useful overview)
+jr schema                     # resource → verbs mapping (default, most useful overview)
+jr schema --list              # all resource names only (issue, project, search, ...)
 jr schema issue               # all operations for a resource
 jr schema issue get           # full schema with all flags for one operation
 ```
 
 Always use `jr schema` to discover the exact command name and flags before running an unfamiliar operation. Command names come directly from Jira's API and can be verbose (e.g., `search-and-reconsile-issues-using-jql`).
+
+`jr schema` (no flags) defaults to the compact resource→verbs mapping, which is the most useful starting point.
 
 ## Common Operations
 
@@ -94,7 +97,11 @@ jr project search --jq '[.values[] | {key, name}]'
 jr raw GET /rest/api/3/myself
 jr raw POST /rest/api/3/some/endpoint --body '{"key":"value"}'
 jr raw POST /rest/api/3/some/endpoint --body @request.json
+# Read body from stdin (must use --body - explicitly)
+echo '{"key":"value"}' | jr raw POST /rest/api/3/some/endpoint --body -
 ```
+
+**Note:** POST/PUT/PATCH require `--body`. Without it, `jr raw` will error instead of hanging on stdin.
 
 ## Token Efficiency
 
@@ -186,7 +193,7 @@ go install github.com/sofq/jira-cli@latest  # Go
 jr raw GET /rest/api/3/myself
 ```
 
-**Unknown command** — Command names are auto-generated from Jira's API and can be verbose. Use `jr schema --compact` to find the right name, or use `jr raw` as an escape hatch.
+**Unknown command** — Command names are auto-generated from Jira's API and can be verbose. Use `jr schema` to find the right name, or use `jr raw` as an escape hatch.
 
 **Large responses filling context** — Always use `--fields` and `--jq` to minimize output.
 

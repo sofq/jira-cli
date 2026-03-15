@@ -106,7 +106,7 @@ Or simply add to your agent's instructions:
 
 ```
 Use `jr` for all Jira operations. Output is always JSON.
-Use `jr schema --compact` to discover available commands.
+Use `jr schema` to discover available commands.
 Use --jq to filter responses and reduce token usage.
 ```
 
@@ -115,8 +115,8 @@ Use --jq to filter responses and reduce token usage.
 Agents don't need hardcoded command lists — they can discover everything:
 
 ```bash
-jr schema --list              # all resource names
-jr schema --compact           # resource → verbs mapping (token-efficient)
+jr schema                     # resource → verbs mapping (default, token-efficient)
+jr schema --list              # all resource names only
 jr schema issue               # all operations for 'issue' with flags
 jr schema issue get           # full schema for one operation
 ```
@@ -200,7 +200,9 @@ jr issue get --issueIdOrKey PROJ-1
 jr issue create-issue --body '{"fields":{...}}'
 jr project search --jq '[.values[] | {key, name}]'
 jr search search-and-reconsile-issues-using-jql --jql "assignee = currentUser()"
-jr raw GET /rest/api/3/myself    # escape hatch for any endpoint
+jr raw GET /rest/api/3/myself              # escape hatch for any endpoint
+jr raw POST /path --body '{"key":"val"}'  # POST/PUT/PATCH require --body
+echo '{}' | jr raw POST /path --body -    # read body from stdin with --body -
 ```
 
 ## Configuration
@@ -215,6 +217,7 @@ export JR_AUTH_TOKEN=your-api-token
 # Config file (supports named profiles)
 jr configure --base-url https://work.atlassian.net --token TOKEN --profile work
 jr issue get --profile work --issueIdOrKey PROJ-1
+jr configure --profile work --delete   # remove a profile
 
 # Auth types: basic (default), bearer, oauth2
 jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token TOKEN

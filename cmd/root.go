@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -181,17 +182,6 @@ func mergeCommand(root *cobra.Command, handWritten *cobra.Command) {
 	root.AddCommand(handWritten)
 }
 
-// writeJSONError writes a structured JSON error to stderr. Used by custom help
-// interceptors to maintain the JSON-only stdout contract.
-func writeJSONError(errType, message string) {
-	apiErr := &jrerrors.APIError{
-		ErrorType: errType,
-		Status:    0,
-		Message:   message,
-	}
-	apiErr.WriteJSON(os.Stderr)
-}
-
 func init() {
 	// Override cobra's default help output so that "jr" with no args and
 	// "jr help <resource>" emit JSON errors to stderr instead of plain text
@@ -201,8 +191,13 @@ func init() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd == rootCmd {
-			writeJSONError("command_error", "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource")
-			os.Exit(jrerrors.ExitError)
+			// Bug #6: Output a helpful JSON hint and exit 0 for explicit --help / help.
+			out, _ := json.Marshal(map[string]string{
+				"hint":    "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource",
+				"version": Version,
+			})
+			fmt.Fprintf(os.Stdout, "%s\n", out)
+			os.Exit(jrerrors.ExitOK)
 			return
 		}
 		// Write help text to stderr so stdout stays JSON-only.

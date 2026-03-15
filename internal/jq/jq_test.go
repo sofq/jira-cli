@@ -2,6 +2,7 @@ package jq_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/sofq/jira-cli/internal/jq"
@@ -131,5 +132,244 @@ func TestApply_NoResults(t *testing.T) {
 	}
 	if string(out) != "null" {
 		t.Errorf("expected null for no results, got %s", out)
+	}
+}
+
+// TestApplyNullInput verifies that applying a filter to the JSON value null
+// returns the expected result without error.
+func TestApplyNullInput(t *testing.T) {
+	out, err := jq.Apply([]byte(`null`), ".")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(out) != "null" {
+		t.Errorf("expected null, got %s", out)
+	}
+}
+
+// TestApplyNestedAccess verifies that deep nested field access works correctly.
+func TestApplyNestedAccess(t *testing.T) {
+	input := []byte(`{"a":{"b":{"c":{"d":"deep-value"}}}}`)
+	out, err := jq.Apply(input, ".a.b.c.d")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != "deep-value" {
+		t.Errorf("expected %q, got %q", "deep-value", result)
+	}
+}
+
+// TestApplyArrayIndex verifies that .[0] returns the first element of an array.
+func TestApplyArrayIndex(t *testing.T) {
+	input := []byte(`["first","second","third"]`)
+	out, err := jq.Apply(input, ".[0]")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != "first" {
+		t.Errorf("expected %q, got %q", "first", result)
+	}
+}
+
+// TestApplyPipe verifies that a piped expression works as expected.
+func TestApplyPipe(t *testing.T) {
+	input := []byte(`{"key":"PROJ-123"}`)
+	out, err := jq.Apply(input, ".key | length")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result float64
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	// "PROJ-123" has 8 characters.
+	if result != 8 {
+		t.Errorf("expected length 8, got %v", result)
+	}
+}
+
+// TestApplyConditional verifies that if/then/else expressions work correctly.
+func TestApplyConditional(t *testing.T) {
+	input := []byte(`{"x":true}`)
+	out, err := jq.Apply(input, `if .x then "yes" else "no" end`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != "yes" {
+		t.Errorf("expected %q, got %q", "yes", result)
+	}
+}
+
+// TestApplyStringInterpolation verifies that jq string interpolation with \()
+// produces the expected concatenated string.
+func TestApplyStringInterpolation(t *testing.T) {
+	input := []byte(`{"name":"World"}`)
+	out, err := jq.Apply(input, `"Hello \(.name)"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != "Hello World" {
+		t.Errorf("expected %q, got %q", "Hello World", result)
+	}
+}
+
+// TestApplySelect verifies that select() correctly filters array elements.
+func TestApplySelect(t *testing.T) {
+	input := []byte(`[{"name":"a","active":true},{"name":"b","active":false},{"name":"c","active":true}]`)
+	out, err := jq.Apply(input, `[.[] | select(.active)]`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result []map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 active items, got %d", len(result))
+	}
+	if result[0]["name"] != "a" {
+		t.Errorf("expected first active item name %q, got %q", "a", result[0]["name"])
+	}
+	if result[1]["name"] != "c" {
+		t.Errorf("expected second active item name %q, got %q", "c", result[1]["name"])
+	}
+}
+
+// TestApplyMathOperations verifies that arithmetic expressions work on numeric
+// fields.
+func TestApplyMathOperations(t *testing.T) {
+	input := []byte(`{"a":7,"b":3}`)
+	out, err := jq.Apply(input, ".a + .b")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result float64
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != 10 {
+		t.Errorf("expected 10, got %v", result)
+	}
+}
+
+// TestApplyNullCoalescing verifies that the // operator returns the alternative
+// when the left-hand side is null or missing.
+func TestApplyNullCoalescing(t *testing.T) {
+	input := []byte(`{"present":"value"}`)
+	out, err := jq.Apply(input, `.missing // "default"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if result != "default" {
+		t.Errorf("expected %q, got %q", "default", result)
+	}
+}
+
+// TestApplyKeys verifies that the keys builtin returns a sorted array of
+// object key names.
+func TestApplyKeys(t *testing.T) {
+	input := []byte(`{"z":1,"a":2,"m":3}`)
+	out, err := jq.Apply(input, "keys")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result []string
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	expected := []string{"a", "m", "z"}
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d keys, got %d: %v", len(expected), len(result), result)
+	}
+	for i, k := range expected {
+		if result[i] != k {
+			t.Errorf("keys[%d] = %q, want %q", i, result[i], k)
+		}
+	}
+}
+
+// TestApplyEmptyArrayResult verifies that a select filter matching no elements
+// returns an empty JSON array when wrapped with [.[]|select(...)].
+func TestApplyEmptyArrayResult(t *testing.T) {
+	input := []byte(`[{"active":false},{"active":false}]`)
+	out, err := jq.Apply(input, `[.[] | select(.active)]`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result []interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal result: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty array, got %d items", len(result))
+	}
+}
+
+// TestApplyLargeInput verifies that Apply handles a ~50 KB JSON document with
+// a complex filter without error and returns a non-empty result.
+func TestApplyLargeInput(t *testing.T) {
+	// Build a JSON array of 500 issue objects (~50 KB).
+	var sb strings.Builder
+	sb.WriteString(`{"issues":[`)
+	for i := 0; i < 500; i++ {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(`{"key":"PROJ-`)
+		sb.WriteString(strings.Repeat("0", 3)) // padding
+		sb.WriteString(`","fields":{"summary":"Issue summary text here","status":{"name":"Open"},"priority":{"name":"Medium"}}}`)
+	}
+	sb.WriteString(`]}`)
+
+	input := []byte(sb.String())
+	// Verify the payload is at least 40 KB.
+	if len(input) < 40*1024 {
+		t.Logf("payload size: %d bytes", len(input))
+	}
+
+	out, err := jq.Apply(input, `[.issues[] | {key: .key, summary: .fields.summary}]`)
+	if err != nil {
+		t.Fatalf("unexpected error on large input: %v", err)
+	}
+	if len(out) == 0 {
+		t.Error("expected non-empty output for large input")
+	}
+
+	var result []map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("failed to unmarshal large-input result: %v", err)
+	}
+	if len(result) != 500 {
+		t.Errorf("expected 500 items, got %d", len(result))
 	}
 }

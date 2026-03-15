@@ -113,7 +113,18 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
 			Status:    0,
-			Message:   "invalid JSON input: " + err.Error(),
+			Message:   "invalid JSON input: expected a JSON array of operations; " + err.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+
+	// Bug #17: Reject null/empty input explicitly.
+	if ops == nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Status:    0,
+			Message:   "invalid JSON input: expected a JSON array of operations, got null",
 		}
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitValidation}
@@ -148,6 +159,17 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		}
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitError}
+	}
+
+	// Bug #9: Exit with highest-severity exit code from batch operations.
+	maxExit := 0
+	for _, r := range results {
+		if r.ExitCode > maxExit {
+			maxExit = r.ExitCode
+		}
+	}
+	if maxExit != 0 {
+		return &errAlreadyWritten{code: maxExit}
 	}
 
 	return nil

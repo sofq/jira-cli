@@ -3,9 +3,11 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -103,6 +105,19 @@ func SaveTo(cfg *Config, path string) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
+// availableProfiles returns a comma-separated list of profile names.
+func availableProfiles(cfg *Config) string {
+	names := make([]string, 0, len(cfg.Profiles))
+	for k := range cfg.Profiles {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return "(none)"
+	}
+	return strings.Join(names, ", ")
+}
+
 // Resolve builds a ResolvedConfig by merging sources in priority order:
 // CLI flags > environment variables > config file profile.
 //
@@ -129,6 +144,9 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 		fileAuthType = p.Auth.Type
 		fileUsername = p.Auth.Username
 		fileToken = p.Auth.Token
+	} else if profileName != "" {
+		// Bug #10: Explicit --profile that doesn't exist should give a clear error.
+		return nil, fmt.Errorf("profile %q not found; available profiles: %s", name, availableProfiles(cfg))
 	}
 
 	// 2. Environment variables (override config file).
