@@ -33,6 +33,10 @@ var rootCmd = &cobra.Command{
 		if skipClientCommands[name] {
 			return nil
 		}
+		// Also skip for subcommands of skipped commands (e.g., completion bash)
+		if cmd.Parent() != nil && skipClientCommands[cmd.Parent().Name()] {
+			return nil
+		}
 
 		// Read flag overrides.
 		baseURL, _ := cmd.Flags().GetString("base-url")
