@@ -25,17 +25,33 @@ func Apply(input []byte, filter string) ([]byte, error) {
 	}
 
 	iter := query.Run(data)
-	v, ok := iter.Next()
-	if !ok {
-		return []byte("null"), nil
-	}
-	if err, isErr := v.(error); isErr {
-		return nil, fmt.Errorf("jq error: %w", err)
+	var results []interface{}
+	for {
+		v, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if err, isErr := v.(error); isErr {
+			return nil, fmt.Errorf("jq error: %w", err)
+		}
+		results = append(results, v)
 	}
 
-	result, err := json.Marshal(v)
+	if len(results) == 0 {
+		return []byte("null"), nil
+	}
+
+	if len(results) == 1 {
+		result, err := json.Marshal(results[0])
+		if err != nil {
+			return nil, fmt.Errorf("marshaling jq result: %w", err)
+		}
+		return result, nil
+	}
+
+	result, err := json.Marshal(results)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling jq result: %w", err)
+		return nil, fmt.Errorf("marshaling jq results: %w", err)
 	}
 	return result, nil
 }
