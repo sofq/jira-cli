@@ -335,6 +335,51 @@ func TestApplyEmptyArrayResult(t *testing.T) {
 	}
 }
 
+// TestApplyNoHTMLEscaping verifies that Apply does not HTML-escape &, <, > characters.
+func TestApplyNoHTMLEscaping(t *testing.T) {
+	input := []byte(`{"summary":"Fix <bug> & deploy","url":"https://example.com?a=1&b=2"}`)
+
+	tests := []struct {
+		name   string
+		filter string
+		want   string
+	}{
+		{"ampersand in string", ".summary", `"Fix <bug> & deploy"`},
+		{"url with ampersand", ".url", `"https://example.com?a=1&b=2"`},
+		{"object with special chars", "{s: .summary}", `{"s":"Fix <bug> & deploy"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := jq.Apply(input, tt.filter)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := string(out)
+			if got != tt.want {
+				t.Errorf("got %s, want %s", got, tt.want)
+			}
+			// Ensure no HTML-escaped sequences
+			if strings.Contains(got, `\u0026`) || strings.Contains(got, `\u003c`) || strings.Contains(got, `\u003e`) {
+				t.Errorf("output contains HTML-escaped characters: %s", got)
+			}
+		})
+	}
+}
+
+// TestApplyNoHTMLEscapingMultipleResults verifies no HTML escaping for multiple results.
+func TestApplyNoHTMLEscapingMultipleResults(t *testing.T) {
+	input := []byte(`[{"name":"A & B"},{"name":"C < D"}]`)
+	out, err := jq.Apply(input, ".[].name")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(out)
+	if strings.Contains(got, `\u0026`) || strings.Contains(got, `\u003c`) {
+		t.Errorf("multiple results contain HTML-escaped characters: %s", got)
+	}
+}
+
 // TestApplyLargeInput verifies that Apply handles a ~50 KB JSON document with
 // a complex filter without error and returns a non-empty result.
 func TestApplyLargeInput(t *testing.T) {
