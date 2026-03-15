@@ -626,3 +626,116 @@ func TestRootHelp_NoHTMLEscaping(t *testing.T) {
 		t.Errorf("expected literal <resource> in output, got: %s", output)
 	}
 }
+
+// --- Bug 21a: raw.go returns unwrapped errors causing double JSON output ---
+
+func TestRawCmd_FileOpenError_SingleOutput(t *testing.T) {
+	// Simulate the raw command's file open error path.
+	// After the fix, it should return errAlreadyWritten, not a raw error.
+	cmd := &cobra.Command{Use: "raw"}
+	f := cmd.Flags()
+	f.String("body", "", "")
+	f.StringArray("query", nil, "")
+	f.String("fields", "", "")
+	_ = cmd.Flags().Set("body", "@nonexistent-file-for-test.json")
+
+	// We need a valid client in context for the code to reach the file open path.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	ctx := client.NewContext(t.Context(), c)
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"POST", "/test"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent body file")
+	}
+	if _, ok := err.(*errAlreadyWritten); !ok {
+		t.Errorf("expected errAlreadyWritten to prevent double error output, got %T: %v", err, err)
+	}
+}
+
+// --- Bug 21b: batch.go batchAssign conflates JSON parse error with not-found ---
+
+func TestBatchAssign_ParseError_ReturnsExitError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/user/search") {
+			w.Header().Set("Content-Type", "application/json")
+			// Return invalid JSON to trigger parse error
+			fmt.Fprintln(w, `not valid json`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchAssign(t.Context(), c, "TEST-1", "someuser@example.com")
+	// Parse errors should return ExitError (1), not ExitNotFound (3)
+	if code != jrerrors.ExitError {
+		t.Fatalf("expected exit %d (error) for parse failure, got %d", jrerrors.ExitError, code)
+	}
+	if !strings.Contains(stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr for parse failure, got: %s", stderr.String())
+	}
+}
+
+// --- Bug 21c: JSON injection safety for transition ID and accountId ---
+
+func TestBatchTransition_JSONSafe(t *testing.T) {
+	// Verify that transition IDs with special characters are properly escaped
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			// Transition ID with a quote character (adversarial)
+			fmt.Fprintln(w, `{"transitions":[{"id":"11\"injected","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+func TestBatchAssign_JSONSafe(t *testing.T) {
+	// Verify that account IDs with special characters are properly escaped
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			// Account ID with a quote character (adversarial)
+			fmt.Fprintln(w, `{"accountId":"abc\"injected"}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/assignee") && r.Method == "PUT" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}

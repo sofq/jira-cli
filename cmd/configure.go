@@ -91,7 +91,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "failed to load config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	cfg.Profiles[profileName] = config.Profile{
@@ -114,7 +114,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "failed to save config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	out, _ := json.Marshal(map[string]string{
@@ -145,7 +145,7 @@ func deleteProfileByName(name string) error {
 			Message:   fmt.Sprintf("profile %q not found", name),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 	}
 
 	delete(cfg.Profiles, name)

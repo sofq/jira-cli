@@ -341,7 +341,8 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		return jrerrors.ExitValidation
 	}
 
-	body := fmt.Sprintf(`{"transition":{"id":"%s"}}`, matchedID)
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
+	body := string(transBody)
 	_, code := fetchJSONWithBody(c, ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		strings.NewReader(body))
@@ -410,7 +411,12 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 			AccountID   string `json:"accountId"`
 			DisplayName string `json:"displayName"`
 		}
-		if err := json.Unmarshal(body, &users); err != nil || len(users) == 0 {
+		if err := json.Unmarshal(body, &users); err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse user search response: " + err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitError
+		}
+		if len(users) == 0 {
 			apiErr := &jrerrors.APIError{ErrorType: "not_found", Message: fmt.Sprintf("no user found matching %q", to)}
 			apiErr.WriteJSON(c.Stderr)
 			return jrerrors.ExitNotFound
@@ -418,7 +424,8 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		accountID = users[0].AccountID
 	}
 
-	assignBody := fmt.Sprintf(`{"accountId":"%s"}`, accountID)
+	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
+	assignBody := string(marshaledAssign)
 	_, code := fetchJSONWithBody(c, ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		strings.NewReader(assignBody))

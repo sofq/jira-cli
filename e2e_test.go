@@ -1490,8 +1490,8 @@ func TestE2E_Configure_DeleteNonexistentProfile(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected error type: %v", err)
 	}
-	if exitErr.ExitCode() != 4 {
-		t.Errorf("expected exit code 4 (validation), got %d", exitErr.ExitCode())
+	if exitErr.ExitCode() != 3 {
+		t.Errorf("expected exit code 3 (not_found), got %d", exitErr.ExitCode())
 	}
 
 	var errObj map[string]interface{}

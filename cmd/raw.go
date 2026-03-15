@@ -57,7 +57,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	// Build query values.
@@ -87,7 +87,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 				Message:   "cannot open body file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return err
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
 		}
 		defer f.Close()
 		bodyReader = f
