@@ -57,6 +57,17 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	issueKey, _ := cmd.Flags().GetString("issue")
 	toStatus, _ := cmd.Flags().GetString("to")
 
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := json.Marshal(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
+		})
+		fmt.Fprintf(c.Stdout, "%s\n", out)
+		return nil
+	}
+
 	// 1. Fetch available transitions.
 	transitionsBody, exitCode := fetchJSON(c, cmd.Context(), "GET",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
@@ -141,6 +152,17 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	issueKey, _ := cmd.Flags().GetString("issue")
 	to, _ := cmd.Flags().GetString("to")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := json.Marshal(map[string]string{
+			"method": "PUT",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
+		})
+		fmt.Fprintf(c.Stdout, "%s\n", out)
+		return nil
+	}
 
 	var accountID string
 
