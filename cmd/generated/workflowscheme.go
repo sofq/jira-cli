@@ -92,6 +92,14 @@ var workflowscheme_create_workflow_scheme = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -155,6 +163,14 @@ var workflowscheme_assign_scheme_to_project = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -196,6 +212,14 @@ var workflowscheme_switch_workflow_scheme_for_project = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
@@ -239,6 +263,14 @@ var workflowscheme_read_workflow_schemes = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -281,6 +313,14 @@ var workflowscheme_update_schemes = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -322,6 +362,14 @@ var workflowscheme_get_required_workflow_scheme_mappings = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
@@ -387,6 +435,14 @@ var workflowscheme_update_workflow_scheme = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
@@ -497,6 +553,14 @@ var workflowscheme_update_default_workflow = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -584,6 +648,14 @@ var workflowscheme_update_workflow_scheme_draft = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -670,6 +742,14 @@ var workflowscheme_update_draft_default_workflow = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
@@ -760,6 +840,14 @@ var workflowscheme_set_workflow_scheme_draft_issue_type = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -826,6 +914,14 @@ var workflowscheme_publish_draft_workflow_scheme = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -890,6 +986,14 @@ var workflowscheme_update_draft_workflow_mapping = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
@@ -980,6 +1084,14 @@ var workflowscheme_set_workflow_scheme_issue_type = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -1067,6 +1179,14 @@ var workflowscheme_update_workflow_mapping = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 

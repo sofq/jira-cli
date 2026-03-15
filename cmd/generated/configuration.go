@@ -113,6 +113,14 @@ var configuration_select_time_tracking_implementation = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -196,6 +204,14 @@ var configuration_set_shared_time_tracking = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 

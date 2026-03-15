@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,7 +13,9 @@ import (
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/client"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/spf13/cobra"
+	"github.com/tidwall/pretty"
 )
 
 // BatchOp represents a single operation in a batch request.
@@ -151,7 +154,8 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Write all results as a JSON array to stdout.
-	enc := json.NewEncoder(os.Stdout)
+	var resultBuf bytes.Buffer
+	enc := json.NewEncoder(&resultBuf)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(results); err != nil {
 		apiErr := &jrerrors.APIError{
@@ -162,6 +166,30 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
+
+	output := bytes.TrimRight(resultBuf.Bytes(), "\n")
+
+	// Apply global --jq filter to the batch output array.
+	if baseClient.JQFilter != "" {
+		filtered, err := jq.Apply(output, baseClient.JQFilter)
+		if err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "jq_error",
+				Status:    0,
+				Message:   "jq: " + err.Error(),
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		}
+		output = filtered
+	}
+
+	// Apply --pretty to the batch output.
+	if baseClient.Pretty {
+		output = pretty.Pretty(output)
+	}
+
+	fmt.Fprintf(os.Stdout, "%s\n", strings.TrimRight(string(output), "\n"))
 
 	// Bug #9: Exit with highest-severity exit code from batch operations.
 	maxExit := 0
@@ -214,7 +242,7 @@ func executeBatchOp(
 	// Hand-written commands have custom execution logic.
 	if bop.Command == "workflow transition" || bop.Command == "workflow assign" {
 		exitCode := executeBatchWorkflow(cmd.Context(), opClient, bop)
-		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 	}
 
 	// Build path by substituting {paramName} placeholders.
@@ -253,7 +281,7 @@ func executeBatchOp(
 		exitCode = opClient.Do(cmd.Context(), schemaOp.Method, path, query, nil)
 	}
 
-	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf)
+	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 }
 
 // executeBatchWorkflow runs workflow transition or assign as a batch operation.
@@ -439,9 +467,33 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 }
 
 // buildBatchResult constructs a BatchResult from captured stdout/stderr.
-func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder) BatchResult {
+// Verbose log lines (from --verbose) are forwarded to real stderr so they
+// are visible to the caller, while structured error JSON is kept in the result.
+func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder, verbose bool) BatchResult {
+	stderrStr := stderrBuf.String()
+
+	if verbose && stderrStr != "" {
+		// Forward verbose log lines to real stderr. Verbose lines are JSON
+		// objects with a "type" field ("request" or "response"). Error lines
+		// are JSON objects with an "error_type" field. We forward verbose
+		// lines and keep error lines for the result.
+		var errorLines []string
+		for _, line := range strings.Split(strings.TrimSpace(stderrStr), "\n") {
+			if line == "" {
+				continue
+			}
+			// Quick heuristic: verbose logs contain "type":"request" or "type":"response"
+			if strings.Contains(line, `"type":"request"`) || strings.Contains(line, `"type":"response"`) {
+				fmt.Fprintln(os.Stderr, line)
+			} else {
+				errorLines = append(errorLines, line)
+			}
+		}
+		stderrStr = strings.Join(errorLines, "\n")
+	}
+
 	if exitCode != jrerrors.ExitOK {
-		errOutput := strings.TrimSpace(stderrBuf.String())
+		errOutput := strings.TrimSpace(stderrStr)
 		var rawErr json.RawMessage
 		if json.Valid([]byte(errOutput)) {
 			rawErr = json.RawMessage(errOutput)

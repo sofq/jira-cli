@@ -92,6 +92,14 @@ var fieldconfigurationscheme_create_field_configuration_scheme = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -176,6 +184,14 @@ var fieldconfigurationscheme_assign_field_configuration_scheme_to_project = &cob
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -218,6 +234,14 @@ var fieldconfigurationscheme_update_field_configuration_scheme = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
@@ -284,6 +308,14 @@ var fieldconfigurationscheme_set_field_configuration_scheme_mapping = &cobra.Com
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
@@ -326,6 +358,14 @@ var fieldconfigurationscheme_remove_issue_types_from_global_field_configuration_
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 

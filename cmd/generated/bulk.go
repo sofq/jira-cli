@@ -71,6 +71,14 @@ var bulk_submit_delete = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -134,6 +142,14 @@ var bulk_submit_edit = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -175,6 +191,14 @@ var bulk_submit_move = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
@@ -239,6 +263,14 @@ var bulk_submit_transition = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -281,6 +313,14 @@ var bulk_submit_unwatch = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -322,6 +362,14 @@ var bulk_submit_watch = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 

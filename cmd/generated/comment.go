@@ -71,6 +71,14 @@ var comment_get_by_ids = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "POST request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
@@ -159,6 +167,14 @@ var comment_set_property = &cobra.Command{
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
+		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "PUT request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 

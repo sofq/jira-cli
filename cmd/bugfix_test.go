@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -711,6 +712,156 @@ func TestBatchTransition_JSONSafe(t *testing.T) {
 	code := batchTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// --- Bug #22: batch --verbose forwards verbose logs to real stderr ---
+
+func TestBuildBatchResult_VerboseForwarded(t *testing.T) {
+	var stdoutBuf, stderrBuf strings.Builder
+	// Simulate verbose output (request + response lines) mixed with no error.
+	stderrBuf.WriteString(`{"type":"request","method":"GET","url":"http://example.com/test"}` + "\n")
+	stderrBuf.WriteString(`{"type":"response","status":200}` + "\n")
+
+	// Capture real stderr by redirecting os.Stderr temporarily.
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	result := buildBatchResult(0, jrerrors.ExitOK, &stdoutBuf, &stderrBuf, true)
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var captured bytes.Buffer
+	_, _ = captured.ReadFrom(r)
+
+	if result.ExitCode != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d", result.ExitCode)
+	}
+	// Verbose lines should have been forwarded to stderr.
+	if !strings.Contains(captured.String(), `"type":"request"`) {
+		t.Errorf("expected verbose request line in stderr, got: %s", captured.String())
+	}
+	if !strings.Contains(captured.String(), `"type":"response"`) {
+		t.Errorf("expected verbose response line in stderr, got: %s", captured.String())
+	}
+}
+
+func TestBuildBatchResult_NoVerbose_NotForwarded(t *testing.T) {
+	var stdoutBuf, stderrBuf strings.Builder
+	stderrBuf.WriteString(`{"type":"request","method":"GET","url":"http://example.com/test"}` + "\n")
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	_ = buildBatchResult(0, jrerrors.ExitOK, &stdoutBuf, &stderrBuf, false)
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var captured bytes.Buffer
+	_, _ = captured.ReadFrom(r)
+
+	// Without verbose=true, nothing should be forwarded.
+	if captured.String() != "" {
+		t.Errorf("expected no stderr output when verbose=false, got: %s", captured.String())
+	}
+}
+
+// --- Bug #22: batch --jq applies to batch output array ---
+
+// captureStdout captures os.Stdout output during fn execution.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = oldStdout
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	return buf.String()
+}
+
+func TestBatchJQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"TEST-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[0].data.key"
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := batchCmd
+	cmd.ResetFlags()
+	cmd.Flags().String("input", "", "")
+	cmd.SetContext(ctx)
+
+	input := `[{"command":"issue get","args":{"issueIdOrKey":"TEST-1"}}]`
+
+	oldStdin := os.Stdin
+	pr, pw, _ := os.Pipe()
+	_, _ = pw.WriteString(input)
+	pw.Close()
+	os.Stdin = pr
+	defer func() { os.Stdin = oldStdin }()
+
+	captured := captureStdout(t, func() {
+		err := runBatch(cmd, nil)
+		if err != nil {
+			t.Fatalf("runBatch error: %v", err)
+		}
+	})
+
+	got := strings.TrimSpace(captured)
+	if got != `"TEST-1"` {
+		t.Errorf("expected JQ-filtered output \"TEST-1\", got: %s", got)
+	}
+}
+
+// --- Bug #22: batch --pretty formats batch output ---
+
+func TestBatchPrettyOutput(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"TEST-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Pretty = true
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := batchCmd
+	cmd.ResetFlags()
+	cmd.Flags().String("input", "", "")
+	cmd.SetContext(ctx)
+
+	input := `[{"command":"issue get","args":{"issueIdOrKey":"TEST-1"}}]`
+	oldStdin := os.Stdin
+	pr, pw, _ := os.Pipe()
+	_, _ = pw.WriteString(input)
+	pw.Close()
+	os.Stdin = pr
+	defer func() { os.Stdin = oldStdin }()
+
+	captured := captureStdout(t, func() {
+		err := runBatch(cmd, nil)
+		if err != nil {
+			t.Fatalf("runBatch error: %v", err)
+		}
+	})
+
+	// Pretty-printed output should contain indentation (newlines + spaces).
+	if !strings.Contains(captured, "\n") || !strings.Contains(captured, "  ") {
+		t.Errorf("expected pretty-printed output with indentation, got: %s", captured)
 	}
 }
 
