@@ -278,6 +278,16 @@ func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) in
 
 // batchTransition executes a workflow transition within a batch operation.
 func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) int {
+	if c.DryRun {
+		out, _ := json.Marshal(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
+		})
+		fmt.Fprintf(c.Stdout, "%s\n", out)
+		return jrerrors.ExitOK
+	}
+
 	transitionsBody, exitCode := fetchJSON(c, ctx, "GET",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
 	if exitCode != jrerrors.ExitOK {
@@ -350,6 +360,16 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 
 // batchAssign executes a workflow assign within a batch operation.
 func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int {
+	if c.DryRun {
+		out, _ := json.Marshal(map[string]string{
+			"method": "PUT",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
+		})
+		fmt.Fprintf(c.Stdout, "%s\n", out)
+		return jrerrors.ExitOK
+	}
+
 	var accountID string
 
 	switch strings.ToLower(to) {

@@ -489,6 +489,103 @@ func TestBatchAssign_UserNotFound(t *testing.T) {
 	}
 }
 
+// --- Bug: --dry-run ignored by workflow commands ---
+
+func TestWorkflowTransition_DryRun(t *testing.T) {
+	// No server needed — dry-run should never make HTTP calls.
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/transitions") {
+		t.Errorf("expected URL containing /transitions, got %s", result["url"])
+	}
+	if !strings.Contains(result["note"], "would transition") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+func TestWorkflowAssign_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "PUT" {
+		t.Errorf("expected method=PUT, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/assignee") {
+		t.Errorf("expected URL containing /assignee, got %s", result["url"])
+	}
+	if !strings.Contains(result["note"], "would assign") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+func TestBatchWorkflow_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow transition",
+		Args:    map[string]string{"issue": "TEST-1", "to": "Done"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+}
+
+func TestBatchWorkflowAssign_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow assign",
+		Args:    map[string]string{"issue": "TEST-1", "to": "none"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "PUT" {
+		t.Errorf("expected method=PUT, got %s", result["method"])
+	}
+}
+
 func TestFetchJSONWithBody_Error(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -505,5 +602,27 @@ func TestFetchJSONWithBody_Error(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "forbidden") {
 		t.Errorf("expected error message in stderr, got: %s", stderr.String())
+	}
+}
+
+// --- Bug: root --help uses HTML-escaped JSON ---
+
+func TestRootHelp_NoHTMLEscaping(t *testing.T) {
+	// The root help JSON should not contain HTML-escaped angle brackets.
+	// We can't easily test the actual help function (it calls os.Exit),
+	// so verify the encoding approach directly.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(map[string]string{
+		"hint": "use `jr schema <resource>` for operations",
+	})
+
+	output := buf.String()
+	if strings.Contains(output, `\u003c`) {
+		t.Errorf("expected no HTML escaping in JSON, got: %s", output)
+	}
+	if !strings.Contains(output, `<resource>`) {
+		t.Errorf("expected literal <resource> in output, got: %s", output)
 	}
 }

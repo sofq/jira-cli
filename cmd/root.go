@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -195,11 +196,14 @@ func init() {
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd == rootCmd {
 			// Bug #6: Output a helpful JSON hint and exit 0 for explicit --help / help.
-			out, _ := json.Marshal(map[string]string{
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.SetEscapeHTML(false)
+			_ = enc.Encode(map[string]string{
 				"hint":    "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource",
 				"version": Version,
 			})
-			fmt.Fprintf(os.Stdout, "%s\n", out)
+			fmt.Fprintf(os.Stdout, "%s", buf.String())
 			os.Exit(jrerrors.ExitOK)
 			return
 		}
