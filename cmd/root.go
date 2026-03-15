@@ -51,6 +51,7 @@ var rootCmd = &cobra.Command{
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		fields, _ := cmd.Flags().GetString("fields")
+		cacheTTL, _ := cmd.Flags().GetDuration("cache")
 
 		flags := &config.FlagOverrides{
 			BaseURL:  baseURL,
@@ -92,6 +93,7 @@ var rootCmd = &cobra.Command{
 			Verbose:    verbose,
 			Pretty:     pretty,
 			Fields:     fields,
+			CacheTTL:   cacheTTL,
 		}
 
 		cmd.SetContext(client.NewContext(cmd.Context(), c))
@@ -112,6 +114,7 @@ func init() {
 	pf.Bool("verbose", false, "log HTTP request/response details to stderr")
 	pf.Bool("dry-run", false, "print the request as JSON without executing it")
 	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
+	pf.Duration("cache", 0, "cache GET responses for this duration (e.g. 5m, 1h)")
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(versionCmd)

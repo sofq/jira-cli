@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
@@ -707,5 +708,39 @@ func TestDo_FieldsNotAppliedToPost(t *testing.T) {
 	}
 	if strings.Contains(gotQuery, "fields=") {
 		t.Errorf("fields should not be applied to POST, got query: %s", gotQuery)
+	}
+}
+
+// Test 14: Cache hit skips server call.
+func TestDo_CacheHit(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"data":"fresh"}`)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.CacheTTL = 5 * time.Minute
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/cached-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "GET", "/rest/api/3/cached-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Errorf("expected still 1 server call (cache hit), got %d", callCount)
 	}
 }

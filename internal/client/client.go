@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
@@ -32,7 +34,8 @@ type Client struct {
 	DryRun     bool      // output request as JSON, don't execute
 	Verbose    bool      // log request/response to stderr
 	Pretty     bool      // pretty-print JSON
-	Fields     string    // --fields comma-separated field names for GET
+	Fields     string        // --fields comma-separated field names for GET
+	CacheTTL   time.Duration // --cache duration; 0 means no caching
 }
 
 // NewContext stores the client in the given context and returns the new context.
@@ -145,6 +148,15 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 
 // doOnce performs a single HTTP request and writes the response to Stdout.
 func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body io.Reader) int {
+	// Cache check for GET requests.
+	var cacheKey string
+	if c.CacheTTL > 0 && method == "GET" {
+		cacheKey = cache.Key(method, rawURL)
+		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
+			return c.writeOutput(data)
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
 	if err != nil {
 		apiErr := &jrerrors.APIError{
@@ -194,6 +206,11 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return apiErr.ExitCode()
+	}
+
+	// Cache successful GET responses.
+	if cacheKey != "" {
+		cache.Set(cacheKey, respBody)
 	}
 
 	return c.writeOutput(respBody)
