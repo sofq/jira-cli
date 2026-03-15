@@ -24,7 +24,7 @@ jr issue get --issueIdOrKey PROJ-123 --fields key,summary --jq '{key: .key, summ
 
 - **All output is JSON** — stdout for data, stderr for errors, always
 - **Semantic exit codes** — 0=ok, 2=auth, 3=not_found, 5=rate_limited — agents can branch without parsing
-- **600+ commands** from the official Jira OpenAPI spec, synced weekly
+- **600+ commands** from the official Jira OpenAPI spec, synced daily
 - **Batch operations** — N API calls in one process via `jr batch`
 - **Self-describing** — `jr schema --compact` lets agents discover commands at runtime
 - **Workflow helpers** — `jr workflow transition --to "Done"` resolves IDs automatically
