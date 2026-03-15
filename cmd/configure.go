@@ -52,7 +52,17 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		return deleteProfileByName(profileName)
 	}
 
-	// Bug #1/#2: Validate required fields are not empty/whitespace.
+	// Validate profile name is not empty/whitespace.
+	if strings.TrimSpace(profileName) == "" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "--profile must not be empty or whitespace-only",
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+
+	// Validate required fields are not empty/whitespace.
 	if strings.TrimSpace(baseURL) == "" {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
