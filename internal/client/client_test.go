@@ -168,12 +168,49 @@ func TestDo_Pagination(t *testing.T) {
 		t.Errorf("expected 2 HTTP calls for pagination, got %d", callCount)
 	}
 
-	var result []map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		t.Fatalf("stdout is not valid JSON array: %s; err=%v", stdout.String(), err)
+	var envelope struct {
+		StartAt int                      `json:"startAt"`
+		Total   int                      `json:"total"`
+		IsLast  bool                     `json:"isLast"`
+		Values  []map[string]interface{} `json:"values"`
 	}
-	if len(result) != 4 {
-		t.Errorf("expected 4 merged items, got %d", len(result))
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(envelope.Values) != 4 {
+		t.Errorf("expected 4 merged items, got %d", len(envelope.Values))
+	}
+	if envelope.Total != 4 {
+		t.Errorf("expected total=4, got %d", envelope.Total)
+	}
+	if !envelope.IsLast {
+		t.Error("expected isLast=true after merging all pages")
+	}
+}
+
+// Test 6b: Pagination passthrough — non-paginated GET responses are returned as-is.
+func TestDo_Pagination_NonPaginatedPassthrough(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"displayName":"Agent","active":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/myself", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if result["displayName"] != "Agent" {
+		t.Errorf("expected displayName=Agent, got %v", result["displayName"])
 	}
 }
 

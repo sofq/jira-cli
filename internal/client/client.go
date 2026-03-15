@@ -96,8 +96,9 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 
 	// Pagination only for GET requests.
 	if c.Paginate && method == "GET" {
-		return c.doWithPagination(ctx, method, path, query)
+		return c.doWithPagination(ctx, method, rawURL, path, query)
 	}
+
 
 	return c.doOnce(ctx, method, rawURL, path, body)
 }
@@ -162,98 +163,85 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	return c.writeOutput(respBody)
 }
 
-// doWithPagination fetches all pages of a Jira paginated response (startAt /
-// maxResults / total / values pattern), merges the values arrays, and writes
-// the combined array to Stdout.
-func (c *Client) doWithPagination(ctx context.Context, method, path string, query url.Values) int {
-	var allValues []json.RawMessage
-	startAt := 0
+// paginatedPage represents Jira's standard paginated response envelope.
+type paginatedPage struct {
+	StartAt    int               `json:"startAt"`
+	MaxResults int               `json:"maxResults"`
+	Total      int               `json:"total"`
+	IsLast     *bool             `json:"isLast,omitempty"`
+	Values     []json.RawMessage `json:"values"`
+}
 
-	for {
+// isPaginated checks whether the raw JSON body looks like a Jira paginated
+// response by verifying the presence of the "values" key.
+func isPaginated(body []byte) bool {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return false
+	}
+	_, ok := probe["values"]
+	return ok
+}
+
+// doWithPagination fetches all pages of a Jira paginated response (startAt /
+// maxResults / total / values pattern), merges the values into the original
+// response envelope, and writes it to Stdout. Non-paginated responses are
+// passed through unchanged.
+func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path string, query url.Values) int {
+	// Fetch the first page using the original URL (preserves caller's query params).
+	firstBody, code := c.fetchPage(ctx, method, firstURL, path)
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	// If it doesn't look like a paginated response, pass through as-is.
+	if !isPaginated(firstBody) {
+		return c.writeOutput(firstBody)
+	}
+
+	var page paginatedPage
+	if err := json.Unmarshal(firstBody, &page); err != nil {
+		return c.writeOutput(firstBody)
+	}
+
+	allValues := append([]json.RawMessage{}, page.Values...)
+
+	// Determine if we need more pages.
+	for !c.isLastPage(page, len(allValues)) && len(page.Values) > 0 {
+		startAt := len(allValues)
 		q := url.Values{}
 		for k, v := range query {
 			q[k] = v
 		}
 		q.Set("startAt", fmt.Sprintf("%d", startAt))
+		nextURL := c.BaseURL + path + "?" + q.Encode()
 
-		rawURL := c.BaseURL + path + "?" + q.Encode()
-
-		req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
-		if err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Status:    0,
-				Message:   err.Error(),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-		req.Header.Set("Accept", "application/json")
-		c.applyAuth(req)
-
-		if c.Verbose {
-			fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
+		body, code := c.fetchPage(ctx, method, nextURL, path)
+		if code != jrerrors.ExitOK {
+			return code
 		}
 
-		resp, err := c.HTTPClient.Do(req)
-		if err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Status:    0,
-				Message:   err.Error(),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-
-		if c.Verbose {
-			fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Status:    0,
-				Message:   "reading response body: " + err.Error(),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-
-		if resp.StatusCode >= 400 {
-			apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path)
-			apiErr.WriteJSON(c.Stderr)
-			return apiErr.ExitCode()
-		}
-
-		// Parse paginated response.
-		var page struct {
-			StartAt    int               `json:"startAt"`
-			MaxResults int               `json:"maxResults"`
-			Total      int               `json:"total"`
-			Values     []json.RawMessage `json:"values"`
-		}
 		if err := json.Unmarshal(body, &page); err != nil {
-			// Not a paginated response — fall back to writing the raw body.
-			return c.writeOutput(body)
+			break
 		}
-
 		allValues = append(allValues, page.Values...)
-
-		// Stop when we've fetched all items.
-		if page.Total == 0 || len(allValues) >= page.Total {
-			break
-		}
-		// Stop if the page returned no items (guards against infinite loops).
-		if len(page.Values) == 0 {
-			break
-		}
-		startAt += len(page.Values)
 	}
 
-	merged, err := json.Marshal(allValues)
+	// Re-serialize the original envelope with all values merged.
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(firstBody, &envelope); err != nil {
+		return c.writeOutput(firstBody)
+	}
+
+	mergedValues, _ := json.Marshal(allValues)
+	envelope["values"] = mergedValues
+	envelope["startAt"] = json.RawMessage("0")
+	total, _ := json.Marshal(len(allValues))
+	envelope["total"] = json.RawMessage(total)
+	isLastTrue, _ := json.Marshal(true)
+	envelope["isLast"] = json.RawMessage(isLastTrue)
+
+	result, err := json.Marshal(envelope)
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "connection_error",
@@ -264,7 +252,73 @@ func (c *Client) doWithPagination(ctx context.Context, method, path string, quer
 		return jrerrors.ExitError
 	}
 
-	return c.writeOutput(merged)
+	return c.writeOutput(result)
+}
+
+// isLastPage returns true when there are no more pages to fetch.
+func (c *Client) isLastPage(page paginatedPage, fetched int) bool {
+	if page.IsLast != nil {
+		return *page.IsLast
+	}
+	if page.Total > 0 {
+		return fetched >= page.Total
+	}
+	return len(page.Values) == 0
+}
+
+// fetchPage performs a single GET request and returns the response body.
+func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]byte, int) {
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Status:    0,
+			Message:   err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	req.Header.Set("Accept", "application/json")
+	c.applyAuth(req)
+
+	if c.Verbose {
+		fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Status:    0,
+			Message:   err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	defer resp.Body.Close()
+
+	if c.Verbose {
+		fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Status:    0,
+			Message:   "reading response body: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+
+	if resp.StatusCode >= 400 {
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(body)), method, path)
+		apiErr.WriteJSON(c.Stderr)
+		return nil, apiErr.ExitCode()
+	}
+
+	return body, jrerrors.ExitOK
 }
 
 // writeOutput applies optional JQ filtering and pretty-printing, then writes
