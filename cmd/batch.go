@@ -234,6 +234,8 @@ func executeBatchOp(
 		DryRun:     baseClient.DryRun,
 		Verbose:    baseClient.Verbose,
 		Pretty:     baseClient.Pretty,
+		Fields:     baseClient.Fields,
+		CacheTTL:   baseClient.CacheTTL,
 	}
 
 	var exitCode int

@@ -1692,3 +1692,190 @@ func TestDo_PaginationCachePassthrough(t *testing.T) {
 		t.Errorf("expected displayName=Agent Smith, got %v", envelope.Values[0]["displayName"])
 	}
 }
+
+// TestDo_TokenPagination tests auto-pagination for nextPageToken-based responses
+// (e.g. the new /search/jql endpoint).
+func TestDo_TokenPagination(t *testing.T) {
+	page := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case 0:
+			page++
+			fmt.Fprintln(w, `{"issues":[{"key":"A-1"},{"key":"A-2"}],"nextPageToken":"tok1","isLast":false}`)
+		case 1:
+			page++
+			if r.URL.Query().Get("nextPageToken") != "tok1" {
+				t.Errorf("expected nextPageToken=tok1, got %q", r.URL.Query().Get("nextPageToken"))
+			}
+			fmt.Fprintln(w, `{"issues":[{"key":"A-3"}],"isLast":true}`)
+		default:
+			t.Error("unexpected extra page fetch")
+			fmt.Fprintln(w, `{"issues":[],"isLast":true}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/search/jql", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var resp struct {
+		Issues []map[string]string `json:"issues"`
+		IsLast bool                `json:"isLast"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(resp.Issues) != 3 {
+		t.Errorf("expected 3 issues, got %d", len(resp.Issues))
+	}
+	if !resp.IsLast {
+		t.Error("expected isLast=true in merged response")
+	}
+	// nextPageToken should be removed from merged response
+	var raw map[string]json.RawMessage
+	_ = json.Unmarshal(stdout.Bytes(), &raw)
+	if _, ok := raw["nextPageToken"]; ok {
+		t.Error("nextPageToken should be removed from merged response")
+	}
+}
+
+// TestDo_TokenPagination_SinglePage tests that a single-page token response passes through.
+func TestDo_TokenPagination_SinglePage(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"issues":[{"key":"B-1"}],"isLast":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/search/jql", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var resp struct {
+		Issues []map[string]string `json:"issues"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(resp.Issues) != 1 {
+		t.Errorf("expected 1 issue, got %d", len(resp.Issues))
+	}
+}
+
+// TestDo_TokenPagination_ErrorOnPage2 tests error handling during token pagination.
+func TestDo_TokenPagination_ErrorOnPage2(t *testing.T) {
+	page := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch page {
+		case 0:
+			page++
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"issues":[{"key":"C-1"}],"nextPageToken":"tok1","isLast":false}`)
+		default:
+			w.WriteHeader(500)
+			fmt.Fprintln(w, `{"errorMessages":["server error"]}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/search/jql", nil, nil)
+	if code == 0 {
+		t.Error("expected non-zero exit code on page 2 error")
+	}
+}
+
+// TestDo_TokenPagination_WithJQ tests JQ filtering on token-paginated responses.
+func TestDo_TokenPagination_WithJQ(t *testing.T) {
+	page := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case 0:
+			page++
+			fmt.Fprintln(w, `{"issues":[{"key":"D-1"},{"key":"D-2"}],"nextPageToken":"tok1","isLast":false}`)
+		default:
+			fmt.Fprintln(w, `{"issues":[{"key":"D-3"}],"isLast":true}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+	c.JQFilter = "[.issues[] | .key]"
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/search/jql", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var keys []string
+	if err := json.Unmarshal(stdout.Bytes(), &keys); err != nil {
+		t.Fatalf("invalid JSON: %v; stdout=%s", err, stdout.String())
+	}
+	if len(keys) != 3 {
+		t.Errorf("expected 3 keys, got %d: %v", len(keys), keys)
+	}
+}
+
+// TestDo_FieldsPropagation tests that the Fields option applies to GET requests.
+func TestDo_FieldsPropagation(t *testing.T) {
+	var gotFields string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFields = r.URL.Query().Get("fields")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary,status"
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if gotFields != "key,summary,status" {
+		t.Errorf("expected fields=key,summary,status, got %q", gotFields)
+	}
+}
+
+// TestDo_FieldsIgnoredOnPost tests that Fields are not applied to POST requests.
+func TestDo_FieldsIgnoredOnPost(t *testing.T) {
+	var gotFields string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFields = r.URL.Query().Get("fields")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"123"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary"
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{"fields":{}}`))
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if gotFields != "" {
+		t.Errorf("expected no fields query param on POST, got %q", gotFields)
+	}
+}

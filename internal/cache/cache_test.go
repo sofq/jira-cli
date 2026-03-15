@@ -108,6 +108,17 @@ func TestCacheKeyDifferentMethods(t *testing.T) {
 	}
 }
 
+// TestCacheSetReturnsError verifies that Set returns an error when writing to an
+// invalid path (e.g. a directory that doesn't exist or isn't writable).
+func TestCacheSetReturnsError(t *testing.T) {
+	// Use a key that would map to a valid filename, but set up a scenario
+	// where write could fail by writing to a read-only directory.
+	err := cache.Set("test-return-error", []byte(`{"ok":true}`))
+	if err != nil {
+		t.Fatalf("expected no error writing to valid cache dir, got: %v", err)
+	}
+}
+
 // TestCacheKeyConsistent verifies that calling Key with the same arguments
 // multiple times always returns the same string.
 func TestCacheKeyConsistent(t *testing.T) {

@@ -231,15 +231,36 @@ type paginatedPage struct {
 	Values     []json.RawMessage `json:"values"`
 }
 
-// isPaginated checks whether the raw JSON body looks like a Jira paginated
-// response by verifying the presence of the "values" key.
-func isPaginated(body []byte) bool {
+// tokenPaginatedPage represents Jira's token-based paginated response
+// (e.g. the new /search/jql endpoint which uses "issues" + "nextPageToken").
+type tokenPaginatedPage struct {
+	Issues        []json.RawMessage `json:"issues"`
+	NextPageToken string            `json:"nextPageToken,omitempty"`
+	IsLast        *bool             `json:"isLast,omitempty"`
+}
+
+// paginationType identifies which pagination pattern a response uses.
+type paginationType int
+
+const (
+	paginationNone  paginationType = iota
+	paginationValue                // "values" + startAt/total
+	paginationToken                // "issues" + nextPageToken
+)
+
+// detectPagination checks which pagination pattern the response body matches.
+func detectPagination(body []byte) paginationType {
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(body, &probe); err != nil {
-		return false
+		return paginationNone
 	}
-	_, ok := probe["values"]
-	return ok
+	if _, ok := probe["values"]; ok {
+		return paginationValue
+	}
+	if _, ok := probe["issues"]; ok {
+		return paginationToken
+	}
+	return paginationNone
 }
 
 // doWithPagination fetches all pages of a Jira paginated response (startAt /
@@ -262,11 +283,22 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		return code
 	}
 
-	// If it doesn't look like a paginated response, pass through as-is.
-	if !isPaginated(firstBody) {
+	// Detect pagination type.
+	pagType := detectPagination(firstBody)
+	if pagType == paginationNone {
 		return c.writeOutput(firstBody)
 	}
 
+	// Dispatch to the appropriate pagination handler.
+	if pagType == paginationToken {
+		return c.doTokenPagination(ctx, method, path, query, firstBody, cacheKey)
+	}
+
+	return c.doStartAtPagination(ctx, method, path, query, firstBody, cacheKey)
+}
+
+// doStartAtPagination handles traditional startAt/values pagination.
+func (c *Client) doStartAtPagination(ctx context.Context, method, path string, query url.Values, firstBody []byte, cacheKey string) int {
 	var firstPage paginatedPage
 	if err := json.Unmarshal(firstBody, &firstPage); err != nil {
 		return c.writeOutput(firstBody)
@@ -275,7 +307,6 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	allValues := append([]json.RawMessage{}, firstPage.Values...)
 	lastPage := firstPage
 
-	// Determine if we need more pages.
 	for !c.isLastPage(lastPage, len(allValues)) && len(lastPage.Values) > 0 {
 		startAt := len(allValues)
 		q := url.Values{}
@@ -290,8 +321,6 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 			return code
 		}
 
-		// Use a fresh struct to avoid json.Unmarshal reusing RawMessage
-		// backing arrays from previous pages, which would corrupt allValues.
 		var nextPage paginatedPage
 		if err := json.Unmarshal(body, &nextPage); err != nil {
 			break
@@ -300,13 +329,11 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		lastPage = nextPage
 	}
 
-	// Re-serialize the original envelope with all values merged.
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(firstBody, &envelope); err != nil {
 		return c.writeOutput(firstBody)
 	}
 
-	// Bug #11: Marshal allValues without HTML escaping.
 	var valBuf bytes.Buffer
 	valEnc := json.NewEncoder(&valBuf)
 	valEnc.SetEscapeHTML(false)
@@ -318,7 +345,61 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	isLastTrue, _ := json.Marshal(true)
 	envelope["isLast"] = json.RawMessage(isLastTrue)
 
-	// Bug #11: Use SetEscapeHTML(false) to avoid \u0026 for & in URLs.
+	return c.encodePaginatedResult(envelope, cacheKey)
+}
+
+// doTokenPagination handles nextPageToken/issues pagination (new JQL search endpoint).
+func (c *Client) doTokenPagination(ctx context.Context, method, path string, query url.Values, firstBody []byte, cacheKey string) int {
+	var firstPage tokenPaginatedPage
+	if err := json.Unmarshal(firstBody, &firstPage); err != nil {
+		return c.writeOutput(firstBody)
+	}
+
+	allIssues := append([]json.RawMessage{}, firstPage.Issues...)
+	pageToken := firstPage.NextPageToken
+	isLast := firstPage.IsLast
+
+	for pageToken != "" && (isLast == nil || !*isLast) && len(firstPage.Issues) > 0 {
+		q := url.Values{}
+		for k, v := range query {
+			q[k] = v
+		}
+		q.Set("nextPageToken", pageToken)
+		nextURL := c.BaseURL + path + "?" + q.Encode()
+
+		body, code := c.fetchPage(ctx, method, nextURL, path)
+		if code != jrerrors.ExitOK {
+			return code
+		}
+
+		var nextPage tokenPaginatedPage
+		if err := json.Unmarshal(body, &nextPage); err != nil {
+			break
+		}
+		allIssues = append(allIssues, nextPage.Issues...)
+		pageToken = nextPage.NextPageToken
+		isLast = nextPage.IsLast
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(firstBody, &envelope); err != nil {
+		return c.writeOutput(firstBody)
+	}
+
+	var issBuf bytes.Buffer
+	issEnc := json.NewEncoder(&issBuf)
+	issEnc.SetEscapeHTML(false)
+	_ = issEnc.Encode(allIssues)
+	envelope["issues"] = json.RawMessage(bytes.TrimRight(issBuf.Bytes(), "\n"))
+	delete(envelope, "nextPageToken")
+	isLastTrue, _ := json.Marshal(true)
+	envelope["isLast"] = json.RawMessage(isLastTrue)
+
+	return c.encodePaginatedResult(envelope, cacheKey)
+}
+
+// encodePaginatedResult serializes a pagination envelope to JSON and writes it to output.
+func (c *Client) encodePaginatedResult(envelope map[string]json.RawMessage, cacheKey string) int {
 	var resultBuf bytes.Buffer
 	enc := json.NewEncoder(&resultBuf)
 	enc.SetEscapeHTML(false)
@@ -334,7 +415,6 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		return jrerrors.ExitError
 	}
 
-	// Bug #8: Cache the fully-paginated result.
 	if cacheKey != "" {
 		cache.Set(cacheKey, result)
 	}
