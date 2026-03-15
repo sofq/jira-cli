@@ -232,7 +232,23 @@ var statuses_get_project_issue_type_usages_for_status = &cobra.Command{
 			return err
 		}
 		statusId, _ := cmd.Flags().GetString("statusId")
+		if strings.TrimSpace(statusId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--statusId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		projectId, _ := cmd.Flags().GetString("projectId")
+		if strings.TrimSpace(projectId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/statuses/%s/project/%s/issueTypeUsages", url.PathEscape(statusId), url.PathEscape(projectId))
 		query := client.QueryFromFlags(cmd, "nextPageToken", "maxResults")
 
@@ -255,6 +271,14 @@ var statuses_get_project_usages_for_status = &cobra.Command{
 			return err
 		}
 		statusId, _ := cmd.Flags().GetString("statusId")
+		if strings.TrimSpace(statusId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--statusId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/statuses/%s/projectUsages", url.PathEscape(statusId))
 		query := client.QueryFromFlags(cmd, "nextPageToken", "maxResults")
 
@@ -277,6 +301,14 @@ var statuses_get_workflow_usages_for_status = &cobra.Command{
 			return err
 		}
 		statusId, _ := cmd.Flags().GetString("statusId")
+		if strings.TrimSpace(statusId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--statusId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/statuses/%s/workflowUsages", url.PathEscape(statusId))
 		query := client.QueryFromFlags(cmd, "nextPageToken", "maxResults")
 

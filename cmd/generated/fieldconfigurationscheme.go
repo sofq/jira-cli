@@ -211,6 +211,14 @@ var fieldconfigurationscheme_update_field_configuration_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/fieldconfigurationscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -262,6 +270,14 @@ var fieldconfigurationscheme_delete_field_configuration_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/fieldconfigurationscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -284,6 +300,14 @@ var fieldconfigurationscheme_set_field_configuration_scheme_mapping = &cobra.Com
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/fieldconfigurationscheme/%s/mapping", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -335,6 +359,14 @@ var fieldconfigurationscheme_remove_issue_types_from_global_field_configuration_
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/fieldconfigurationscheme/%s/mapping/delete", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 

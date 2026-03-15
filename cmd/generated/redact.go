@@ -98,6 +98,14 @@ var redact_get_redaction_status = &cobra.Command{
 			return err
 		}
 		jobId, _ := cmd.Flags().GetString("jobId")
+		if strings.TrimSpace(jobId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--jobId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/redact/status/%s", url.PathEscape(jobId))
 		query := client.QueryFromFlags(cmd)
 

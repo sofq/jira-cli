@@ -119,6 +119,14 @@ var issueLinkType_get_issue_link_type = &cobra.Command{
 			return err
 		}
 		issueLinkTypeId, _ := cmd.Flags().GetString("issueLinkTypeId")
+		if strings.TrimSpace(issueLinkTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueLinkTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issueLinkType/%s", url.PathEscape(issueLinkTypeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -141,6 +149,14 @@ var issueLinkType_update_issue_link_type = &cobra.Command{
 			return err
 		}
 		issueLinkTypeId, _ := cmd.Flags().GetString("issueLinkTypeId")
+		if strings.TrimSpace(issueLinkTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueLinkTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issueLinkType/%s", url.PathEscape(issueLinkTypeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -192,6 +208,14 @@ var issueLinkType_delete_issue_link_type = &cobra.Command{
 			return err
 		}
 		issueLinkTypeId, _ := cmd.Flags().GetString("issueLinkTypeId")
+		if strings.TrimSpace(issueLinkTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueLinkTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issueLinkType/%s", url.PathEscape(issueLinkTypeId))
 		query := client.QueryFromFlags(cmd)
 

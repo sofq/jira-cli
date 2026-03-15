@@ -211,6 +211,14 @@ var issuetypescreenscheme_update_issue_type_screen_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -262,6 +270,14 @@ var issuetypescreenscheme_delete_issue_type_screen_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -284,6 +300,14 @@ var issuetypescreenscheme_append_mappings_for_issue_type_screen_scheme = &cobra.
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s/mapping", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -335,6 +359,14 @@ var issuetypescreenscheme_update_default_screen_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s/mapping/default", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -386,6 +418,14 @@ var issuetypescreenscheme_remove_mappings_from_issue_type_screen_scheme = &cobra
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s/mapping/remove", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -437,6 +477,14 @@ var issuetypescreenscheme_get_projects_for_issue_type_screen_scheme = &cobra.Com
 			return err
 		}
 		issueTypeScreenSchemeId, _ := cmd.Flags().GetString("issueTypeScreenSchemeId")
+		if strings.TrimSpace(issueTypeScreenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeScreenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescreenscheme/%s/project", url.PathEscape(issueTypeScreenSchemeId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "query")
 

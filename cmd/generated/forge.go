@@ -119,6 +119,14 @@ var forge_get_app_property = &cobra.Command{
 			return err
 		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/forge/1/app/properties/%s", url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -141,6 +149,14 @@ var forge_put_app_property = &cobra.Command{
 			return err
 		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/forge/1/app/properties/%s", url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -192,6 +208,14 @@ var forge_delete_app_property = &cobra.Command{
 			return err
 		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/forge/1/app/properties/%s", url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 

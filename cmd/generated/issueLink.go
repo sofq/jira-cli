@@ -98,6 +98,14 @@ var issueLink_get_issue_link = &cobra.Command{
 			return err
 		}
 		linkId, _ := cmd.Flags().GetString("linkId")
+		if strings.TrimSpace(linkId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--linkId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issueLink/%s", url.PathEscape(linkId))
 		query := client.QueryFromFlags(cmd)
 
@@ -120,6 +128,14 @@ var issueLink_delete_issue_link = &cobra.Command{
 			return err
 		}
 		linkId, _ := cmd.Flags().GetString("linkId")
+		if strings.TrimSpace(linkId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--linkId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issueLink/%s", url.PathEscape(linkId))
 		query := client.QueryFromFlags(cmd)
 

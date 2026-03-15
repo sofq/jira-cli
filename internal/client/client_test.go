@@ -1247,15 +1247,28 @@ func TestDo_DryRunWithBody(t *testing.T) {
 		t.Error("dry run must not execute the actual HTTP request")
 	}
 
-	var obj map[string]string
+	var obj map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &obj); err != nil {
 		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
 	}
 	if obj["method"] != "POST" {
 		t.Errorf("expected method=POST in dry run output, got %q", obj["method"])
 	}
-	if !strings.Contains(obj["url"], "/rest/api/3/issue") {
-		t.Errorf("expected url to contain path, got %q", obj["url"])
+	urlStr, _ := obj["url"].(string)
+	if !strings.Contains(urlStr, "/rest/api/3/issue") {
+		t.Errorf("expected url to contain path, got %q", urlStr)
+	}
+	// Verify body is included in dry-run output.
+	bodyObj, ok := obj["body"]
+	if !ok {
+		t.Error("expected body field in dry-run output for POST request")
+	} else {
+		bodyMap, ok := bodyObj.(map[string]interface{})
+		if !ok {
+			t.Errorf("expected body to be a JSON object, got %T", bodyObj)
+		} else if bodyMap["fields"] == nil {
+			t.Error("expected body.fields in dry-run output")
+		}
 	}
 }
 

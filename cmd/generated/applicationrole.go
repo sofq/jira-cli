@@ -69,6 +69,14 @@ var applicationrole_get_application_role = &cobra.Command{
 			return err
 		}
 		key, _ := cmd.Flags().GetString("key")
+		if strings.TrimSpace(key) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--key must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/applicationrole/%s", url.PathEscape(key))
 		query := client.QueryFromFlags(cmd)
 

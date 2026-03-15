@@ -138,11 +138,26 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 
 	// DryRun: emit the request as JSON and return immediately.
 	if c.DryRun {
-		out, _ := json.Marshal(map[string]string{
+		dryOut := map[string]interface{}{
 			"method": method,
 			"url":    rawURL,
-		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
+		}
+		if body != nil {
+			bodyBytes, err := io.ReadAll(body)
+			if err == nil && len(bodyBytes) > 0 {
+				var parsed interface{}
+				if json.Unmarshal(bodyBytes, &parsed) == nil {
+					dryOut["body"] = parsed
+				} else {
+					dryOut["body"] = string(bodyBytes)
+				}
+			}
+		}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		_ = enc.Encode(dryOut)
+		fmt.Fprintf(c.Stdout, "%s", buf.String())
 		return jrerrors.ExitOK
 	}
 
@@ -308,6 +323,19 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	return c.doStartAtPagination(ctx, method, path, query, firstBody, cacheKey)
 }
 
+// buildURL constructs a URL from base, path, and query, correctly handling
+// paths that may already contain query parameters.
+func (c *Client) buildURL(path string, query url.Values) string {
+	rawURL := c.BaseURL + path
+	if len(query) == 0 {
+		return rawURL
+	}
+	if strings.Contains(rawURL, "?") {
+		return rawURL + "&" + query.Encode()
+	}
+	return rawURL + "?" + query.Encode()
+}
+
 // doStartAtPagination handles traditional startAt/values pagination.
 func (c *Client) doStartAtPagination(ctx context.Context, method, path string, query url.Values, firstBody []byte, cacheKey string) int {
 	var firstPage paginatedPage
@@ -325,7 +353,7 @@ func (c *Client) doStartAtPagination(ctx context.Context, method, path string, q
 			q[k] = v
 		}
 		q.Set("startAt", fmt.Sprintf("%d", startAt))
-		nextURL := c.BaseURL + path + "?" + q.Encode()
+		nextURL := c.buildURL(path, q)
 
 		body, code := c.fetchPage(ctx, method, nextURL, path)
 		if code != jrerrors.ExitOK {
@@ -377,7 +405,7 @@ func (c *Client) doTokenPagination(ctx context.Context, method, path string, que
 			q[k] = v
 		}
 		q.Set("nextPageToken", pageToken)
-		nextURL := c.BaseURL + path + "?" + q.Encode()
+		nextURL := c.buildURL(path, q)
 
 		body, code := c.fetchPage(ctx, method, nextURL, path)
 		if code != jrerrors.ExitOK {

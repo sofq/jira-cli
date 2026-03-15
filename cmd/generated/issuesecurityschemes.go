@@ -303,6 +303,14 @@ var issuesecurityschemes_get_issue_security_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -325,6 +333,14 @@ var issuesecurityschemes_update_issue_security_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -376,6 +392,14 @@ var issuesecurityschemes_get_issue_security_level_members = &cobra.Command{
 			return err
 		}
 		issueSecuritySchemeId, _ := cmd.Flags().GetString("issueSecuritySchemeId")
+		if strings.TrimSpace(issueSecuritySchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueSecuritySchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/members", url.PathEscape(issueSecuritySchemeId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "issueSecurityLevelId", "expand")
 
@@ -398,6 +422,14 @@ var issuesecurityschemes_delete_security_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -420,6 +452,14 @@ var issuesecurityschemes_add_security_level = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/level", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -471,7 +511,23 @@ var issuesecurityschemes_update_security_level = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		levelId, _ := cmd.Flags().GetString("levelId")
+		if strings.TrimSpace(levelId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--levelId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/level/%s", url.PathEscape(schemeId), url.PathEscape(levelId))
 		query := client.QueryFromFlags(cmd)
 
@@ -523,7 +579,23 @@ var issuesecurityschemes_remove_level = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		levelId, _ := cmd.Flags().GetString("levelId")
+		if strings.TrimSpace(levelId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--levelId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/level/%s", url.PathEscape(schemeId), url.PathEscape(levelId))
 		query := client.QueryFromFlags(cmd, "replaceWith")
 
@@ -546,7 +618,23 @@ var issuesecurityschemes_add_security_level_members = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		levelId, _ := cmd.Flags().GetString("levelId")
+		if strings.TrimSpace(levelId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--levelId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/level/%s/member", url.PathEscape(schemeId), url.PathEscape(levelId))
 		query := client.QueryFromFlags(cmd)
 
@@ -598,8 +686,32 @@ var issuesecurityschemes_remove_member_from_security_level = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		levelId, _ := cmd.Flags().GetString("levelId")
+		if strings.TrimSpace(levelId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--levelId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		memberId, _ := cmd.Flags().GetString("memberId")
+		if strings.TrimSpace(memberId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--memberId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuesecurityschemes/%s/level/%s/member/%s", url.PathEscape(schemeId), url.PathEscape(levelId), url.PathEscape(memberId))
 		query := client.QueryFromFlags(cmd)
 

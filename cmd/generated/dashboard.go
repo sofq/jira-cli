@@ -211,6 +211,14 @@ var dashboard_get_all_gadgets = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/gadget", url.PathEscape(dashboardId))
 		query := client.QueryFromFlags(cmd, "moduleKey", "uri", "gadgetId")
 
@@ -233,6 +241,14 @@ var dashboard_add_gadget = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/gadget", url.PathEscape(dashboardId))
 		query := client.QueryFromFlags(cmd)
 
@@ -284,7 +300,23 @@ var dashboard_update_gadget = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		gadgetId, _ := cmd.Flags().GetString("gadgetId")
+		if strings.TrimSpace(gadgetId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--gadgetId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/gadget/%s", url.PathEscape(dashboardId), url.PathEscape(gadgetId))
 		query := client.QueryFromFlags(cmd)
 
@@ -336,7 +368,23 @@ var dashboard_remove_gadget = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		gadgetId, _ := cmd.Flags().GetString("gadgetId")
+		if strings.TrimSpace(gadgetId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--gadgetId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/gadget/%s", url.PathEscape(dashboardId), url.PathEscape(gadgetId))
 		query := client.QueryFromFlags(cmd)
 
@@ -359,7 +407,23 @@ var dashboard_get_item_property_keys = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		itemId, _ := cmd.Flags().GetString("itemId")
+		if strings.TrimSpace(itemId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--itemId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/items/%s/properties", url.PathEscape(dashboardId), url.PathEscape(itemId))
 		query := client.QueryFromFlags(cmd)
 
@@ -382,8 +446,32 @@ var dashboard_get_item_property = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		itemId, _ := cmd.Flags().GetString("itemId")
+		if strings.TrimSpace(itemId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--itemId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/items/%s/properties/%s", url.PathEscape(dashboardId), url.PathEscape(itemId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -406,8 +494,32 @@ var dashboard_set_item_property = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		itemId, _ := cmd.Flags().GetString("itemId")
+		if strings.TrimSpace(itemId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--itemId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/items/%s/properties/%s", url.PathEscape(dashboardId), url.PathEscape(itemId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -459,8 +571,32 @@ var dashboard_delete_item_property = &cobra.Command{
 			return err
 		}
 		dashboardId, _ := cmd.Flags().GetString("dashboardId")
+		if strings.TrimSpace(dashboardId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--dashboardId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		itemId, _ := cmd.Flags().GetString("itemId")
+		if strings.TrimSpace(itemId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--itemId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/items/%s/properties/%s", url.PathEscape(dashboardId), url.PathEscape(itemId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -483,6 +619,14 @@ var dashboard_get = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -505,6 +649,14 @@ var dashboard_update = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "extendAdminPermissions")
 
@@ -556,6 +708,14 @@ var dashboard_delete = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -578,6 +738,14 @@ var dashboard_copy = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/dashboard/%s/copy", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "extendAdminPermissions")
 

@@ -140,6 +140,14 @@ var issuetype_get_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -162,6 +170,14 @@ var issuetype_update_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -213,6 +229,14 @@ var issuetype_delete_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "alternativeIssueTypeId")
 
@@ -235,6 +259,14 @@ var issuetype_get_alternative_issue_types = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/alternatives", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -257,6 +289,14 @@ var issuetype_create_issue_type_avatar = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/avatar2", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "x", "y", "size")
 
@@ -308,6 +348,14 @@ var issuetype_get_issue_type_property_keys = &cobra.Command{
 			return err
 		}
 		issueTypeId, _ := cmd.Flags().GetString("issueTypeId")
+		if strings.TrimSpace(issueTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/properties", url.PathEscape(issueTypeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -330,7 +378,23 @@ var issuetype_get_issue_type_property = &cobra.Command{
 			return err
 		}
 		issueTypeId, _ := cmd.Flags().GetString("issueTypeId")
+		if strings.TrimSpace(issueTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/properties/%s", url.PathEscape(issueTypeId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -353,7 +417,23 @@ var issuetype_set_issue_type_property = &cobra.Command{
 			return err
 		}
 		issueTypeId, _ := cmd.Flags().GetString("issueTypeId")
+		if strings.TrimSpace(issueTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/properties/%s", url.PathEscape(issueTypeId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -405,7 +485,23 @@ var issuetype_delete_issue_type_property = &cobra.Command{
 			return err
 		}
 		issueTypeId, _ := cmd.Flags().GetString("issueTypeId")
+		if strings.TrimSpace(issueTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetype/%s/properties/%s", url.PathEscape(issueTypeId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 

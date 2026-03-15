@@ -203,6 +203,14 @@ var project_get_type_by_key = &cobra.Command{
 			return err
 		}
 		projectTypeKey, _ := cmd.Flags().GetString("projectTypeKey")
+		if strings.TrimSpace(projectTypeKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectTypeKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/type/%s", url.PathEscape(projectTypeKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -225,6 +233,14 @@ var project_get_accessible_project_type_by_key = &cobra.Command{
 			return err
 		}
 		projectTypeKey, _ := cmd.Flags().GetString("projectTypeKey")
+		if strings.TrimSpace(projectTypeKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectTypeKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/type/%s/accessible", url.PathEscape(projectTypeKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -247,6 +263,14 @@ var project_get = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "expand", "properties")
 
@@ -269,6 +293,14 @@ var project_update = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -320,6 +352,14 @@ var project_delete = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "enableUndo")
 
@@ -342,6 +382,14 @@ var project_archive = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/archive", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -364,6 +412,14 @@ var project_update_avatar = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/avatar", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -415,7 +471,23 @@ var project_delete_avatar = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/avatar/%s", url.PathEscape(projectIdOrKey), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -438,6 +510,14 @@ var project_create_avatar = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/avatar2", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "x", "y", "size")
 
@@ -489,6 +569,14 @@ var project_get_all_project_avatars = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/avatars", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -511,6 +599,14 @@ var project_get_classification_config = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/classification-config", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -533,6 +629,14 @@ var project_get_default_project_classification = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/classification-level/default", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -555,6 +659,14 @@ var project_update_default_project_classification = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/classification-level/default", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -606,6 +718,14 @@ var project_remove_default_project_classification = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/classification-level/default", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -628,6 +748,14 @@ var project_get_components_paginated = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/component", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "orderBy", "componentSource", "query")
 
@@ -650,6 +778,14 @@ var project_get_components = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/components", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "componentSource")
 
@@ -672,6 +808,14 @@ var project_delete_asynchronously = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/delete", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -694,6 +838,14 @@ var project_get_features_for = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/features", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -716,7 +868,23 @@ var project_toggle_feature_for = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		featureKey, _ := cmd.Flags().GetString("featureKey")
+		if strings.TrimSpace(featureKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--featureKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/features/%s", url.PathEscape(projectIdOrKey), url.PathEscape(featureKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -768,6 +936,14 @@ var project_get_property_keys = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/properties", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -790,7 +966,23 @@ var project_get_property = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/properties/%s", url.PathEscape(projectIdOrKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -813,7 +1005,23 @@ var project_set_property = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/properties/%s", url.PathEscape(projectIdOrKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -865,7 +1073,23 @@ var project_delete_property = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/properties/%s", url.PathEscape(projectIdOrKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -888,6 +1112,14 @@ var project_restore = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/restore", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -910,6 +1142,14 @@ var project_get_roles = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/role", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -932,7 +1172,23 @@ var project_get_role = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/role/%s", url.PathEscape(projectIdOrKey), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "excludeInactiveUsers")
 
@@ -955,7 +1211,23 @@ var project_add_actor_users = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/role/%s", url.PathEscape(projectIdOrKey), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -1007,7 +1279,23 @@ var project_set_actors = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/role/%s", url.PathEscape(projectIdOrKey), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -1059,7 +1347,23 @@ var project_delete_actor = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/role/%s", url.PathEscape(projectIdOrKey), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "user", "group", "groupId")
 
@@ -1082,6 +1386,14 @@ var project_get_role_details = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/roledetails", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "currentMember", "excludeConnectAddons", "excludeOtherServiceRoles")
 
@@ -1104,6 +1416,14 @@ var project_get_all_statuses = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/statuses", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -1126,6 +1446,14 @@ var project_get_versions_paginated = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/version", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "orderBy", "query", "status", "expand")
 
@@ -1148,6 +1476,14 @@ var project_get_versions = &cobra.Command{
 			return err
 		}
 		projectIdOrKey, _ := cmd.Flags().GetString("projectIdOrKey")
+		if strings.TrimSpace(projectIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/versions", url.PathEscape(projectIdOrKey))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -1170,6 +1506,14 @@ var project_get_email = &cobra.Command{
 			return err
 		}
 		projectId, _ := cmd.Flags().GetString("projectId")
+		if strings.TrimSpace(projectId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/email", url.PathEscape(projectId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1192,6 +1536,14 @@ var project_update_email = &cobra.Command{
 			return err
 		}
 		projectId, _ := cmd.Flags().GetString("projectId")
+		if strings.TrimSpace(projectId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/email", url.PathEscape(projectId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1243,6 +1595,14 @@ var project_get_hierarchy = &cobra.Command{
 			return err
 		}
 		projectId, _ := cmd.Flags().GetString("projectId")
+		if strings.TrimSpace(projectId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/hierarchy", url.PathEscape(projectId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1265,6 +1625,14 @@ var project_get_issue_security_scheme = &cobra.Command{
 			return err
 		}
 		projectKeyOrId, _ := cmd.Flags().GetString("projectKeyOrId")
+		if strings.TrimSpace(projectKeyOrId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectKeyOrId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/issuesecuritylevelscheme", url.PathEscape(projectKeyOrId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1287,6 +1655,14 @@ var project_get_notification_scheme_for = &cobra.Command{
 			return err
 		}
 		projectKeyOrId, _ := cmd.Flags().GetString("projectKeyOrId")
+		if strings.TrimSpace(projectKeyOrId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectKeyOrId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/notificationscheme", url.PathEscape(projectKeyOrId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -1309,6 +1685,14 @@ var project_get_assigned_permission_scheme = &cobra.Command{
 			return err
 		}
 		projectKeyOrId, _ := cmd.Flags().GetString("projectKeyOrId")
+		if strings.TrimSpace(projectKeyOrId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectKeyOrId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/permissionscheme", url.PathEscape(projectKeyOrId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -1331,6 +1715,14 @@ var project_assign_permission_scheme = &cobra.Command{
 			return err
 		}
 		projectKeyOrId, _ := cmd.Flags().GetString("projectKeyOrId")
+		if strings.TrimSpace(projectKeyOrId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectKeyOrId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/permissionscheme", url.PathEscape(projectKeyOrId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -1382,6 +1774,14 @@ var project_get_security_levels_for = &cobra.Command{
 			return err
 		}
 		projectKeyOrId, _ := cmd.Flags().GetString("projectKeyOrId")
+		if strings.TrimSpace(projectKeyOrId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--projectKeyOrId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/project/%s/securitylevel", url.PathEscape(projectKeyOrId))
 		query := client.QueryFromFlags(cmd)
 

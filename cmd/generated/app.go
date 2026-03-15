@@ -148,6 +148,14 @@ var app_get_custom_field_configuration = &cobra.Command{
 			return err
 		}
 		fieldIdOrKey, _ := cmd.Flags().GetString("fieldIdOrKey")
+		if strings.TrimSpace(fieldIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/app/field/%s/context/configuration", url.PathEscape(fieldIdOrKey))
 		query := client.QueryFromFlags(cmd, "id", "fieldContextId", "issueId", "projectKeyOrId", "issueTypeId", "startAt", "maxResults")
 
@@ -170,6 +178,14 @@ var app_update_custom_field_configuration = &cobra.Command{
 			return err
 		}
 		fieldIdOrKey, _ := cmd.Flags().GetString("fieldIdOrKey")
+		if strings.TrimSpace(fieldIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/app/field/%s/context/configuration", url.PathEscape(fieldIdOrKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -221,6 +237,14 @@ var app_update_custom_field_value = &cobra.Command{
 			return err
 		}
 		fieldIdOrKey, _ := cmd.Flags().GetString("fieldIdOrKey")
+		if strings.TrimSpace(fieldIdOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldIdOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/app/field/%s/value", url.PathEscape(fieldIdOrKey))
 		query := client.QueryFromFlags(cmd, "generateChangelog")
 

@@ -261,6 +261,14 @@ var field_update_custom = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd)
 
@@ -312,6 +320,14 @@ var field_get_contexts_for = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "isAnyIssueType", "isGlobalContext", "contextId", "startAt", "maxResults")
 
@@ -334,6 +350,14 @@ var field_create_custom_field_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd)
 
@@ -385,6 +409,14 @@ var field_get_default_values = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/defaultValue", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "contextId", "startAt", "maxResults")
 
@@ -407,6 +439,14 @@ var field_set_default_values = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/defaultValue", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd)
 
@@ -458,6 +498,14 @@ var field_get_issue_type_mappings_for_contexts = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/issuetypemapping", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "contextId", "startAt", "maxResults")
 
@@ -480,6 +528,14 @@ var field_get_custom_field_contexts_for_projects_and_issue_types = &cobra.Comman
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/mapping", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults")
 
@@ -531,6 +587,14 @@ var field_get_project_context_mapping = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/projectmapping", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "contextId", "startAt", "maxResults")
 
@@ -553,7 +617,23 @@ var field_update_custom_field_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -605,7 +685,23 @@ var field_delete_custom_field_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -628,7 +724,23 @@ var field_add_issue_types_to_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/issuetype", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -680,7 +792,23 @@ var field_remove_issue_types_from_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/issuetype/remove", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -732,7 +860,23 @@ var field_get_options_for_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd, "optionId", "onlyOptions", "startAt", "maxResults")
 
@@ -755,7 +899,23 @@ var field_create_custom_field_option = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -807,7 +967,23 @@ var field_update_custom_field_option = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -859,7 +1035,23 @@ var field_reorder_custom_field_options = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option/move", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -911,8 +1103,32 @@ var field_delete_custom_field_option = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option/%s", url.PathEscape(fieldId), url.PathEscape(contextId), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd)
 
@@ -935,8 +1151,32 @@ var field_replace_custom_field_option = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/option/%s/issue", url.PathEscape(fieldId), url.PathEscape(contextId), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd, "replaceWith", "jql")
 
@@ -959,7 +1199,23 @@ var field_assign_projects_to_custom_field_context = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/project", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1011,7 +1267,23 @@ var field_remove_custom_field_context_from_projects = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		contextId, _ := cmd.Flags().GetString("contextId")
+		if strings.TrimSpace(contextId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--contextId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/context/%s/project/remove", url.PathEscape(fieldId), url.PathEscape(contextId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1063,6 +1335,14 @@ var field_get_contexts_for_field_deprecated = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/contexts", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults")
 
@@ -1085,6 +1365,14 @@ var field_get_screens_for = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/screens", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "expand")
 
@@ -1107,6 +1395,14 @@ var field_get_all_issue_field_options = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option", url.PathEscape(fieldKey))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults")
 
@@ -1129,6 +1425,14 @@ var field_create_issue_field_option = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option", url.PathEscape(fieldKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -1180,6 +1484,14 @@ var field_get_selectable_issue_field_options = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/suggestions/edit", url.PathEscape(fieldKey))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "projectId")
 
@@ -1202,6 +1514,14 @@ var field_get_visible_issue_field_options = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/suggestions/search", url.PathEscape(fieldKey))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "projectId")
 
@@ -1224,7 +1544,23 @@ var field_get_issue_field_option = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/%s", url.PathEscape(fieldKey), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1247,7 +1583,23 @@ var field_update_issue_field_option = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/%s", url.PathEscape(fieldKey), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1299,7 +1651,23 @@ var field_delete_issue_field_option = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/%s", url.PathEscape(fieldKey), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd)
 
@@ -1322,7 +1690,23 @@ var field_replace_issue_field_option = &cobra.Command{
 			return err
 		}
 		fieldKey, _ := cmd.Flags().GetString("fieldKey")
+		if strings.TrimSpace(fieldKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		optionId, _ := cmd.Flags().GetString("optionId")
+		if strings.TrimSpace(optionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--optionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/option/%s/issue", url.PathEscape(fieldKey), url.PathEscape(optionId))
 		query := client.QueryFromFlags(cmd, "replaceWith", "jql", "overrideScreenSecurity", "overrideEditableFlag")
 
@@ -1345,6 +1729,14 @@ var field_delete_custom = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -1367,6 +1759,14 @@ var field_restore_custom = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/restore", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -1389,6 +1789,14 @@ var field_trash_custom = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/field/%s/trash", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 

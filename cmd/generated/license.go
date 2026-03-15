@@ -69,6 +69,14 @@ var license_get_approximate_application_license_count = &cobra.Command{
 			return err
 		}
 		applicationKey, _ := cmd.Flags().GetString("applicationKey")
+		if strings.TrimSpace(applicationKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--applicationKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/license/approximateLicenseCount/product/%s", url.PathEscape(applicationKey))
 		query := client.QueryFromFlags(cmd)
 

@@ -69,6 +69,14 @@ var statuscategory_get_status_category = &cobra.Command{
 			return err
 		}
 		idOrKey, _ := cmd.Flags().GetString("idOrKey")
+		if strings.TrimSpace(idOrKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--idOrKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/statuscategory/%s", url.PathEscape(idOrKey))
 		query := client.QueryFromFlags(cmd)
 
