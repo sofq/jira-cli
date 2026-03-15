@@ -1961,3 +1961,47 @@ func TestTokenPagination_NonEmptyTokenEmptyIssues(t *testing.T) {
 		t.Fatalf("expected at most 2 requests, made %d (infinite loop detected!)", callCount)
 	}
 }
+
+// TestDo_CacheNonPaginatedGET verifies that non-paginated GET responses
+// are cached when --cache is set and Paginate is true (the default path).
+func TestDo_CacheNonPaginatedGET(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","fields":{"summary":"Test"}}`)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.Paginate = true
+	c.CacheTTL = 5 * time.Minute
+
+	// First call should hit the server.
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("first call: expected exit 0, got %d; stderr=%s", code, stderr1.String())
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call after first request, got %d", callCount)
+	}
+
+	// Second call with same URL should be served from cache.
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+
+	code = c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("second call: expected exit 0, got %d; stderr=%s", code, stderr2.String())
+	}
+	if callCount != 1 {
+		t.Fatalf("expected still 1 server call after cached request, got %d", callCount)
+	}
+
+	// Both calls should return the same data.
+	if strings.TrimSpace(stdout1.String()) != strings.TrimSpace(stdout2.String()) {
+		t.Errorf("cached response differs: %q vs %q", stdout1.String(), stdout2.String())
+	}
+}

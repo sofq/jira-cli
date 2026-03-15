@@ -290,6 +290,9 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	// Detect pagination type.
 	pagType := detectPagination(firstBody)
 	if pagType == paginationNone {
+		if cacheKey != "" {
+			_ = cache.Set(cacheKey, firstBody)
+		}
 		return c.writeOutput(firstBody)
 	}
 

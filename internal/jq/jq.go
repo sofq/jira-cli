@@ -1,11 +1,24 @@
 package jq
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
 	"github.com/itchyny/gojq"
 )
+
+// marshalNoHTMLEscape marshals v to JSON without HTML escaping of &, <, >.
+func marshalNoHTMLEscape(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	// Encoder adds a trailing newline; trim it.
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
+}
 
 // Apply runs a jq filter expression on JSON input and returns the result as JSON bytes.
 // If filter is empty, returns input unchanged.
@@ -42,14 +55,14 @@ func Apply(input []byte, filter string) ([]byte, error) {
 	}
 
 	if len(results) == 1 {
-		result, err := json.Marshal(results[0])
+		result, err := marshalNoHTMLEscape(results[0])
 		if err != nil {
 			return nil, fmt.Errorf("marshaling jq result: %w", err)
 		}
 		return result, nil
 	}
 
-	result, err := json.Marshal(results)
+	result, err := marshalNoHTMLEscape(results)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling jq results: %w", err)
 	}
