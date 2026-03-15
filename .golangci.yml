@@ -1,0 +1,19 @@
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - (io.Writer).Write
+      - os.Setenv
+      - os.Unsetenv
+      - os.Remove
+      - (os).WriteFile
+      - (*os.File).Close
