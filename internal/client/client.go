@@ -65,15 +65,46 @@ func QueryFromFlags(cmd *cobra.Command, names ...string) url.Values {
 	return q
 }
 
-// applyAuth sets authentication headers on the request according to the
+// ApplyAuth sets authentication headers on the request according to the
 // client's Auth configuration.
-func (c *Client) applyAuth(req *http.Request) {
+func (c *Client) ApplyAuth(req *http.Request) {
 	switch strings.ToLower(c.Auth.Type) {
 	case "basic":
 		req.SetBasicAuth(c.Auth.Username, c.Auth.Token)
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+c.Auth.Token)
+	case "oauth2":
+		token, err := c.fetchOAuth2Token()
+		if err == nil && token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
+}
+
+// fetchOAuth2Token performs a client_credentials grant and returns the access token.
+func (c *Client) fetchOAuth2Token() (string, error) {
+	data := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {c.Auth.ClientID},
+		"client_secret": {c.Auth.ClientSecret},
+	}
+	if c.Auth.Scopes != "" {
+		data.Set("scope", c.Auth.Scopes)
+	}
+
+	resp, err := c.HTTPClient.Post(c.Auth.TokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("oauth2 token request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("oauth2 token response decode failed: %w", err)
+	}
+	return tokenResp.AccessToken, nil
 }
 
 // Do executes an HTTP request and returns an exit code. It constructs the URL
@@ -129,7 +160,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c.applyAuth(req)
+	c.ApplyAuth(req)
 
 	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
@@ -289,7 +320,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 		return nil, jrerrors.ExitError
 	}
 	req.Header.Set("Accept", "application/json")
-	c.applyAuth(req)
+	c.ApplyAuth(req)
 
 	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 

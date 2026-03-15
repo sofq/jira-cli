@@ -630,6 +630,40 @@ func TestDo_VerboseStructuredJSON(t *testing.T) {
 	}
 }
 
+// Test 12b: OAuth2 client credentials flow.
+func TestDo_OAuth2Auth(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"oauth-token-123","token_type":"Bearer","expires_in":3600}`)
+	}))
+	defer tokenServer.Close()
+
+	var gotAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		ClientID:     "my-client-id",
+		ClientSecret: "my-client-secret",
+		TokenURL:     tokenServer.URL,
+	}
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	if gotAuth != "Bearer oauth-token-123" {
+		t.Errorf("expected 'Bearer oauth-token-123', got: %q", gotAuth)
+	}
+}
+
 // Test 13: --fields adds fields query param to GET requests.
 func TestDo_FieldsQueryParam(t *testing.T) {
 	var gotFields string
