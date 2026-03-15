@@ -42,6 +42,14 @@ brew install sofq/tap/jr
 npm install -g jira-jr
 ```
 
+### pip / uv
+
+```bash
+pip install jira-jr
+# or
+uv tool install jira-jr
+```
+
 ### Scoop (Windows)
 
 ```bash
