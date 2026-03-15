@@ -12,7 +12,7 @@ import (
 func Dir() string {
 	dir, _ := os.UserCacheDir()
 	p := filepath.Join(dir, "jr")
-	os.MkdirAll(p, 0o755)
+	_ = os.MkdirAll(p, 0o755)
 	return p
 }
 

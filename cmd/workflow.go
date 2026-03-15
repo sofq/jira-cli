@@ -153,7 +153,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		var me struct {
 			AccountID string `json:"accountId"`
 		}
-		json.Unmarshal(body, &me)
+		_ = json.Unmarshal(body, &me)
 		accountID = me.AccountID
 
 	case "none", "unassign":
@@ -181,7 +181,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			AccountID   string `json:"accountId"`
 			DisplayName string `json:"displayName"`
 		}
-		json.Unmarshal(body, &users)
+		_ = json.Unmarshal(body, &users)
 		if len(users) == 0 {
 			apiErr := &jrerrors.APIError{
 				ErrorType: "not_found",

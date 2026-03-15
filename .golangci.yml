@@ -9,6 +9,8 @@ linters:
         - fmt.Fprintln
         - fmt.Fprint
         - (io.Writer).Write
+        - (*net/http.Response.Body).Close
+        - (io.Closer).Close
         - os.Setenv
         - os.Unsetenv
         - os.Remove
