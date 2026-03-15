@@ -53,7 +53,7 @@ var config_get_field_association_schemes = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -85,16 +85,15 @@ var config_create_field_association_scheme = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -126,16 +125,15 @@ var config_update_fields_associated_with_schemes = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -167,16 +165,15 @@ var config_remove_fields_associated_with_schemes = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "DELETE", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -208,16 +205,15 @@ var config_update_field_association_scheme_item_parameters = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -249,16 +245,15 @@ var config_remove_field_association_scheme_item_parameters = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "DELETE", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -279,7 +274,7 @@ var config_get_projects_with_field_schemes = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -311,16 +306,15 @@ var config_associate_projects_to_field_association_schemes = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -342,7 +336,7 @@ var config_get_field_association_scheme_by_id = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -375,16 +369,15 @@ var config_update_field_association_scheme = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -406,7 +399,7 @@ var config_delete_field_association_scheme = &cobra.Command{
 		code := c.Do(cmd.Context(), "DELETE", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -439,16 +432,15 @@ var config_clone_field_association_scheme = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -470,7 +462,7 @@ var config_search_field_association_scheme_fields = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -493,7 +485,7 @@ var config_get_field_association_scheme_item_parameters = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -515,7 +507,7 @@ var config_search_field_association_scheme_projects = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

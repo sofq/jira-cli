@@ -1879,3 +1879,85 @@ func TestDo_FieldsIgnoredOnPost(t *testing.T) {
 		t.Errorf("expected no fields query param on POST, got %q", gotFields)
 	}
 }
+
+// Test: Token pagination terminates when a subsequent page returns empty issues
+// (regression test for BUG-1: stale len(firstPage.Issues) check).
+func TestTokenPagination_EmptySubsequentPage(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		switch callCount {
+		case 1:
+			// First page: 2 issues, has next token
+			fmt.Fprintln(w, `{"issues":[{"id":"1"},{"id":"2"}],"nextPageToken":"tok1"}`)
+		case 2:
+			// Second page: 1 issue, has next token
+			fmt.Fprintln(w, `{"issues":[{"id":"3"}],"nextPageToken":"tok2"}`)
+		case 3:
+			// Third page: empty issues with token still present — should stop
+			fmt.Fprintln(w, `{"issues":[],"nextPageToken":"tok3"}`)
+		default:
+			// Should never reach here
+			t.Errorf("unexpected request #%d — pagination should have stopped", callCount)
+			fmt.Fprintln(w, `{"issues":[]}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	// Parse result and verify all 3 issues are collected.
+	var result struct {
+		Issues []json.RawMessage `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+	if len(result.Issues) != 3 {
+		t.Errorf("expected 3 issues, got %d", len(result.Issues))
+	}
+	// Must not make more than 3 requests
+	if callCount > 3 {
+		t.Errorf("expected at most 3 requests, made %d (infinite loop bug)", callCount)
+	}
+}
+
+// Test: Token pagination terminates correctly when server sends non-empty
+// nextPageToken alongside empty issues array (potential infinite loop scenario).
+func TestTokenPagination_NonEmptyTokenEmptyIssues(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			// First page: has issues
+			fmt.Fprintln(w, `{"issues":[{"id":"1"}],"nextPageToken":"tok1"}`)
+		} else {
+			// Subsequent page: empty issues but non-empty token — MUST stop
+			fmt.Fprintln(w, `{"issues":[],"nextPageToken":"infinite-loop-trap"}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	// Should have made exactly 2 requests (first page + one empty page)
+	if callCount > 2 {
+		t.Fatalf("expected at most 2 requests, made %d (infinite loop detected!)", callCount)
+	}
+}

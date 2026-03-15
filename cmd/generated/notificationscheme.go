@@ -53,7 +53,7 @@ var notificationscheme_get_notification_schemes = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -85,16 +85,15 @@ var notificationscheme_create_notification_scheme = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -115,7 +114,7 @@ var notificationscheme_get_notification_scheme_to_project_mappings = &cobra.Comm
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -137,7 +136,7 @@ var notificationscheme_get_notification_scheme = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -170,16 +169,15 @@ var notificationscheme_update_notification_scheme = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -212,16 +210,15 @@ var notificationscheme_add_notifications = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -243,7 +240,7 @@ var notificationscheme_delete_notification_scheme = &cobra.Command{
 		code := c.Do(cmd.Context(), "DELETE", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -266,7 +263,7 @@ var notificationscheme_remove_notification_from_notification_scheme = &cobra.Com
 		code := c.Do(cmd.Context(), "DELETE", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

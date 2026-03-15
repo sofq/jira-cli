@@ -70,7 +70,7 @@ var schemaCmd = &cobra.Command{
 					Message:   fmt.Sprintf("resource %q not found", resource),
 				}
 				apiErr.WriteJSON(os.Stderr)
-				os.Exit(jrerrors.ExitNotFound)
+				return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 			}
 			data, _ := json.Marshal(matching)
 			fmt.Println(string(data))
@@ -90,8 +90,7 @@ var schemaCmd = &cobra.Command{
 			Message:   fmt.Sprintf("operation %s %s not found", resource, verb),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		os.Exit(jrerrors.ExitNotFound)
-		return nil
+		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 	},
 }
 

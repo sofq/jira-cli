@@ -65,9 +65,8 @@ var {{.VarName}} = &cobra.Command{
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
@@ -76,7 +75,7 @@ var {{.VarName}} = &cobra.Command{
 		code := c.Do(cmd.Context(), "{{.Method}}", path, query, nil)
 		{{end}}
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

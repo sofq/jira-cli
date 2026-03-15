@@ -54,7 +54,7 @@ var atlassian_connect_addon_properties_resource_get_addon_properties_get = &cobr
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -77,7 +77,7 @@ var atlassian_connect_addon_properties_resource_get_addon_property_get = &cobra.
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -111,16 +111,15 @@ var atlassian_connect_addon_properties_resource_put_addon_property_put = &cobra.
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -143,7 +142,7 @@ var atlassian_connect_addon_properties_resource_delete_addon_property_delete = &
 		code := c.Do(cmd.Context(), "DELETE", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -164,7 +163,7 @@ var atlassian_connect_dynamic_modules_resource_get_modules_get = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -196,16 +195,15 @@ var atlassian_connect_dynamic_modules_resource_register_modules_post = &cobra.Co
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -226,7 +224,7 @@ var atlassian_connect_dynamic_modules_resource_remove_modules_delete = &cobra.Co
 		code := c.Do(cmd.Context(), "DELETE", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -258,16 +256,15 @@ var atlassian_connect_app_issue_field_value_update_resource_update_issue_fields_
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -300,16 +297,15 @@ var atlassian_connect_migration_resource_update_entity_properties_value_put = &c
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "PUT", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -341,16 +337,15 @@ var atlassian_connect_migration_resource_workflow_rule_search_post = &cobra.Comm
 				bodyReader = strings.NewReader(bodyStr)
 			}
 		} else {
-			// Check if stdin has data
-			stat, _ := os.Stdin.Stat()
-			if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
 		}
 		code := c.Do(cmd.Context(), "POST", path, query, bodyReader)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -373,7 +368,7 @@ var atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migra
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -394,7 +389,7 @@ var atlassian_connect_service_registry_resource_services_get = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

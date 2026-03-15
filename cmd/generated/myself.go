@@ -53,7 +53,7 @@ var myself_get_current_user = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

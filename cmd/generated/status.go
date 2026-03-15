@@ -53,7 +53,7 @@ var status_get_statuses = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},
@@ -75,7 +75,7 @@ var status_get = &cobra.Command{
 		code := c.Do(cmd.Context(), "GET", path, query, nil)
 
 		if code != 0 {
-			os.Exit(code)
+			return &jerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	},

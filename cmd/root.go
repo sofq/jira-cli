@@ -146,6 +146,9 @@ func Execute() int {
 		if aw, ok := err.(*errAlreadyWritten); ok {
 			return aw.code
 		}
+		if aw, ok := err.(*jrerrors.AlreadyWrittenError); ok {
+			return aw.Code
+		}
 		enc := json.NewEncoder(os.Stderr)
 		enc.SetEscapeHTML(false)
 		_ = enc.Encode(map[string]string{

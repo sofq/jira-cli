@@ -22,6 +22,13 @@ const (
 	ExitServer     = 7
 )
 
+// AlreadyWrittenError is a sentinel error indicating that the JSON error has
+// already been written to stderr, so the caller should not write a second one.
+// The Code field holds the process exit code.
+type AlreadyWrittenError struct{ Code int }
+
+func (e *AlreadyWrittenError) Error() string { return "error already written" }
+
 // RequestInfo holds metadata about the HTTP request that triggered the error.
 type RequestInfo struct {
 	Method string `json:"method"`
