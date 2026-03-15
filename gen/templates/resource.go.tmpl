@@ -72,6 +72,14 @@ var {{.VarName}} = &cobra.Command{
 				bodyReader = os.Stdin
 			}
 		}
+		if bodyReader == nil && !c.DryRun {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "{{.Method}} request requires a body; use --body '{...}', --body @file, or pipe JSON to stdin",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		code := c.Do(cmd.Context(), "{{.Method}}", path, query, bodyReader)
 		{{else}}
 		code := c.Do(cmd.Context(), "{{.Method}}", path, query, nil)
