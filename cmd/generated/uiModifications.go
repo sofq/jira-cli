@@ -119,6 +119,14 @@ var uiModifications_update_ui_modification = &cobra.Command{
 			return err
 		}
 		uiModificationId, _ := cmd.Flags().GetString("uiModificationId")
+		if strings.TrimSpace(uiModificationId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--uiModificationId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/uiModifications/%s", url.PathEscape(uiModificationId))
 		query := client.QueryFromFlags(cmd)
 
@@ -170,6 +178,14 @@ var uiModifications_delete_ui_modification = &cobra.Command{
 			return err
 		}
 		uiModificationId, _ := cmd.Flags().GetString("uiModificationId")
+		if strings.TrimSpace(uiModificationId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--uiModificationId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/uiModifications/%s", url.PathEscape(uiModificationId))
 		query := client.QueryFromFlags(cmd)
 

@@ -69,6 +69,14 @@ var status_get = &cobra.Command{
 			return err
 		}
 		idOrName, _ := cmd.Flags().GetString("idOrName")
+		if strings.TrimSpace(idOrName) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--idOrName must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/status/%s", url.PathEscape(idOrName))
 		query := client.QueryFromFlags(cmd)
 

@@ -119,6 +119,14 @@ var projectCategory_get_project_category_by_id = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/projectCategory/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -141,6 +149,14 @@ var projectCategory_update_project_category = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/projectCategory/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -192,6 +208,14 @@ var projectCategory_remove_project_category = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/projectCategory/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 

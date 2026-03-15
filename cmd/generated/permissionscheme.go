@@ -119,6 +119,14 @@ var permissionscheme_get_permission_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -141,6 +149,14 @@ var permissionscheme_update_permission_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -192,6 +208,14 @@ var permissionscheme_delete_permission_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -214,6 +238,14 @@ var permissionscheme_get_permission_scheme_grants = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s/permission", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -236,6 +268,14 @@ var permissionscheme_create_permission_grant = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s/permission", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -287,7 +327,23 @@ var permissionscheme_get_permission_scheme_grant = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		permissionId, _ := cmd.Flags().GetString("permissionId")
+		if strings.TrimSpace(permissionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--permissionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s/permission/%s", url.PathEscape(schemeId), url.PathEscape(permissionId))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -310,7 +366,23 @@ var permissionscheme_delete_permission_scheme_entity = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		permissionId, _ := cmd.Flags().GetString("permissionId")
+		if strings.TrimSpace(permissionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--permissionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/permissionscheme/%s/permission/%s", url.PathEscape(schemeId), url.PathEscape(permissionId))
 		query := client.QueryFromFlags(cmd)
 

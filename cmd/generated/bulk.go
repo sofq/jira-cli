@@ -390,6 +390,14 @@ var bulk_get_operation_progress = &cobra.Command{
 			return err
 		}
 		taskId, _ := cmd.Flags().GetString("taskId")
+		if strings.TrimSpace(taskId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--taskId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/bulk/queue/%s", url.PathEscape(taskId))
 		query := client.QueryFromFlags(cmd)
 

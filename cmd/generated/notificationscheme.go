@@ -140,6 +140,14 @@ var notificationscheme_get_notification_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/notificationscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -162,6 +170,14 @@ var notificationscheme_update_notification_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/notificationscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -213,6 +229,14 @@ var notificationscheme_add_notifications = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/notificationscheme/%s/notification", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -264,6 +288,14 @@ var notificationscheme_delete_notification_scheme = &cobra.Command{
 			return err
 		}
 		notificationSchemeId, _ := cmd.Flags().GetString("notificationSchemeId")
+		if strings.TrimSpace(notificationSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--notificationSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/notificationscheme/%s", url.PathEscape(notificationSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -286,7 +318,23 @@ var notificationscheme_remove_notification_from_notification_scheme = &cobra.Com
 			return err
 		}
 		notificationSchemeId, _ := cmd.Flags().GetString("notificationSchemeId")
+		if strings.TrimSpace(notificationSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--notificationSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		notificationId, _ := cmd.Flags().GetString("notificationId")
+		if strings.TrimSpace(notificationId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--notificationId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/notificationscheme/%s/notification/%s", url.PathEscape(notificationSchemeId), url.PathEscape(notificationId))
 		query := client.QueryFromFlags(cmd)
 

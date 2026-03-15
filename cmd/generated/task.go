@@ -48,6 +48,14 @@ var task_get = &cobra.Command{
 			return err
 		}
 		taskId, _ := cmd.Flags().GetString("taskId")
+		if strings.TrimSpace(taskId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--taskId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/task/%s", url.PathEscape(taskId))
 		query := client.QueryFromFlags(cmd)
 
@@ -70,6 +78,14 @@ var task_cancel = &cobra.Command{
 			return err
 		}
 		taskId, _ := cmd.Flags().GetString("taskId")
+		if strings.TrimSpace(taskId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--taskId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/task/%s/cancel", url.PathEscape(taskId))
 		query := client.QueryFromFlags(cmd)
 

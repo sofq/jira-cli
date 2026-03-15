@@ -119,6 +119,14 @@ var screens_add_field_to_default = &cobra.Command{
 			return err
 		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/addToDefault/%s", url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd)
 
@@ -162,6 +170,14 @@ var screens_update = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s", url.PathEscape(screenId))
 		query := client.QueryFromFlags(cmd)
 
@@ -213,6 +229,14 @@ var screens_delete = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s", url.PathEscape(screenId))
 		query := client.QueryFromFlags(cmd)
 
@@ -235,6 +259,14 @@ var screens_get_available_screen_fields = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/availableFields", url.PathEscape(screenId))
 		query := client.QueryFromFlags(cmd)
 
@@ -257,6 +289,14 @@ var screens_get_all_screen_tabs = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs", url.PathEscape(screenId))
 		query := client.QueryFromFlags(cmd, "projectKey")
 
@@ -279,6 +319,14 @@ var screens_add_tab = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs", url.PathEscape(screenId))
 		query := client.QueryFromFlags(cmd)
 
@@ -330,7 +378,23 @@ var screens_rename_tab = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s", url.PathEscape(screenId), url.PathEscape(tabId))
 		query := client.QueryFromFlags(cmd)
 
@@ -382,7 +446,23 @@ var screens_delete_tab = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s", url.PathEscape(screenId), url.PathEscape(tabId))
 		query := client.QueryFromFlags(cmd)
 
@@ -405,7 +485,23 @@ var screens_get_all_screen_tab_fields = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s/fields", url.PathEscape(screenId), url.PathEscape(tabId))
 		query := client.QueryFromFlags(cmd, "projectKey")
 
@@ -428,7 +524,23 @@ var screens_add_tab_field = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s/fields", url.PathEscape(screenId), url.PathEscape(tabId))
 		query := client.QueryFromFlags(cmd)
 
@@ -480,8 +592,32 @@ var screens_remove_tab_field = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s/fields/%s", url.PathEscape(screenId), url.PathEscape(tabId), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -504,8 +640,32 @@ var screens_move_tab_field = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s/fields/%s/move", url.PathEscape(screenId), url.PathEscape(tabId), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -557,8 +717,32 @@ var screens_move_tab = &cobra.Command{
 			return err
 		}
 		screenId, _ := cmd.Flags().GetString("screenId")
+		if strings.TrimSpace(screenId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		tabId, _ := cmd.Flags().GetString("tabId")
+		if strings.TrimSpace(tabId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--tabId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		pos, _ := cmd.Flags().GetString("pos")
+		if strings.TrimSpace(pos) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--pos must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screens/%s/tabs/%s/move/%s", url.PathEscape(screenId), url.PathEscape(tabId), url.PathEscape(pos))
 		query := client.QueryFromFlags(cmd)
 

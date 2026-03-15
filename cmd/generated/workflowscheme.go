@@ -390,6 +390,14 @@ var workflowscheme_get_workflow_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "returnDraftIfExists")
 
@@ -412,6 +420,14 @@ var workflowscheme_update_workflow_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -463,6 +479,14 @@ var workflowscheme_delete_workflow_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -485,6 +509,14 @@ var workflowscheme_create_workflow_scheme_draft_from_parent = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/createdraft", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -507,6 +539,14 @@ var workflowscheme_get_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "returnDraftIfExists")
 
@@ -529,6 +569,14 @@ var workflowscheme_update_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -580,6 +628,14 @@ var workflowscheme_delete_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "updateDraftIfNeeded")
 
@@ -602,6 +658,14 @@ var workflowscheme_get_workflow_scheme_draft = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -624,6 +688,14 @@ var workflowscheme_update_workflow_scheme_draft = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -675,6 +747,14 @@ var workflowscheme_delete_workflow_scheme_draft = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -697,6 +777,14 @@ var workflowscheme_get_draft_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -719,6 +807,14 @@ var workflowscheme_update_draft_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -770,6 +866,14 @@ var workflowscheme_delete_draft_default_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/default", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -792,7 +896,23 @@ var workflowscheme_get_workflow_scheme_draft_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd)
 
@@ -815,7 +935,23 @@ var workflowscheme_set_workflow_scheme_draft_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd)
 
@@ -867,7 +1003,23 @@ var workflowscheme_delete_workflow_scheme_draft_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd)
 
@@ -890,6 +1042,14 @@ var workflowscheme_publish_draft_workflow_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/publish", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "validateOnly")
 
@@ -941,6 +1101,14 @@ var workflowscheme_get_draft_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName")
 
@@ -963,6 +1131,14 @@ var workflowscheme_update_draft_workflow_mapping = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName")
 
@@ -1014,6 +1190,14 @@ var workflowscheme_delete_draft_workflow_mapping = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/draft/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName")
 
@@ -1036,7 +1220,23 @@ var workflowscheme_get_workflow_scheme_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd, "returnDraftIfExists")
 
@@ -1059,7 +1259,23 @@ var workflowscheme_set_workflow_scheme_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd)
 
@@ -1111,7 +1327,23 @@ var workflowscheme_delete_workflow_scheme_issue_type = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueType, _ := cmd.Flags().GetString("issueType")
+		if strings.TrimSpace(issueType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/issuetype/%s", url.PathEscape(id), url.PathEscape(issueType))
 		query := client.QueryFromFlags(cmd, "updateDraftIfNeeded")
 
@@ -1134,6 +1366,14 @@ var workflowscheme_get_workflow = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName", "returnDraftIfExists")
 
@@ -1156,6 +1396,14 @@ var workflowscheme_update_workflow_mapping = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName")
 
@@ -1207,6 +1455,14 @@ var workflowscheme_delete_workflow_mapping = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/workflow", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "workflowName", "updateDraftIfNeeded")
 
@@ -1229,6 +1485,14 @@ var workflowscheme_get_project_usages_for_workflow_scheme = &cobra.Command{
 			return err
 		}
 		workflowSchemeId, _ := cmd.Flags().GetString("workflowSchemeId")
+		if strings.TrimSpace(workflowSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--workflowSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/workflowscheme/%s/projectUsages", url.PathEscape(workflowSchemeId))
 		query := client.QueryFromFlags(cmd, "nextPageToken", "maxResults")
 

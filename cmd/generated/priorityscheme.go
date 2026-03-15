@@ -190,6 +190,14 @@ var priorityscheme_update_priority_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/priorityscheme/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -241,6 +249,14 @@ var priorityscheme_delete_priority_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/priorityscheme/%s", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -263,6 +279,14 @@ var priorityscheme_get_priorities_by_priority_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/priorityscheme/%s/priorities", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults")
 
@@ -285,6 +309,14 @@ var priorityscheme_get_projects_by_priority_scheme = &cobra.Command{
 			return err
 		}
 		schemeId, _ := cmd.Flags().GetString("schemeId")
+		if strings.TrimSpace(schemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--schemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/priorityscheme/%s/projects", url.PathEscape(schemeId))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "projectId", "query")
 

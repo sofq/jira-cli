@@ -390,6 +390,14 @@ var config_get_field_association_scheme_by_id = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -412,6 +420,14 @@ var config_update_field_association_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -463,6 +479,14 @@ var config_delete_field_association_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -485,6 +509,14 @@ var config_clone_field_association_scheme = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s/clone", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -536,6 +568,14 @@ var config_search_field_association_scheme_fields = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s/fields", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "fieldId")
 
@@ -558,7 +598,23 @@ var config_get_field_association_scheme_item_parameters = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s/fields/%s/parameters", url.PathEscape(id), url.PathEscape(fieldId))
 		query := client.QueryFromFlags(cmd)
 
@@ -581,6 +637,14 @@ var config_search_field_association_scheme_projects = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/config/fieldschemes/%s/projects", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "startAt", "maxResults", "projectId")
 

@@ -98,6 +98,14 @@ var comment_get_property_keys = &cobra.Command{
 			return err
 		}
 		commentId, _ := cmd.Flags().GetString("commentId")
+		if strings.TrimSpace(commentId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--commentId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/comment/%s/properties", url.PathEscape(commentId))
 		query := client.QueryFromFlags(cmd)
 
@@ -120,7 +128,23 @@ var comment_get_property = &cobra.Command{
 			return err
 		}
 		commentId, _ := cmd.Flags().GetString("commentId")
+		if strings.TrimSpace(commentId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--commentId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/comment/%s/properties/%s", url.PathEscape(commentId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -143,7 +167,23 @@ var comment_set_property = &cobra.Command{
 			return err
 		}
 		commentId, _ := cmd.Flags().GetString("commentId")
+		if strings.TrimSpace(commentId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--commentId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/comment/%s/properties/%s", url.PathEscape(commentId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -195,7 +235,23 @@ var comment_delete_property = &cobra.Command{
 			return err
 		}
 		commentId, _ := cmd.Flags().GetString("commentId")
+		if strings.TrimSpace(commentId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--commentId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/comment/%s/properties/%s", url.PathEscape(commentId), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 

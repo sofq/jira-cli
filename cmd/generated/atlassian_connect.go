@@ -48,6 +48,14 @@ var atlassian_connect_addon_properties_resource_get_addon_properties_get = &cobr
 			return err
 		}
 		addonKey, _ := cmd.Flags().GetString("addonKey")
+		if strings.TrimSpace(addonKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--addonKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/addons/%s/properties", url.PathEscape(addonKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -70,7 +78,23 @@ var atlassian_connect_addon_properties_resource_get_addon_property_get = &cobra.
 			return err
 		}
 		addonKey, _ := cmd.Flags().GetString("addonKey")
+		if strings.TrimSpace(addonKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--addonKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/addons/%s/properties/%s", url.PathEscape(addonKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -93,7 +117,23 @@ var atlassian_connect_addon_properties_resource_put_addon_property_put = &cobra.
 			return err
 		}
 		addonKey, _ := cmd.Flags().GetString("addonKey")
+		if strings.TrimSpace(addonKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--addonKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/addons/%s/properties/%s", url.PathEscape(addonKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -145,7 +185,23 @@ var atlassian_connect_addon_properties_resource_delete_addon_property_delete = &
 			return err
 		}
 		addonKey, _ := cmd.Flags().GetString("addonKey")
+		if strings.TrimSpace(addonKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--addonKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		propertyKey, _ := cmd.Flags().GetString("propertyKey")
+		if strings.TrimSpace(propertyKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--propertyKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/addons/%s/properties/%s", url.PathEscape(addonKey), url.PathEscape(propertyKey))
 		query := client.QueryFromFlags(cmd)
 
@@ -310,6 +366,14 @@ var atlassian_connect_migration_resource_update_entity_properties_value_put = &c
 			return err
 		}
 		entityType, _ := cmd.Flags().GetString("entityType")
+		if strings.TrimSpace(entityType) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--entityType must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/migration/properties/%s", url.PathEscape(entityType))
 		query := client.QueryFromFlags(cmd)
 
@@ -411,7 +475,23 @@ var atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migra
 			return err
 		}
 		connectKey, _ := cmd.Flags().GetString("connectKey")
+		if strings.TrimSpace(connectKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--connectKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		jiraIssueFieldsKey, _ := cmd.Flags().GetString("jiraIssueFieldsKey")
+		if strings.TrimSpace(jiraIssueFieldsKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--jiraIssueFieldsKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/atlassian-connect/1/migration/%s/%s/task", url.PathEscape(connectKey), url.PathEscape(jiraIssueFieldsKey))
 		query := client.QueryFromFlags(cmd)
 

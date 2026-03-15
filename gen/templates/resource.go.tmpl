@@ -48,6 +48,14 @@ var {{.VarName}} = &cobra.Command{
 			return err
 		}
 		{{range .PathParams}}{{.GoName}}, _ := cmd.Flags().GetString("{{.Name}}")
+		if strings.TrimSpace({{.GoName}}) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--{{.Name}} must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		{{end}}path := fmt.Sprintf("{{.PathTemplate}}"{{.PathArgs}})
 		query := client.QueryFromFlags(cmd{{.QueryFlagNames}})
 		{{if .HasBody}}

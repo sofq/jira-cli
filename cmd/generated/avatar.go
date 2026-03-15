@@ -48,6 +48,14 @@ var avatar_get_all_system = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/avatar/%s/system", url.PathEscape(type_))
 		query := client.QueryFromFlags(cmd)
 

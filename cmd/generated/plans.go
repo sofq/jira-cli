@@ -119,6 +119,14 @@ var plans_get_plan = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd, "useGroupId")
 
@@ -141,6 +149,14 @@ var plans_update = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd, "useGroupId")
 
@@ -192,6 +208,14 @@ var plans_archive = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/archive", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd)
 
@@ -214,6 +238,14 @@ var plans_duplicate = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/duplicate", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd)
 
@@ -265,6 +297,14 @@ var plans_get_teams = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd, "cursor", "maxResults")
 
@@ -287,6 +327,14 @@ var plans_add_atlassian_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/atlassian", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd)
 
@@ -338,7 +386,23 @@ var plans_get_atlassian_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		atlassianTeamId, _ := cmd.Flags().GetString("atlassianTeamId")
+		if strings.TrimSpace(atlassianTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--atlassianTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/atlassian/%s", url.PathEscape(planId), url.PathEscape(atlassianTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -361,7 +425,23 @@ var plans_update_atlassian_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		atlassianTeamId, _ := cmd.Flags().GetString("atlassianTeamId")
+		if strings.TrimSpace(atlassianTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--atlassianTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/atlassian/%s", url.PathEscape(planId), url.PathEscape(atlassianTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -413,7 +493,23 @@ var plans_remove_atlassian_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		atlassianTeamId, _ := cmd.Flags().GetString("atlassianTeamId")
+		if strings.TrimSpace(atlassianTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--atlassianTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/atlassian/%s", url.PathEscape(planId), url.PathEscape(atlassianTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -436,6 +532,14 @@ var plans_create_only_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/planonly", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd)
 
@@ -487,7 +591,23 @@ var plans_get_only_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		planOnlyTeamId, _ := cmd.Flags().GetString("planOnlyTeamId")
+		if strings.TrimSpace(planOnlyTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planOnlyTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/planonly/%s", url.PathEscape(planId), url.PathEscape(planOnlyTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -510,7 +630,23 @@ var plans_update_only_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		planOnlyTeamId, _ := cmd.Flags().GetString("planOnlyTeamId")
+		if strings.TrimSpace(planOnlyTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planOnlyTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/planonly/%s", url.PathEscape(planId), url.PathEscape(planOnlyTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -562,7 +698,23 @@ var plans_delete_only_team = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		planOnlyTeamId, _ := cmd.Flags().GetString("planOnlyTeamId")
+		if strings.TrimSpace(planOnlyTeamId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planOnlyTeamId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/team/planonly/%s", url.PathEscape(planId), url.PathEscape(planOnlyTeamId))
 		query := client.QueryFromFlags(cmd)
 
@@ -585,6 +737,14 @@ var plans_trash = &cobra.Command{
 			return err
 		}
 		planId, _ := cmd.Flags().GetString("planId")
+		if strings.TrimSpace(planId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--planId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/plans/plan/%s/trash", url.PathEscape(planId))
 		query := client.QueryFromFlags(cmd)
 

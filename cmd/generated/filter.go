@@ -232,6 +232,14 @@ var filter_get = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "expand", "overrideSharePermissions")
 
@@ -254,6 +262,14 @@ var filter_update = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "expand", "overrideSharePermissions")
 
@@ -305,6 +321,14 @@ var filter_delete = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -327,6 +351,14 @@ var filter_get_columns = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/columns", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -349,6 +381,14 @@ var filter_set_columns = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/columns", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -400,6 +440,14 @@ var filter_reset_columns = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/columns", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -422,6 +470,14 @@ var filter_set_favourite_for = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/favourite", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -444,6 +500,14 @@ var filter_delete_favourite_for = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/favourite", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "expand")
 
@@ -466,6 +530,14 @@ var filter_change_owner = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/owner", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -517,6 +589,14 @@ var filter_get_share_permissions = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/permission", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -539,6 +619,14 @@ var filter_add_share_permission = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/permission", url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -590,7 +678,23 @@ var filter_get_share_permission = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		permissionId, _ := cmd.Flags().GetString("permissionId")
+		if strings.TrimSpace(permissionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--permissionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/permission/%s", url.PathEscape(id), url.PathEscape(permissionId))
 		query := client.QueryFromFlags(cmd)
 
@@ -613,7 +717,23 @@ var filter_delete_share_permission = &cobra.Command{
 			return err
 		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		permissionId, _ := cmd.Flags().GetString("permissionId")
+		if strings.TrimSpace(permissionId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--permissionId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/filter/%s/permission/%s", url.PathEscape(id), url.PathEscape(permissionId))
 		query := client.QueryFromFlags(cmd)
 

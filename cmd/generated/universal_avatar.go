@@ -48,7 +48,23 @@ var universal_avatar_get_avatars = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		entityId, _ := cmd.Flags().GetString("entityId")
+		if strings.TrimSpace(entityId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--entityId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/type/%s/owner/%s", url.PathEscape(type_), url.PathEscape(entityId))
 		query := client.QueryFromFlags(cmd)
 
@@ -71,7 +87,23 @@ var universal_avatar_store_avatar = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		entityId, _ := cmd.Flags().GetString("entityId")
+		if strings.TrimSpace(entityId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--entityId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/type/%s/owner/%s", url.PathEscape(type_), url.PathEscape(entityId))
 		query := client.QueryFromFlags(cmd, "x", "y", "size")
 
@@ -123,8 +155,32 @@ var universal_avatar_delete_avatar = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		owningObjectId, _ := cmd.Flags().GetString("owningObjectId")
+		if strings.TrimSpace(owningObjectId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--owningObjectId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/type/%s/owner/%s/avatar/%s", url.PathEscape(type_), url.PathEscape(owningObjectId), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd)
 
@@ -147,6 +203,14 @@ var universal_avatar_get_avatar_image_by_type = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/view/type/%s", url.PathEscape(type_))
 		query := client.QueryFromFlags(cmd, "size", "format")
 
@@ -169,7 +233,23 @@ var universal_avatar_get_avatar_image_by_id = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		id, _ := cmd.Flags().GetString("id")
+		if strings.TrimSpace(id) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--id must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/view/type/%s/avatar/%s", url.PathEscape(type_), url.PathEscape(id))
 		query := client.QueryFromFlags(cmd, "size", "format")
 
@@ -192,7 +272,23 @@ var universal_avatar_get_avatar_image_by_owner = &cobra.Command{
 			return err
 		}
 		type_, _ := cmd.Flags().GetString("type")
+		if strings.TrimSpace(type_) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--type must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		entityId, _ := cmd.Flags().GetString("entityId")
+		if strings.TrimSpace(entityId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--entityId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/universal_avatar/view/type/%s/owner/%s", url.PathEscape(type_), url.PathEscape(entityId))
 		query := client.QueryFromFlags(cmd, "size", "format")
 

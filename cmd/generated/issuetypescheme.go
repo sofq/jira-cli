@@ -211,6 +211,14 @@ var issuetypescheme_update_issue_type_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeSchemeId, _ := cmd.Flags().GetString("issueTypeSchemeId")
+		if strings.TrimSpace(issueTypeSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescheme/%s", url.PathEscape(issueTypeSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -262,6 +270,14 @@ var issuetypescheme_delete_issue_type_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeSchemeId, _ := cmd.Flags().GetString("issueTypeSchemeId")
+		if strings.TrimSpace(issueTypeSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescheme/%s", url.PathEscape(issueTypeSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -284,6 +300,14 @@ var issuetypescheme_add_issue_types_to_issue_type_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeSchemeId, _ := cmd.Flags().GetString("issueTypeSchemeId")
+		if strings.TrimSpace(issueTypeSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescheme/%s/issuetype", url.PathEscape(issueTypeSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -335,6 +359,14 @@ var issuetypescheme_reorder_issue_types_in_issue_type_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeSchemeId, _ := cmd.Flags().GetString("issueTypeSchemeId")
+		if strings.TrimSpace(issueTypeSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescheme/%s/issuetype/move", url.PathEscape(issueTypeSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -386,7 +418,23 @@ var issuetypescheme_remove_issue_type_from_issue_type_scheme = &cobra.Command{
 			return err
 		}
 		issueTypeSchemeId, _ := cmd.Flags().GetString("issueTypeSchemeId")
+		if strings.TrimSpace(issueTypeSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		issueTypeId, _ := cmd.Flags().GetString("issueTypeId")
+		if strings.TrimSpace(issueTypeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--issueTypeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/issuetypescheme/%s/issuetype/%s", url.PathEscape(issueTypeSchemeId), url.PathEscape(issueTypeId))
 		query := client.QueryFromFlags(cmd)
 

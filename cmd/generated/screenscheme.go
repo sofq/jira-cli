@@ -119,6 +119,14 @@ var screenscheme_update_screen_scheme = &cobra.Command{
 			return err
 		}
 		screenSchemeId, _ := cmd.Flags().GetString("screenSchemeId")
+		if strings.TrimSpace(screenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screenscheme/%s", url.PathEscape(screenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
@@ -170,6 +178,14 @@ var screenscheme_delete_screen_scheme = &cobra.Command{
 			return err
 		}
 		screenSchemeId, _ := cmd.Flags().GetString("screenSchemeId")
+		if strings.TrimSpace(screenSchemeId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--screenSchemeId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
 		path := fmt.Sprintf("/rest/api/3/screenscheme/%s", url.PathEscape(screenSchemeId))
 		query := client.QueryFromFlags(cmd)
 
