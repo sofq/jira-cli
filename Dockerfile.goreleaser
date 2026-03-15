@@ -1,0 +1,3 @@
+FROM gcr.io/distroless/static:nonroot
+COPY jr /usr/local/bin/jr
+ENTRYPOINT ["jr"]

@@ -1,0 +1,12 @@
+.git
+.github
+dist
+docs
+jira-cli-workspace
+node_modules
+npm
+skill
+*.md
+!go.mod
+!go.sum
+LICENSE

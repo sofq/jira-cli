@@ -34,8 +34,18 @@ Most CLIs are built for humans — they print tables, prompt for input, and bury
 # Homebrew
 brew install sofq/tap/jr
 
+# npm
+npm install -g @sofq/jr
+
+# Scoop (Windows)
+scoop bucket add sofq https://github.com/sofq/scoop-bucket
+scoop install jr
+
 # Go
 go install github.com/sofq/jira-cli@latest
+
+# Docker
+docker run --rm ghcr.io/sofq/jr version
 
 # Binary
 # → https://github.com/sofq/jira-cli/releases
