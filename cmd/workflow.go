@@ -127,7 +127,8 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	}
 
 	// 3. Execute transition. Use fetchJSON to avoid c.Do() writing "{}" to stdout.
-	body := fmt.Sprintf(`{"transition":{"id":"%s"}}`, matchedID)
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
+	body := string(transBody)
 	_, exitCode = fetchJSONWithBody(c, cmd.Context(), "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		strings.NewReader(body))
@@ -237,7 +238,8 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		accountID = users[0].AccountID
 	}
 
-	assignBody := fmt.Sprintf(`{"accountId":"%s"}`, accountID)
+	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
+	assignBody := string(marshaledAssign)
 	_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		strings.NewReader(assignBody))
