@@ -20,8 +20,8 @@ jr configure --base-url https://yoursite.atlassian.net --token YOUR_API_TOKEN --
 # Get issue
 jr issue get --issueIdOrKey PROJ-123
 
-# Search issues
-jr search jql --jql "project = PROJ AND status = 'In Progress'" --jq '[.issues[] | {key, summary: .fields.summary}]'
+# Search issues (use the new JQL endpoint — the old /search is deprecated)
+jr search search-and-reconsile-issues-using-jql --jql "project = PROJ AND status = 'In Progress'" --jq '[.issues[] | {key, summary: .fields.summary}]'
 
 # Create issue
 jr issue create-issue --body '{"fields":{"project":{"key":"PROJ"},"summary":"Bug title","issuetype":{"name":"Bug"}}}'
@@ -33,7 +33,7 @@ jr workflow transition --issue PROJ-123 --to "Done"
 jr workflow assign --issue PROJ-123 --to "me"
 
 # List projects
-jr project list --jq '[.values[] | {key, name}]'
+jr project search --jq '[.values[] | {key, name}]'
 
 # Batch operations
 echo '[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},{"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}]' | jr batch

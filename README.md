@@ -8,7 +8,8 @@
 
 ```bash
 # An agent can search, filter, and get exactly the tokens it needs
-jr search jql --jql "project = PROJ AND status = 'In Progress'" \
+jr search search-and-reconsile-issues-using-jql \
+  --jql "project = PROJ AND status = 'In Progress'" \
   --fields key,summary,status \
   --jq '[.issues[] | {key, summary: .fields.summary, status: .fields.status.name}]'
 ```
@@ -143,7 +144,7 @@ jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary --jq '{key: .key, summary: .fields.summary}'
 
 # Cache read-heavy data to avoid redundant API calls
-jr project list --cache 5m --jq '[.values[].key]'
+jr project search --cache 5m --jq '[.values[].key]'
 ```
 
 ## 600+ commands, auto-generated
@@ -153,8 +154,8 @@ Commands are generated from the [official Jira OpenAPI v3 spec](https://develope
 ```bash
 jr issue get --issueIdOrKey PROJ-1
 jr issue create-issue --body '{"fields":{...}}'
-jr project list
-jr search jql --jql "assignee = currentUser()"
+jr project search --jq '[.values[] | {key, name}]'
+jr search search-and-reconsile-issues-using-jql --jql "assignee = currentUser()"
 jr raw GET /rest/api/3/myself    # escape hatch for any endpoint
 ```
 
