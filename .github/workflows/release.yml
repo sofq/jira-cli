@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -43,6 +44,7 @@ jobs:
   npm-publish:
     runs-on: ubuntu-latest
     needs: release
+    environment: npm-publish
     steps:
       - uses: actions/checkout@v6
 
@@ -58,7 +60,5 @@ jobs:
           npm version "$VERSION" --no-git-tag-version
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish
         working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

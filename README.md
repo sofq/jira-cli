@@ -35,7 +35,7 @@ Most CLIs are built for humans — they print tables, prompt for input, and bury
 brew install sofq/tap/jr
 
 # npm
-npm install -g @sofq/jr
+npm install -g jira-jr
 
 # Scoop (Windows)
 scoop bucket add sofq https://github.com/sofq/scoop-bucket
