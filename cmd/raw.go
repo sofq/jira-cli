@@ -121,7 +121,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 
 	code := c.Do(cmd.Context(), method, path, q, bodyReader)
 	if code != jrerrors.ExitOK {
-		os.Exit(code)
+		return &errAlreadyWritten{code: code}
 	}
 	return nil
 }

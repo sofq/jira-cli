@@ -37,7 +37,7 @@ func mockJira(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/rest/api/3/myself", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"displayName":"Agent","emailAddress":"agent@test.com","active":true}`))
+		_, _ = w.Write([]byte(`{"accountId":"abc123","displayName":"Agent","emailAddress":"agent@test.com","active":true}`))
 	})
 
 	mux.HandleFunc("/rest/api/3/issue/TEST-1", func(w http.ResponseWriter, r *http.Request) {
@@ -2279,5 +2279,126 @@ func TestE2E_IssueNoSubcommand(t *testing.T) {
 
 	if stderr == "" {
 		t.Error("expected error output on stderr when no subcommand provided")
+	}
+}
+
+// TestE2E_Workflow_AssignMe_MissingAccountId verifies that assign --to me
+// returns a clear error when /myself does not contain accountId (BUG-7 regression).
+func TestE2E_Workflow_AssignMe_MissingAccountId(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	// Custom mock that returns /myself WITHOUT accountId.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/myself", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"displayName":"Agent","emailAddress":"agent@test.com"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	_, stderr, exitCode := runJR(t, binary, srv, "workflow", "assign", "--issue", "TEST-1", "--to", "me")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit when /myself has no accountId")
+	}
+	if !strings.Contains(stderr, "could not determine your account ID") {
+		t.Errorf("expected error about missing account ID, got: %s", stderr)
+	}
+}
+
+// TestE2E_Workflow_AssignMe_InvalidJSON verifies that assign --to me
+// returns a clear error when /myself returns invalid JSON (BUG-7 regression).
+func TestE2E_Workflow_AssignMe_InvalidJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	// Custom mock that returns invalid JSON for /myself.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/myself", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`not json`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	_, stderr, exitCode := runJR(t, binary, srv, "workflow", "assign", "--issue", "TEST-1", "--to", "me")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit when /myself returns invalid JSON")
+	}
+	if !strings.Contains(stderr, "failed to parse") {
+		t.Errorf("expected parse error in stderr, got: %s", stderr)
+	}
+}
+
+// TestE2E_Schema_NotFound_NoOsExit verifies that schema with unknown resource
+// returns proper exit code without os.Exit (BUG-9 regression).
+func TestE2E_Schema_NotFound_NoOsExit(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	_, stderr, exitCode := runJR(t, binary, srv, "schema", "nonexistent_resource")
+
+	if exitCode != 3 {
+		t.Fatalf("expected exit code 3 (not_found), got %d", exitCode)
+	}
+	if !strings.Contains(stderr, "not_found") {
+		t.Errorf("expected not_found error, got: %s", stderr)
+	}
+}
+
+// TestE2E_Schema_OpNotFound_NoOsExit verifies that schema with unknown verb
+// returns proper exit code without os.Exit (BUG-9 regression).
+func TestE2E_Schema_OpNotFound_NoOsExit(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	_, stderr, exitCode := runJR(t, binary, srv, "schema", "issue", "nonexistent_verb")
+
+	if exitCode != 3 {
+		t.Fatalf("expected exit code 3 (not_found), got %d", exitCode)
+	}
+	if !strings.Contains(stderr, "not_found") {
+		t.Errorf("expected not_found error, got: %s", stderr)
+	}
+}
+
+// TestE2E_Raw_ErrorReturnsExitCode verifies that raw command errors
+// return proper exit codes via errAlreadyWritten instead of os.Exit (BUG-6 regression).
+func TestE2E_Raw_ErrorReturnsExitCode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	_, stderr, exitCode := runJR(t, binary, srv, "raw", "GET", "/rest/api/3/nonexistent")
+
+	if exitCode != 3 {
+		t.Fatalf("expected exit code 3 (not_found), got %d", exitCode)
+	}
+	if !strings.Contains(stderr, "not_found") {
+		t.Errorf("expected not_found error, got: %s", stderr)
 	}
 }

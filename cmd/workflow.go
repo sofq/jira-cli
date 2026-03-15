@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/sofq/jira-cli/internal/client"
@@ -62,7 +61,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	transitionsBody, exitCode := fetchJSON(c, cmd.Context(), "GET",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
 	if exitCode != jrerrors.ExitOK {
-		os.Exit(exitCode)
+		return &errAlreadyWritten{code: exitCode}
 	}
 
 	var transResp struct {
@@ -80,7 +79,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			Message:   "failed to parse transitions: " + err.Error(),
 		}
 		apiErr.WriteJSON(c.Stderr)
-		os.Exit(jrerrors.ExitError)
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	// 2. Match target status (case-insensitive exact match first, then substring).
@@ -113,7 +112,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
 		}
 		apiErr.WriteJSON(c.Stderr)
-		os.Exit(jrerrors.ExitValidation)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
 	// 3. Execute transition.
@@ -122,7 +121,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		nil, strings.NewReader(body))
 	if code != jrerrors.ExitOK {
-		os.Exit(code)
+		return &errAlreadyWritten{code: code}
 	}
 
 	out, _ := json.Marshal(map[string]string{
@@ -149,12 +148,27 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	case "me":
 		body, code := fetchJSON(c, cmd.Context(), "GET", "/rest/api/3/myself")
 		if code != jrerrors.ExitOK {
-			os.Exit(code)
+			return &errAlreadyWritten{code: code}
 		}
 		var me struct {
 			AccountID string `json:"accountId"`
 		}
-		_ = json.Unmarshal(body, &me)
+		if err := json.Unmarshal(body, &me); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "failed to parse /myself response: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitError}
+		}
+		if me.AccountID == "" {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "could not determine your account ID from /myself",
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitError}
+		}
 		accountID = me.AccountID
 
 	case "none", "unassign":
@@ -163,7 +177,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			nil, strings.NewReader(assignBody))
 		if code != jrerrors.ExitOK {
-			os.Exit(code)
+			return &errAlreadyWritten{code: code}
 		}
 		out, _ := json.Marshal(map[string]string{
 			"status": "unassigned",
@@ -176,20 +190,27 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		body, code := fetchJSON(c, cmd.Context(), "GET",
 			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
 		if code != jrerrors.ExitOK {
-			os.Exit(code)
+			return &errAlreadyWritten{code: code}
 		}
 		var users []struct {
 			AccountID   string `json:"accountId"`
 			DisplayName string `json:"displayName"`
 		}
-		_ = json.Unmarshal(body, &users)
+		if err := json.Unmarshal(body, &users); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "failed to parse user search response: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitError}
+		}
 		if len(users) == 0 {
 			apiErr := &jrerrors.APIError{
 				ErrorType: "not_found",
 				Message:   fmt.Sprintf("no user found matching %q", to),
 			}
 			apiErr.WriteJSON(c.Stderr)
-			os.Exit(jrerrors.ExitNotFound)
+			return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 		}
 		accountID = users[0].AccountID
 	}
@@ -199,7 +220,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		nil, strings.NewReader(assignBody))
 	if code != jrerrors.ExitOK {
-		os.Exit(code)
+		return &errAlreadyWritten{code: code}
 	}
 
 	out, _ := json.Marshal(map[string]string{

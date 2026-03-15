@@ -359,7 +359,8 @@ func (c *Client) doTokenPagination(ctx context.Context, method, path string, que
 	pageToken := firstPage.NextPageToken
 	isLast := firstPage.IsLast
 
-	for pageToken != "" && (isLast == nil || !*isLast) && len(firstPage.Issues) > 0 {
+	lastPageLen := len(firstPage.Issues)
+	for pageToken != "" && (isLast == nil || !*isLast) && lastPageLen > 0 {
 		q := url.Values{}
 		for k, v := range query {
 			q[k] = v
@@ -377,6 +378,7 @@ func (c *Client) doTokenPagination(ctx context.Context, method, path string, que
 			break
 		}
 		allIssues = append(allIssues, nextPage.Issues...)
+		lastPageLen = len(nextPage.Issues)
 		pageToken = nextPage.NextPageToken
 		isLast = nextPage.IsLast
 	}
