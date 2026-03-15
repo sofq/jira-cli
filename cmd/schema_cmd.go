@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sofq/jira-cli/cmd/generated"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/spf13/cobra"
+	"github.com/tidwall/pretty"
 )
 
 var schemaCmd = &cobra.Command{
@@ -21,41 +24,36 @@ var schemaCmd = &cobra.Command{
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		listFlag, _ := cmd.Flags().GetBool("list")
-
 		compactFlag, _ := cmd.Flags().GetBool("compact")
 
+		// Include hand-written ops alongside generated ones.
+		allOps := generated.AllSchemaOps()
+		allOps = append(allOps, HandWrittenSchemaOps()...)
+
 		if compactFlag {
-			allOps := generated.AllSchemaOps()
 			compact := make(map[string][]string)
 			for _, op := range allOps {
 				compact[op.Resource] = append(compact[op.Resource], op.Verb)
 			}
 			data, _ := json.Marshal(compact)
-			fmt.Println(string(data))
-			return nil
+			return schemaOutput(cmd, data)
 		}
 
-		// Bug #19: When no args and no flags, show compact resource→verbs map
-		// instead of just resource names (more useful default).
 		if len(args) == 0 && !listFlag {
-			allOps := generated.AllSchemaOps()
 			compact := make(map[string][]string)
 			for _, op := range allOps {
 				compact[op.Resource] = append(compact[op.Resource], op.Verb)
 			}
 			data, _ := json.Marshal(compact)
-			fmt.Println(string(data))
-			return nil
+			return schemaOutput(cmd, data)
 		}
 
 		if listFlag {
 			data, _ := json.Marshal(generated.AllResources())
-			fmt.Println(string(data))
-			return nil
+			return schemaOutput(cmd, data)
 		}
 
 		resource := args[0]
-		allOps := generated.AllSchemaOps()
 
 		if len(args) == 1 {
 			var matching []generated.SchemaOp
@@ -73,16 +71,14 @@ var schemaCmd = &cobra.Command{
 				return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 			}
 			data, _ := json.Marshal(matching)
-			fmt.Println(string(data))
-			return nil
+			return schemaOutput(cmd, data)
 		}
 
 		verb := args[1]
 		for _, op := range allOps {
 			if op.Resource == resource && op.Verb == verb {
 				data, _ := json.Marshal(op)
-				fmt.Println(string(data))
-				return nil
+				return schemaOutput(cmd, data)
 			}
 		}
 		apiErr := &jrerrors.APIError{
@@ -92,6 +88,32 @@ var schemaCmd = &cobra.Command{
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 	},
+}
+
+// schemaOutput applies --jq and --pretty flags to schema JSON output.
+func schemaOutput(cmd *cobra.Command, data []byte) error {
+	jqFilter, _ := cmd.Flags().GetString("jq")
+	prettyFlag, _ := cmd.Flags().GetBool("pretty")
+
+	if jqFilter != "" {
+		filtered, err := jq.Apply(data, jqFilter)
+		if err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "jq_error",
+				Message:   "jq: " + err.Error(),
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		}
+		data = filtered
+	}
+
+	if prettyFlag {
+		data = pretty.Pretty(data)
+	}
+
+	fmt.Fprintf(os.Stdout, "%s\n", strings.TrimRight(string(data), "\n"))
+	return nil
 }
 
 func init() {

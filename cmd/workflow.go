@@ -115,13 +115,13 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
-	// 3. Execute transition.
+	// 3. Execute transition. Use fetchJSON to avoid c.Do() writing "{}" to stdout.
 	body := fmt.Sprintf(`{"transition":{"id":"%s"}}`, matchedID)
-	code := c.Do(cmd.Context(), "POST",
+	_, exitCode = fetchJSONWithBody(c, cmd.Context(), "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		nil, strings.NewReader(body))
-	if code != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: code}
+		strings.NewReader(body))
+	if exitCode != jrerrors.ExitOK {
+		return &errAlreadyWritten{code: exitCode}
 	}
 
 	out, _ := json.Marshal(map[string]string{
@@ -173,11 +173,11 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	case "none", "unassign":
 		assignBody := `{"accountId":null}`
-		code := c.Do(cmd.Context(), "PUT",
+		_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-			nil, strings.NewReader(assignBody))
-		if code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			strings.NewReader(assignBody))
+		if exitCode != jrerrors.ExitOK {
+			return &errAlreadyWritten{code: exitCode}
 		}
 		out, _ := json.Marshal(map[string]string{
 			"status": "unassigned",
@@ -216,11 +216,11 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	}
 
 	assignBody := fmt.Sprintf(`{"accountId":"%s"}`, accountID)
-	code := c.Do(cmd.Context(), "PUT",
+	_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		nil, strings.NewReader(assignBody))
-	if code != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: code}
+		strings.NewReader(assignBody))
+	if exitCode != jrerrors.ExitOK {
+		return &errAlreadyWritten{code: exitCode}
 	}
 
 	out, _ := json.Marshal(map[string]string{
@@ -233,13 +233,25 @@ func runAssign(cmd *cobra.Command, args []string) error {
 }
 
 // fetchJSON performs an HTTP request and returns the raw response body.
+// It uses the client's verbose logging so --verbose works for all requests.
 func fetchJSON(c *client.Client, ctx context.Context, method, path string) ([]byte, int) {
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, nil)
+	return fetchJSONWithBody(c, ctx, method, path, nil)
+}
+
+// fetchJSONWithBody performs an HTTP request with an optional body and returns the raw response body.
+func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
+	fullURL := c.BaseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
 	if err != nil {
 		return nil, jrerrors.ExitError
 	}
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	c.ApplyAuth(req)
+
+	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -249,11 +261,13 @@ func fetchJSON(c *client.Client, ctx context.Context, method, path string) ([]by
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, string(body), method, path, resp)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, string(respBody), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return nil, apiErr.ExitCode()
 	}
-	return body, jrerrors.ExitOK
+	return respBody, jrerrors.ExitOK
 }

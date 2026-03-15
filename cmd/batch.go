@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -130,8 +131,9 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
-	// Load all schema ops for lookup.
+	// Load all schema ops for lookup (generated + hand-written).
 	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
 
 	// Build a lookup map: "resource verb" -> SchemaOp
 	opMap := make(map[string]generated.SchemaOp, len(allOps))
@@ -190,6 +192,31 @@ func executeBatchOp(
 		return errorResult(index, jrerrors.ExitError, "validation_error", errMsg)
 	}
 
+	// Create a per-operation client with captured stdout/stderr.
+	var stdoutBuf strings.Builder
+	var stderrBuf strings.Builder
+
+	opClient := &client.Client{
+		BaseURL:    baseClient.BaseURL,
+		Auth:       baseClient.Auth,
+		HTTPClient: baseClient.HTTPClient,
+		Stdout:     &stdoutBuf,
+		Stderr:     &stderrBuf,
+		JQFilter:   bop.JQ,
+		Paginate:   baseClient.Paginate,
+		DryRun:     baseClient.DryRun,
+		Verbose:    baseClient.Verbose,
+		Pretty:     baseClient.Pretty,
+		Fields:     baseClient.Fields,
+		CacheTTL:   baseClient.CacheTTL,
+	}
+
+	// Hand-written commands have custom execution logic.
+	if bop.Command == "workflow transition" || bop.Command == "workflow assign" {
+		exitCode := executeBatchWorkflow(cmd.Context(), opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf)
+	}
+
 	// Build path by substituting {paramName} placeholders.
 	path := schemaOp.Path
 	for _, flag := range schemaOp.Flags {
@@ -219,25 +246,6 @@ func executeBatchOp(
 		bodyReaderPtr = &bodyReader
 	}
 
-	// Create a per-operation client with captured stdout/stderr.
-	var stdoutBuf strings.Builder
-	var stderrBuf strings.Builder
-
-	opClient := &client.Client{
-		BaseURL:    baseClient.BaseURL,
-		Auth:       baseClient.Auth,
-		HTTPClient: baseClient.HTTPClient,
-		Stdout:     &stdoutBuf,
-		Stderr:     &stderrBuf,
-		JQFilter:   bop.JQ,
-		Paginate:   baseClient.Paginate,
-		DryRun:     baseClient.DryRun,
-		Verbose:    baseClient.Verbose,
-		Pretty:     baseClient.Pretty,
-		Fields:     baseClient.Fields,
-		CacheTTL:   baseClient.CacheTTL,
-	}
-
 	var exitCode int
 	if bodyReaderPtr != nil {
 		exitCode = opClient.Do(cmd.Context(), schemaOp.Method, path, query, bodyReaderPtr)
@@ -245,8 +253,167 @@ func executeBatchOp(
 		exitCode = opClient.Do(cmd.Context(), schemaOp.Method, path, query, nil)
 	}
 
+	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf)
+}
+
+// executeBatchWorkflow runs workflow transition or assign as a batch operation.
+func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) int {
+	issueKey := bop.Args["issue"]
+	to := bop.Args["to"]
+
+	if issueKey == "" || to == "" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "workflow commands require 'issue' and 'to' args",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitValidation
+	}
+
+	if bop.Command == "workflow transition" {
+		return batchTransition(ctx, c, issueKey, to)
+	}
+	return batchAssign(ctx, c, issueKey, to)
+}
+
+// batchTransition executes a workflow transition within a batch operation.
+func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) int {
+	transitionsBody, exitCode := fetchJSON(c, ctx, "GET",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
 	if exitCode != jrerrors.ExitOK {
-		// Return error result using stderr content.
+		return exitCode
+	}
+
+	var transResp struct {
+		Transitions []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			To   struct {
+				Name string `json:"name"`
+			} `json:"to"`
+		} `json:"transitions"`
+	}
+	if err := json.Unmarshal(transitionsBody, &transResp); err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse transitions: " + err.Error()}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitError
+	}
+
+	toLower := strings.ToLower(toStatus)
+	var matchedID, matchedName string
+	for _, tr := range transResp.Transitions {
+		if strings.ToLower(tr.Name) == toLower || strings.ToLower(tr.To.Name) == toLower {
+			matchedID = tr.ID
+			matchedName = tr.Name
+			break
+		}
+	}
+	if matchedID == "" {
+		for _, tr := range transResp.Transitions {
+			if strings.Contains(strings.ToLower(tr.Name), toLower) ||
+				strings.Contains(strings.ToLower(tr.To.Name), toLower) {
+				matchedID = tr.ID
+				matchedName = tr.Name
+				break
+			}
+		}
+	}
+	if matchedID == "" {
+		names := make([]string, len(transResp.Transitions))
+		for i, tr := range transResp.Transitions {
+			names[i] = tr.Name
+		}
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitValidation
+	}
+
+	body := fmt.Sprintf(`{"transition":{"id":"%s"}}`, matchedID)
+	_, code := fetchJSONWithBody(c, ctx, "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		strings.NewReader(body))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := json.Marshal(map[string]string{
+		"status":     "transitioned",
+		"issue":      issueKey,
+		"transition": matchedName,
+	})
+	fmt.Fprintf(c.Stdout, "%s\n", out)
+	return jrerrors.ExitOK
+}
+
+// batchAssign executes a workflow assign within a batch operation.
+func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int {
+	var accountID string
+
+	switch strings.ToLower(to) {
+	case "me":
+		body, code := fetchJSON(c, ctx, "GET", "/rest/api/3/myself")
+		if code != jrerrors.ExitOK {
+			return code
+		}
+		var me struct {
+			AccountID string `json:"accountId"`
+		}
+		if err := json.Unmarshal(body, &me); err != nil || me.AccountID == "" {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "could not determine your account ID from /myself"}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitError
+		}
+		accountID = me.AccountID
+
+	case "none", "unassign":
+		assignBody := `{"accountId":null}`
+		_, code := fetchJSONWithBody(c, ctx, "PUT",
+			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			strings.NewReader(assignBody))
+		if code != jrerrors.ExitOK {
+			return code
+		}
+		out, _ := json.Marshal(map[string]string{"status": "unassigned", "issue": issueKey})
+		fmt.Fprintf(c.Stdout, "%s\n", out)
+		return jrerrors.ExitOK
+
+	default:
+		body, code := fetchJSON(c, ctx, "GET",
+			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
+		if code != jrerrors.ExitOK {
+			return code
+		}
+		var users []struct {
+			AccountID   string `json:"accountId"`
+			DisplayName string `json:"displayName"`
+		}
+		if err := json.Unmarshal(body, &users); err != nil || len(users) == 0 {
+			apiErr := &jrerrors.APIError{ErrorType: "not_found", Message: fmt.Sprintf("no user found matching %q", to)}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitNotFound
+		}
+		accountID = users[0].AccountID
+	}
+
+	assignBody := fmt.Sprintf(`{"accountId":"%s"}`, accountID)
+	_, code := fetchJSONWithBody(c, ctx, "PUT",
+		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+		strings.NewReader(assignBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := json.Marshal(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
+	fmt.Fprintf(c.Stdout, "%s\n", out)
+	return jrerrors.ExitOK
+}
+
+// buildBatchResult constructs a BatchResult from captured stdout/stderr.
+func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder) BatchResult {
+	if exitCode != jrerrors.ExitOK {
 		errOutput := strings.TrimSpace(stderrBuf.String())
 		var rawErr json.RawMessage
 		if json.Valid([]byte(errOutput)) {
@@ -262,7 +429,6 @@ func executeBatchOp(
 		}
 	}
 
-	// Parse stdout as JSON data.
 	outStr := strings.TrimSpace(stdoutBuf.String())
 	var rawData json.RawMessage
 	if outStr != "" && json.Valid([]byte(outStr)) {
