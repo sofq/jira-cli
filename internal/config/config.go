@@ -1,0 +1,193 @@
+package config
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+// AuthConfig holds authentication credentials for a profile.
+type AuthConfig struct {
+	Type         string `json:"type"`
+	Username     string `json:"username,omitempty"`
+	Token        string `json:"token,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	TokenURL     string `json:"token_url,omitempty"`
+	Scopes       string `json:"scopes,omitempty"`
+}
+
+// Profile holds the configuration for a named Jira instance.
+type Profile struct {
+	BaseURL string     `json:"base_url"`
+	Auth    AuthConfig `json:"auth"`
+}
+
+// Config is the top-level configuration structure persisted to disk.
+type Config struct {
+	Profiles       map[string]Profile `json:"profiles"`
+	DefaultProfile string             `json:"default_profile"`
+}
+
+// FlagOverrides carries values supplied via CLI flags. Empty string means
+// "not set by flag".
+type FlagOverrides struct {
+	BaseURL  string
+	AuthType string
+	Username string
+	Token    string
+}
+
+// ResolvedConfig is the final, merged configuration ready for use.
+type ResolvedConfig struct {
+	BaseURL string
+	Auth    AuthConfig
+}
+
+// DefaultPath returns the path to the configuration file. It checks the
+// JR_CONFIG_PATH environment variable first; otherwise it falls back to an
+// OS-specific default location.
+func DefaultPath() string {
+	if v := os.Getenv("JR_CONFIG_PATH"); v != "" {
+		return v
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "Library", "Application Support", "jr", "config.json")
+	case "windows":
+		appdata := os.Getenv("APPDATA")
+		return filepath.Join(appdata, "jr", "config.json")
+	default: // linux and others
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".config", "jr", "config.json")
+	}
+}
+
+// LoadFrom reads and parses the config file at path. If the file does not
+// exist, an empty (non-nil) Config is returned without error.
+func LoadFrom(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &Config{Profiles: map[string]Profile{}}, nil
+		}
+		return nil, err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg.Profiles == nil {
+		cfg.Profiles = map[string]Profile{}
+	}
+	return &cfg, nil
+}
+
+// SaveTo serialises cfg as indented JSON and writes it to path with 0o600
+// permissions, creating any missing parent directories.
+func SaveTo(cfg *Config, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0o600)
+}
+
+// Resolve builds a ResolvedConfig by merging sources in priority order:
+// CLI flags > environment variables > config file profile.
+//
+// The profileName argument selects which profile to load from the config
+// file; an empty string falls back to the DefaultProfile, then "default".
+func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedConfig, error) {
+	// 1. Load from config file (lowest priority).
+	cfg, err := LoadFrom(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	name := profileName
+	if name == "" {
+		name = cfg.DefaultProfile
+	}
+	if name == "" {
+		name = "default"
+	}
+
+	var fileBaseURL, fileAuthType, fileUsername, fileToken string
+	if p, ok := cfg.Profiles[name]; ok {
+		fileBaseURL = p.BaseURL
+		fileAuthType = p.Auth.Type
+		fileUsername = p.Auth.Username
+		fileToken = p.Auth.Token
+	}
+
+	// 2. Environment variables (override config file).
+	envBaseURL := os.Getenv("JR_BASE_URL")
+	envAuthType := os.Getenv("JR_AUTH_TYPE")
+	envUsername := os.Getenv("JR_AUTH_USER")
+	envToken := os.Getenv("JR_AUTH_TOKEN")
+
+	// 3. Merge: start with file values, then layer env vars.
+	baseURL := fileBaseURL
+	if envBaseURL != "" {
+		baseURL = envBaseURL
+	}
+
+	authType := fileAuthType
+	if envAuthType != "" {
+		authType = envAuthType
+	}
+
+	username := fileUsername
+	if envUsername != "" {
+		username = envUsername
+	}
+
+	token := fileToken
+	if envToken != "" {
+		token = envToken
+	}
+
+	// 4. CLI flags (highest priority).
+	if flags != nil {
+		if flags.BaseURL != "" {
+			baseURL = flags.BaseURL
+		}
+		if flags.AuthType != "" {
+			authType = flags.AuthType
+		}
+		if flags.Username != "" {
+			username = flags.Username
+		}
+		if flags.Token != "" {
+			token = flags.Token
+		}
+	}
+
+	// 5. Apply defaults.
+	if authType == "" {
+		authType = "basic"
+	}
+
+	// 6. Trim trailing slash from BaseURL.
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	return &ResolvedConfig{
+		BaseURL: baseURL,
+		Auth: AuthConfig{
+			Type:     authType,
+			Username: username,
+			Token:    token,
+		},
+	}, nil
+}
