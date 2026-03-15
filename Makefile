@@ -2,7 +2,7 @@
 
 VERSION ?= dev
 LDFLAGS := -s -w -X github.com/sofq/jira-cli/cmd.Version=$(VERSION)
-SPEC_URL := https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json?_v=1.8420.0
+SPEC_URL := https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
 
 generate:
 	go run ./gen/...
