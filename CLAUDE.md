@@ -69,3 +69,27 @@ make build       # build binary
 make test        # run tests
 make lint        # run golangci-lint
 ```
+
+## Pre-PR Checklist (MUST pass before creating a PR)
+
+Run these locally — CI failures waste time and slow down iteration.
+
+```bash
+# 1. Build must succeed
+go build ./...
+
+# 2. All tests must pass (unit + e2e)
+go test ./...
+
+# 3. Linter must pass (this is what usually fails in CI)
+golangci-lint run
+
+# 4. If you touched generated code or templates, regenerate and verify
+make generate
+go test ./gen/...   # conformance test catches stale generated code
+```
+
+### Common lint issues to watch for
+- **errcheck**: Every function that returns an error must have its return value handled. Use `_ =` for intentional ignores (e.g. `_ = json.Unmarshal(...)`). Check `.golangci.yml` for excluded functions.
+- **Do NOT add new exclude-functions to `.golangci.yml`** unless the function is truly fire-and-forget (like `fmt.Fprintf` to a Writer).
+- If `golangci-lint` is not installed: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
