@@ -27,6 +27,12 @@ var (
 var myselfCmd = &cobra.Command{
 	Use:   "myself",
 	Short: "myself operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema myself` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema myself` to list operations", cmd.CommandPath())
+	},
 }
 
 var myself_get_current_user = &cobra.Command{

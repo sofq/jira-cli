@@ -27,6 +27,12 @@ var (
 var statusesCmd = &cobra.Command{
 	Use:   "statuses",
 	Short: "statuses operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema statuses` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema statuses` to list operations", cmd.CommandPath())
+	},
 }
 
 var statuses_get_by_id = &cobra.Command{

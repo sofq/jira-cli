@@ -27,6 +27,12 @@ var (
 var issueLinkTypeCmd = &cobra.Command{
 	Use:   "issueLinkType",
 	Short: "issueLinkType operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema issueLinkType` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema issueLinkType` to list operations", cmd.CommandPath())
+	},
 }
 
 var issueLinkType_get_issue_link_types = &cobra.Command{

@@ -27,6 +27,12 @@ var (
 var project_templateCmd = &cobra.Command{
 	Use:   "project-template",
 	Short: "project-template operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema project-template` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema project-template` to list operations", cmd.CommandPath())
+	},
 }
 
 var project_template_create_project_with_custom_template = &cobra.Command{

@@ -27,6 +27,12 @@ var (
 var componentCmd = &cobra.Command{
 	Use:   "component",
 	Short: "component operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema component` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema component` to list operations", cmd.CommandPath())
+	},
 }
 
 var component_find_for_projects = &cobra.Command{

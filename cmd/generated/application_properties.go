@@ -27,6 +27,12 @@ var (
 var application_propertiesCmd = &cobra.Command{
 	Use:   "application-properties",
 	Short: "application-properties operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema application-properties` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema application-properties` to list operations", cmd.CommandPath())
+	},
 }
 
 var application_properties_get_application_property = &cobra.Command{

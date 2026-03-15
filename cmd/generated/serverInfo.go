@@ -27,6 +27,12 @@ var (
 var serverInfoCmd = &cobra.Command{
 	Use:   "serverInfo",
 	Short: "serverInfo operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema serverInfo` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema serverInfo` to list operations", cmd.CommandPath())
+	},
 }
 
 var serverInfo_get_server_info = &cobra.Command{

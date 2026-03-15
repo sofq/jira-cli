@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Exit code constants for structured error handling.
@@ -76,6 +77,10 @@ func ExitCodeFromStatus(status int) int {
 		return ExitRateLimit
 	case status == 409:
 		return ExitConflict
+	case status == 410:
+		return ExitNotFound
+	case status >= 400 && status < 500:
+		return ExitValidation
 	case status >= 500 && status < 600:
 		return ExitServer
 	case status >= 200 && status < 300:
@@ -98,6 +103,10 @@ func ErrorTypeFromStatus(status int) string {
 		return "rate_limited"
 	case status == 409:
 		return "conflict"
+	case status == 410:
+		return "gone"
+	case status >= 400 && status < 500:
+		return "client_error"
 	case status >= 500 && status < 600:
 		return "server_error"
 	default:
@@ -110,7 +119,7 @@ func ErrorTypeFromStatus(status int) string {
 func HintFromStatus(status int) string {
 	switch status {
 	case 401:
-		return "Run `jr auth login` to authenticate."
+		return "Run `jr configure --base-url <url> --token <token> --username <email>` to authenticate."
 	case 403:
 		return "You do not have permission to perform this action."
 	case 429:
@@ -118,6 +127,16 @@ func HintFromStatus(status int) string {
 	default:
 		return ""
 	}
+}
+
+// sanitizeBody returns a clean message string. If the body looks like HTML,
+// it returns a generic message with the HTTP status instead of the raw HTML.
+func sanitizeBody(body string, status int) string {
+	trimmed := strings.TrimSpace(body)
+	if strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<html") || strings.HasPrefix(trimmed, "<HTML") {
+		return fmt.Sprintf("HTTP %d: server returned HTML error page", status)
+	}
+	return body
 }
 
 // NewFromHTTP constructs an APIError from an HTTP response status, body text,
@@ -135,7 +154,7 @@ func NewFromHTTP(status int, body string, method, path string, resp *http.Respon
 	return &APIError{
 		ErrorType:  ErrorTypeFromStatus(status),
 		Status:     status,
-		Message:    body,
+		Message:    sanitizeBody(body, status),
 		Hint:       HintFromStatus(status),
 		RetryAfter: retryAfter,
 		Request: &RequestInfo{

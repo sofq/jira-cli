@@ -65,7 +65,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	// Read input.
@@ -81,7 +81,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "cannot read input file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return err
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
 		}
 	} else {
 		// Read from stdin.
@@ -93,7 +93,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "no input provided: use --input <file> or pipe JSON to stdin",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return fmt.Errorf("no input provided")
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
 		}
 		inputData, err = io.ReadAll(os.Stdin)
 		if err != nil {
@@ -103,7 +103,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "failed to read stdin: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return err
+			return &errAlreadyWritten{code: jrerrors.ExitError}
 		}
 	}
 
@@ -116,7 +116,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "invalid JSON input: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
 	// Load all schema ops for lookup.
@@ -147,7 +147,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "failed to encode results: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return err
+		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
 	return nil

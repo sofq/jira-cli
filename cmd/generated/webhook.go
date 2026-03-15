@@ -27,6 +27,12 @@ var (
 var webhookCmd = &cobra.Command{
 	Use:   "webhook",
 	Short: "webhook operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema webhook` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema webhook` to list operations", cmd.CommandPath())
+	},
 }
 
 var webhook_get_dynamic_webhooks_for_app = &cobra.Command{

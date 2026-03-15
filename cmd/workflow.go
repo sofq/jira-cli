@@ -29,7 +29,7 @@ var transitionCmd = &cobra.Command{
 var assignCmd = &cobra.Command{
 	Use:   "assign",
 	Short: "Assign an issue to a user",
-	Long:  "Assigns an issue. Use --to with a display name, email, or 'me' to resolve the account ID automatically.",
+	Long:  "Assigns an issue. Use --to with a display name, email, 'me', 'none', or 'unassign'. Use 'none' or 'unassign' to remove the assignee.",
 	RunE:  runAssign,
 }
 
@@ -41,7 +41,7 @@ func init() {
 
 	assignCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = assignCmd.MarkFlagRequired("issue")
-	assignCmd.Flags().String("to", "", "assignee: display name, email, or 'me'")
+	assignCmd.Flags().String("to", "", "assignee: display name, email, 'me', 'none', or 'unassign'")
 	_ = assignCmd.MarkFlagRequired("to")
 
 	workflowCmd.AddCommand(transitionCmd)

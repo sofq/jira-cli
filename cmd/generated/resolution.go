@@ -27,6 +27,12 @@ var (
 var resolutionCmd = &cobra.Command{
 	Use:   "resolution",
 	Short: "resolution operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema resolution` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema resolution` to list operations", cmd.CommandPath())
+	},
 }
 
 var resolution_get_resolutions = &cobra.Command{

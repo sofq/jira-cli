@@ -27,6 +27,12 @@ var (
 var customFieldOptionCmd = &cobra.Command{
 	Use:   "customFieldOption",
 	Short: "customFieldOption operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema customFieldOption` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema customFieldOption` to list operations", cmd.CommandPath())
+	},
 }
 
 var customFieldOption_get_custom_field_option = &cobra.Command{

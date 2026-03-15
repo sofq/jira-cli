@@ -27,6 +27,12 @@ var (
 var screensCmd = &cobra.Command{
 	Use:   "screens",
 	Short: "screens operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema screens` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema screens` to list operations", cmd.CommandPath())
+	},
 }
 
 var screens_get = &cobra.Command{

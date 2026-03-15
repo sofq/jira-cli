@@ -27,6 +27,12 @@ var (
 var classification_levelsCmd = &cobra.Command{
 	Use:   "classification-levels",
 	Short: "classification-levels operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema classification-levels` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema classification-levels` to list operations", cmd.CommandPath())
+	},
 }
 
 var classification_levels_get_all_user_data_classification_levels = &cobra.Command{

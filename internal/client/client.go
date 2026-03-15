@@ -392,12 +392,12 @@ func (c *Client) writeOutput(data []byte) int {
 		filtered, err := jq.Apply(data, c.JQFilter)
 		if err != nil {
 			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
+				ErrorType: "jq_error",
 				Status:    0,
 				Message:   "jq: " + err.Error(),
 			}
 			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
+			return jrerrors.ExitValidation
 		}
 		data = filtered
 	}
