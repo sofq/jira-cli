@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/quanhoang/jr/cmd/generated"
 	"github.com/quanhoang/jr/internal/client"
 	"github.com/quanhoang/jr/internal/config"
 	jrerrors "github.com/quanhoang/jr/internal/errors"
@@ -108,6 +109,7 @@ func init() {
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(rawCmd)
+	generated.RegisterAll(rootCmd)
 }
 
 // Execute runs the root command and returns an exit code.
