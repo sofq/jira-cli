@@ -1,0 +1,22 @@
+{
+  "name": "@sofq/jr",
+  "version": "0.0.0",
+  "description": "Agent-friendly Jira CLI with structured JSON output and jq filtering",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sofq/jira-cli"
+  },
+  "homepage": "https://github.com/sofq/jira-cli",
+  "keywords": ["jira", "cli", "ai", "agent", "json"],
+  "bin": {
+    "jr": "bin/jr"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/",
+    "install.js"
+  ]
+}

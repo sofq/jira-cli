@@ -24,3 +24,6 @@ docs/
 
 # Test
 coverage.out
+
+# Skill workspace
+jira-cli-workspace/
