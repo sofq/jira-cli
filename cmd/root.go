@@ -50,6 +50,7 @@ var rootCmd = &cobra.Command{
 		noPaginate, _ := cmd.Flags().GetBool("no-paginate")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		fields, _ := cmd.Flags().GetString("fields")
 
 		flags := &config.FlagOverrides{
 			BaseURL:  baseURL,
@@ -90,6 +91,7 @@ var rootCmd = &cobra.Command{
 			DryRun:     dryRun,
 			Verbose:    verbose,
 			Pretty:     pretty,
+			Fields:     fields,
 		}
 
 		cmd.SetContext(client.NewContext(cmd.Context(), c))
@@ -109,6 +111,7 @@ func init() {
 	pf.Bool("no-paginate", false, "disable automatic pagination")
 	pf.Bool("verbose", false, "log HTTP request/response details to stderr")
 	pf.Bool("dry-run", false, "print the request as JSON without executing it")
+	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(versionCmd)

@@ -629,3 +629,49 @@ func TestDo_VerboseStructuredJSON(t *testing.T) {
 		t.Errorf("expected type=response, got %v", respLog["type"])
 	}
 }
+
+// Test 13: --fields adds fields query param to GET requests.
+func TestDo_FieldsQueryParam(t *testing.T) {
+	var gotFields string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFields = r.URL.Query().Get("fields")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"TEST-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary,status"
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/TEST-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if gotFields != "key,summary,status" {
+		t.Errorf("expected fields=key,summary,status, got %q", gotFields)
+	}
+}
+
+// Test 13b: --fields not applied to POST requests.
+func TestDo_FieldsNotAppliedToPost(t *testing.T) {
+	var gotQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary"
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if strings.Contains(gotQuery, "fields=") {
+		t.Errorf("fields should not be applied to POST, got query: %s", gotQuery)
+	}
+}

@@ -32,6 +32,7 @@ type Client struct {
 	DryRun     bool      // output request as JSON, don't execute
 	Verbose    bool      // log request/response to stderr
 	Pretty     bool      // pretty-print JSON
+	Fields     string    // --fields comma-separated field names for GET
 }
 
 // NewContext stores the client in the given context and returns the new context.
@@ -79,6 +80,14 @@ func (c *Client) applyAuth(req *http.Request) {
 // from BaseURL+path+query, applies auth, handles pagination, jq filtering, and
 // pretty-printing. Errors are written as structured JSON to Stderr.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body io.Reader) int {
+	// Append --fields as query param for GET requests.
+	if c.Fields != "" && method == "GET" {
+		if query == nil {
+			query = url.Values{}
+		}
+		query.Set("fields", c.Fields)
+	}
+
 	rawURL := c.BaseURL + path
 	if len(query) > 0 {
 		rawURL = rawURL + "?" + query.Encode()
