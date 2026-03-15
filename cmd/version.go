@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time via ldflags: -X github.com/quanhoang/jr/cmd.Version=<ver>
+// Version is set at build time via ldflags: -X github.com/sofq/jira-cli/cmd.Version=<ver>
 var Version = "dev"
 
 var versionCmd = &cobra.Command{

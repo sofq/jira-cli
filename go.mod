@@ -1,4 +1,4 @@
-module github.com/quanhoang/jr
+module github.com/sofq/jira-cli
 
 go 1.25.2
 

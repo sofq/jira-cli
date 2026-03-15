@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/quanhoang/jr/internal/jq"
+	"github.com/sofq/jira-cli/internal/jq"
 )
 
 var sampleJSON = []byte(`{

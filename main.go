@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/quanhoang/jr/cmd"
+	"github.com/sofq/jira-cli/cmd"
 )
 
 func main() {

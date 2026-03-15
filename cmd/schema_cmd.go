@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/quanhoang/jr/cmd/generated"
-	jrerrors "github.com/quanhoang/jr/internal/errors"
+	"github.com/sofq/jira-cli/cmd/generated"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 

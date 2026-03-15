@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/quanhoang/jr/internal/client"
-	"github.com/quanhoang/jr/internal/config"
+	"github.com/sofq/jira-cli/internal/client"
+	"github.com/sofq/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

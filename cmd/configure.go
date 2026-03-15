@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/quanhoang/jr/internal/config"
-	jrerrors "github.com/quanhoang/jr/internal/errors"
+	"github.com/sofq/jira-cli/internal/config"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 

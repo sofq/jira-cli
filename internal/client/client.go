@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/quanhoang/jr/internal/config"
-	jrerrors "github.com/quanhoang/jr/internal/errors"
-	"github.com/quanhoang/jr/internal/jq"
+	"github.com/sofq/jira-cli/internal/config"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )

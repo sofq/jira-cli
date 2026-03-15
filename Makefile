@@ -1,18 +1,23 @@
-.PHONY: generate build install test spec-update clean
+.PHONY: generate build install test spec-update clean lint
 
+VERSION ?= dev
+LDFLAGS := -s -w -X github.com/sofq/jira-cli/cmd.Version=$(VERSION)
 SPEC_URL := https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json?_v=1.8420.0
 
 generate:
 	go run ./gen/...
 
 build: generate
-	go build -o jr .
+	go build -ldflags "$(LDFLAGS)" -o jr .
 
 install: generate
-	go install .
+	go install -ldflags "$(LDFLAGS)" .
 
 test:
 	go test ./...
+
+lint:
+	golangci-lint run
 
 spec-update:
 	curl -sL "$(SPEC_URL)" -o spec/jira-v3.json

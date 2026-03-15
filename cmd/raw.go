@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/quanhoang/jr/internal/client"
-	jrerrors "github.com/quanhoang/jr/internal/errors"
+	"github.com/sofq/jira-cli/internal/client"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 

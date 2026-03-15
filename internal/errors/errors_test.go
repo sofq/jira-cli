@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	jrerrors "github.com/quanhoang/jr/internal/errors"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 )
 
 func TestExitCodeFromStatus(t *testing.T) {

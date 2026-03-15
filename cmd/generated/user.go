@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/quanhoang/jr/internal/client"
-	jerrors "github.com/quanhoang/jr/internal/errors"
+	"github.com/sofq/jira-cli/internal/client"
+	jerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 

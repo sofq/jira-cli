@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/quanhoang/jr/internal/config"
+	"github.com/sofq/jira-cli/internal/config"
 )
 
 // helper to unset a list of env vars and restore them after the test.
