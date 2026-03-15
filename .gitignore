@@ -19,5 +19,8 @@ Thumbs.db
 # Docs (internal)
 docs/
 
+# Claude Code
+.claude/
+
 # Test
 coverage.out
