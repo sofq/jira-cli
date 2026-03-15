@@ -32,7 +32,7 @@ type RequestInfo struct {
 // human-readable message, optional hint, and optional request context.
 type APIError struct {
 	ErrorType  string       `json:"error_type"`
-	Status     int          `json:"status"`
+	Status     int          `json:"status,omitempty"`
 	Message    string       `json:"message"`
 	Hint       string       `json:"hint,omitempty"`
 	Request    *RequestInfo `json:"request,omitempty"`

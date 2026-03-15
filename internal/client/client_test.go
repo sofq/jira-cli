@@ -744,3 +744,951 @@ func TestDo_CacheHit(t *testing.T) {
 		t.Errorf("expected still 1 server call (cache hit), got %d", callCount)
 	}
 }
+
+// Bug #4: HTTP 204 No Content returns {} instead of empty body.
+func TestDo_204ReturnsEmptyJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "PUT", "/rest/api/3/issue/TEST-1", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if out != "{}" {
+		t.Errorf("expected '{}' for 204 response, got %q", out)
+	}
+}
+
+// Bug #5: --jq on 204 response should work (operates on {}).
+func TestDo_204WithJQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = `.status // "ok"`
+
+	code := c.Do(context.Background(), "PUT", "/path", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if out != `"ok"` {
+		t.Errorf("expected jq result %q, got %q", `"ok"`, out)
+	}
+}
+
+// Bug #4: Empty body (not 204 status) also returns {}.
+func TestDo_EmptyBodyReturnsEmptyJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// Write nothing.
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "DELETE", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	if out != "{}" {
+		t.Errorf("expected '{}' for empty response, got %q", out)
+	}
+}
+
+// Bug #8: Cache works with pagination enabled.
+func TestDo_CacheWithPagination(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":1,"values":[{"id":1}]}`)
+	}))
+	defer ts.Close()
+
+	// First call: should hit server.
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.Paginate = true
+	c.CacheTTL = 5 * time.Minute
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/cache-page-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	// Second call: should be cached.
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "GET", "/rest/api/3/cache-page-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Errorf("expected still 1 server call (cache hit), got %d", callCount)
+	}
+
+	// Verify both calls return same data.
+	if stdout1.String() != stdout2.String() {
+		t.Errorf("cached output differs:\n  first:  %s\n  second: %s", stdout1.String(), stdout2.String())
+	}
+}
+
+// Bug #11: Paginated output should not HTML-escape characters like &.
+func TestDo_PaginationNoHTMLEscape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":1,"values":[{"url":"http://example.com/a?b=1&c=2"}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	if strings.Contains(out, `\u0026`) {
+		t.Errorf("paginated output should not HTML-escape '&' as '\\u0026':\n%s", out)
+	}
+	if !strings.Contains(out, `&c=2`) {
+		t.Errorf("expected literal '&' in output:\n%s", out)
+	}
+}
+
+// Test: DELETE request returns JSON response on stdout.
+func TestDo_DeleteReturnsJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE method, got %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"deleted":true,"id":"PROJ-42"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "DELETE", "/rest/api/3/issue/PROJ-42", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if result["deleted"] != true {
+		t.Errorf("expected deleted=true, got %v", result["deleted"])
+	}
+	if result["id"] != "PROJ-42" {
+		t.Errorf("expected id=PROJ-42, got %v", result["id"])
+	}
+}
+
+// Test: PATCH with body sends correct content-type header.
+func TestDo_PatchWithBody(t *testing.T) {
+	var gotContentType, gotMethod string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotContentType = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"updated":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	body := strings.NewReader(`{"fields":{"summary":"Updated summary"}}`)
+	code := c.Do(context.Background(), "PATCH", "/rest/api/3/issue/PROJ-1", nil, body)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if gotMethod != "PATCH" {
+		t.Errorf("expected method PATCH, got %q", gotMethod)
+	}
+	if gotContentType != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", gotContentType)
+	}
+}
+
+// Test: HEAD request succeeds with no body and no error.
+func TestDo_HeadRequest(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Errorf("expected HEAD method, got %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// HEAD responses must not include a body per HTTP spec.
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "HEAD", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 for HEAD request, got %d; stderr=%s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("expected empty stderr for HEAD request, got: %s", stderr.String())
+	}
+}
+
+// Test: Invalid URL produces connection_error on stderr with exit code 1.
+func TestDo_ConnectionError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://127.0.0.1:0", &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 1 {
+		t.Fatalf("expected exit code 1 (error), got %d", code)
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "connection_error" {
+		t.Errorf("expected error_type 'connection_error', got: %v", errObj["error_type"])
+	}
+}
+
+// Test: Pretty=true outputs indented JSON with newlines.
+func TestDo_PrettyPrint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","summary":"Test issue"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Pretty = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "\n") {
+		t.Error("expected pretty-printed output with newlines")
+	}
+	// Indented JSON typically has leading spaces before field names.
+	if !strings.Contains(out, "  ") {
+		t.Error("expected indentation in pretty-printed output")
+	}
+	// Must still be valid JSON.
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &result); err != nil {
+		t.Fatalf("pretty output is not valid JSON: err=%v\noutput: %s", err, out)
+	}
+	if result["key"] != "PROJ-1" {
+		t.Errorf("expected key=PROJ-1, got %v", result["key"])
+	}
+}
+
+// Test: Verbose=true logs both request and response lines to stderr as JSON.
+func TestDo_VerboseRequestAndResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Verbose = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines in stderr (request + response), got %d: %s", len(lines), stderr.String())
+	}
+
+	var reqLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &reqLog); err != nil {
+		t.Fatalf("request log line not valid JSON: %s", lines[0])
+	}
+	if reqLog["type"] != "request" {
+		t.Errorf("expected first log type=request, got %v", reqLog["type"])
+	}
+	if reqLog["method"] != "GET" {
+		t.Errorf("expected method=GET in request log, got %v", reqLog["method"])
+	}
+
+	var respLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[1]), &respLog); err != nil {
+		t.Fatalf("response log line not valid JSON: %s", lines[1])
+	}
+	if respLog["type"] != "response" {
+		t.Errorf("expected second log type=response, got %v", respLog["type"])
+	}
+	if int(respLog["status"].(float64)) != 200 {
+		t.Errorf("expected status=200 in response log, got %v", respLog["status"])
+	}
+}
+
+// Test: Invalid jq expression returns jq_error with exit code 4.
+func TestDo_JQInvalidFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid jq"
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 4 {
+		t.Fatalf("expected exit code 4 (validation/jq_error), got %d; stderr=%s", code, stderr.String())
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "jq_error" {
+		t.Errorf("expected error_type 'jq_error', got: %v", errObj["error_type"])
+	}
+}
+
+// Test: jq filter producing multiple results returns each on its own line.
+func TestDo_JQMultipleResults(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"items":[{"id":1},{"id":2},{"id":3}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = "[.items[].id]"
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	out := strings.TrimSpace(stdout.String())
+	var ids []interface{}
+	if err := json.Unmarshal([]byte(out), &ids); err != nil {
+		t.Fatalf("stdout is not valid JSON array: %s; err=%v", out, err)
+	}
+	if len(ids) != 3 {
+		t.Errorf("expected 3 results, got %d", len(ids))
+	}
+}
+
+// Test: jq object construction {key: .key, name: .name} works correctly.
+func TestDo_JQObjectConstruction(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-7","name":"Test Project","extra":"ignored"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = `{key: .key, name: .name}`
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if result["key"] != "PROJ-7" {
+		t.Errorf("expected key=PROJ-7, got %v", result["key"])
+	}
+	if result["name"] != "Test Project" {
+		t.Errorf("expected name=Test Project, got %v", result["name"])
+	}
+	if _, hasExtra := result["extra"]; hasExtra {
+		t.Error("jq object construction should not include 'extra' field")
+	}
+}
+
+// Test: Fields="key,summary" is NOT added as query param for POST requests.
+func TestDo_FieldsNotAddedToPost(t *testing.T) {
+	var gotRawQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"id":"PROJ-99"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary"
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{"fields":{}}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if strings.Contains(gotRawQuery, "fields=") {
+		t.Errorf("fields query param must not be added to POST requests, got query: %q", gotRawQuery)
+	}
+}
+
+// Test: Fields="key,summary" IS added as ?fields=key,summary for GET requests.
+func TestDo_FieldsAddedToGet(t *testing.T) {
+	var gotFields string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFields = r.URL.Query().Get("fields")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","summary":"Hello"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Fields = "key,summary"
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if gotFields != "key,summary" {
+		t.Errorf("expected fields query param=key,summary, got %q", gotFields)
+	}
+}
+
+// Test: DryRun with query params includes them in the output URL.
+func TestDo_DryRunIncludesQuery(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.atlassian.net",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+	}
+
+	q := map[string][]string{"jql": {"project = PROJ"}, "maxResults": {"10"}}
+	code := c.Do(context.Background(), "GET", "/rest/api/3/search", q, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 for dry run, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var obj map[string]string
+	if err := json.Unmarshal(stdout.Bytes(), &obj); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if !strings.Contains(obj["url"], "jql=") {
+		t.Errorf("expected url to contain jql query param, got %q", obj["url"])
+	}
+	if !strings.Contains(obj["url"], "maxResults=") {
+		t.Errorf("expected url to contain maxResults query param, got %q", obj["url"])
+	}
+}
+
+// Test: DryRun with POST body still outputs request JSON without executing.
+func TestDo_DryRunWithBody(t *testing.T) {
+	// Use a server that would record if it got called.
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+	}
+
+	body := strings.NewReader(`{"fields":{"summary":"Dry run issue"}}`)
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, body)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 for dry run, got %d; stderr=%s", code, stderr.String())
+	}
+	if called {
+		t.Error("dry run must not execute the actual HTTP request")
+	}
+
+	var obj map[string]string
+	if err := json.Unmarshal(stdout.Bytes(), &obj); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if obj["method"] != "POST" {
+		t.Errorf("expected method=POST in dry run output, got %q", obj["method"])
+	}
+	if !strings.Contains(obj["url"], "/rest/api/3/issue") {
+		t.Errorf("expected url to contain path, got %q", obj["url"])
+	}
+}
+
+// Test: POST request does NOT cache even when CacheTTL is set.
+func TestDo_CacheOnlyForGet(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"created":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.CacheTTL = 5 * time.Minute
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	// Second POST to same path — must not be served from cache.
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0 on second call, got %d", code)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 server calls (POST never cached), got %d", callCount)
+	}
+}
+
+// Test: Expired cache entry triggers a new server call.
+func TestDo_CacheExpired(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"call":%d}`, callCount)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	// Use a tiny TTL so it expires almost immediately.
+	c.CacheTTL = 1 * time.Millisecond
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/expire-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	// Wait for the cache to expire.
+	time.Sleep(10 * time.Millisecond)
+
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "GET", "/rest/api/3/expire-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 on second call, got %d", code)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 server calls after cache expiry, got %d", callCount)
+	}
+}
+
+// Test: 3 pages merged correctly — total=6, values contain ids 1-6.
+func TestDo_PaginationMultiplePages(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		startAt := r.URL.Query().Get("startAt")
+		switch startAt {
+		case "", "0":
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":6,"values":[{"id":1},{"id":2}]}`)
+		case "2":
+			fmt.Fprintln(w, `{"startAt":2,"maxResults":2,"total":6,"values":[{"id":3},{"id":4}]}`)
+		default:
+			fmt.Fprintln(w, `{"startAt":4,"maxResults":2,"total":6,"values":[{"id":5},{"id":6}]}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if callCount != 3 {
+		t.Errorf("expected 3 HTTP calls for 3 pages, got %d", callCount)
+	}
+
+	var envelope struct {
+		Total  int                      `json:"total"`
+		Values []map[string]interface{} `json:"values"`
+		IsLast bool                     `json:"isLast"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(envelope.Values) != 6 {
+		t.Errorf("expected 6 merged values, got %d", len(envelope.Values))
+	}
+	if envelope.Total != 6 {
+		t.Errorf("expected total=6, got %d", envelope.Total)
+	}
+	if !envelope.IsLast {
+		t.Error("expected isLast=true after all pages merged")
+	}
+	// Verify ids are 1-6 in order.
+	for i, v := range envelope.Values {
+		expectedID := float64(i + 1)
+		if v["id"] != expectedID {
+			t.Errorf("expected values[%d].id=%v, got %v", i, expectedID, v["id"])
+		}
+	}
+}
+
+// Test: POST with Paginate=true still goes through doOnce (no pagination for non-GET).
+func TestDo_PaginationDoesNotApplyToPost(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":4,"values":[{"id":1},{"id":2}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/search", nil, strings.NewReader(`{"jql":"project=PROJ"}`))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	// POST + Paginate=true must only make one server call.
+	if callCount != 1 {
+		t.Errorf("expected exactly 1 server call for POST (no pagination), got %d", callCount)
+	}
+	// Response should be the raw first (and only) page, not a merged envelope.
+	var envelope struct {
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if envelope.Total != 4 {
+		t.Errorf("expected total=4 in raw response, got %d", envelope.Total)
+	}
+}
+
+// Test: HTTP 401 returns exit code 2 with error_type=auth_failed and a hint.
+func TestDo_401StructuredError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"message":"Unauthorized"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/myself", nil, nil)
+	if code != 2 {
+		t.Fatalf("expected exit code 2 (auth), got %d; stderr=%s", code, stderr.String())
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "auth_failed" {
+		t.Errorf("expected error_type 'auth_failed', got: %v", errObj["error_type"])
+	}
+	if int(errObj["status"].(float64)) != 401 {
+		t.Errorf("expected status=401, got: %v", errObj["status"])
+	}
+	hint, _ := errObj["hint"].(string)
+	if hint == "" {
+		t.Error("expected non-empty hint for 401 error")
+	}
+}
+
+// Test: HTTP 403 returns exit code 2 with error_type=auth_failed and a hint.
+func TestDo_403StructuredError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintln(w, `{"message":"Forbidden"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 2 {
+		t.Fatalf("expected exit code 2 (auth), got %d; stderr=%s", code, stderr.String())
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "auth_failed" {
+		t.Errorf("expected error_type 'auth_failed', got: %v", errObj["error_type"])
+	}
+	if int(errObj["status"].(float64)) != 403 {
+		t.Errorf("expected status=403, got: %v", errObj["status"])
+	}
+	hint, _ := errObj["hint"].(string)
+	if hint == "" {
+		t.Error("expected non-empty hint for 403 error")
+	}
+}
+
+// Test: HTTP 409 returns exit code 6 with error_type=conflict.
+func TestDo_409ConflictError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprintln(w, `{"errorMessages":["Issue already exists"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, strings.NewReader(`{}`))
+	if code != 6 {
+		t.Fatalf("expected exit code 6 (conflict), got %d; stderr=%s", code, stderr.String())
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "conflict" {
+		t.Errorf("expected error_type 'conflict', got: %v", errObj["error_type"])
+	}
+	if int(errObj["status"].(float64)) != 409 {
+		t.Errorf("expected status=409, got: %v", errObj["status"])
+	}
+}
+
+// Test: HTTP 500 returns exit code 7 with error_type=server_error.
+func TestDo_500ServerError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"errorMessages":["Internal Server Error"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 7 {
+		t.Fatalf("expected exit code 7 (server_error), got %d; stderr=%s", code, stderr.String())
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "server_error" {
+		t.Errorf("expected error_type 'server_error', got: %v", errObj["error_type"])
+	}
+	if int(errObj["status"].(float64)) != 500 {
+		t.Errorf("expected status=500, got: %v", errObj["status"])
+	}
+}
+
+// Test: Server returning HTML error body gets a sanitized message (not raw HTML).
+func TestDo_HTMLErrorSanitized(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintln(w, `<!DOCTYPE html><html><body><h1>Service Unavailable</h1></body></html>`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code == 0 {
+		t.Fatal("expected non-zero exit code for 503 response")
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	msg, _ := errObj["message"].(string)
+	if strings.Contains(msg, "<html") || strings.Contains(msg, "<!DOCTYPE") {
+		t.Errorf("expected sanitized message (no raw HTML), got: %q", msg)
+	}
+	if !strings.Contains(msg, "503") && !strings.Contains(strings.ToLower(msg), "html") {
+		t.Errorf("expected message to reference status or 'html', got: %q", msg)
+	}
+}
+
+// Test: 100KB response body is handled correctly.
+func TestDo_LargeResponse(t *testing.T) {
+	// Build a JSON object with a 100KB string value.
+	const targetSize = 100 * 1024
+	largeValue := strings.Repeat("x", targetSize)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":"%s"}`, largeValue)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/large", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON for large response; err=%v", err)
+	}
+	data, _ := result["data"].(string)
+	if len(data) != targetSize {
+		t.Errorf("expected data length %d, got %d", targetSize, len(data))
+	}
+}
+
+// Test: Empty JQFilter ("") passes response through unchanged.
+func TestDo_EmptyJQFilterPassthrough(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","summary":"No filter applied"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = "" // Explicitly empty — must behave as passthrough.
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/PROJ-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("expected empty stderr, got: %s", stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if result["key"] != "PROJ-1" {
+		t.Errorf("expected key=PROJ-1 in passthrough response, got %v", result["key"])
+	}
+	if result["summary"] != "No filter applied" {
+		t.Errorf("expected summary intact, got %v", result["summary"])
+	}
+}
+
+// Test: Paginated GET with Paginate=true and CacheTTL set caches the merged result.
+// Uses a proper paginated response (with a "values" key) so the pagination code
+// path runs and caches the merged envelope on the first call.
+func TestDo_PaginationCachePassthrough(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		// Single-page paginated response (total == len(values)) so only one fetch.
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":1,"values":[{"displayName":"Agent Smith"}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout1, stderr1 bytes.Buffer
+	c := newTestClient(ts.URL, &stdout1, &stderr1)
+	c.Paginate = true
+	c.CacheTTL = 5 * time.Minute
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/paginationcache-passthrough-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 server call, got %d", callCount)
+	}
+
+	// Second call must be served from cache (no additional server calls).
+	var stdout2, stderr2 bytes.Buffer
+	c.Stdout = &stdout2
+	c.Stderr = &stderr2
+	code = c.Do(context.Background(), "GET", "/rest/api/3/paginationcache-passthrough-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 on cached call, got %d", code)
+	}
+	if callCount != 1 {
+		t.Errorf("expected still 1 server call (cache hit), got %d", callCount)
+	}
+
+	// Both outputs must be identical valid JSON containing the merged envelope.
+	if stdout1.String() != stdout2.String() {
+		t.Errorf("cached output differs:\n  first:  %s\n  second: %s", stdout1.String(), stdout2.String())
+	}
+	var envelope struct {
+		Values []map[string]interface{} `json:"values"`
+		Total  int                      `json:"total"`
+	}
+	if err := json.Unmarshal(stdout2.Bytes(), &envelope); err != nil {
+		t.Fatalf("cached stdout is not valid JSON: %s; err=%v", stdout2.String(), err)
+	}
+	if len(envelope.Values) != 1 {
+		t.Errorf("expected 1 value in cached response, got %d", len(envelope.Values))
+	}
+	if envelope.Values[0]["displayName"] != "Agent Smith" {
+		t.Errorf("expected displayName=Agent Smith, got %v", envelope.Values[0]["displayName"])
+	}
+}

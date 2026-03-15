@@ -35,7 +35,20 @@ var schemaCmd = &cobra.Command{
 			return nil
 		}
 
-		if listFlag || len(args) == 0 {
+		// Bug #19: When no args and no flags, show compact resource→verbs map
+		// instead of just resource names (more useful default).
+		if len(args) == 0 && !listFlag {
+			allOps := generated.AllSchemaOps()
+			compact := make(map[string][]string)
+			for _, op := range allOps {
+				compact[op.Resource] = append(compact[op.Resource], op.Verb)
+			}
+			data, _ := json.Marshal(compact)
+			fmt.Println(string(data))
+			return nil
+		}
+
+		if listFlag {
 			data, _ := json.Marshal(generated.AllResources())
 			fmt.Println(string(data))
 			return nil

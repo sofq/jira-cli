@@ -3,6 +3,7 @@
 ## Quick Start
 ```
 jr configure --base-url https://yoursite.atlassian.net --token YOUR_API_TOKEN --username your@email.com
+jr configure --profile myprofile --delete   # remove a profile
 ```
 
 ## Key Patterns
@@ -35,9 +36,19 @@ jr workflow assign --issue PROJ-123 --to "me"
 # Unassign issue
 jr workflow assign --issue PROJ-123 --to "none"
 
-# Raw API call (method is positional, not a flag)
+# Edit issue (returns {} for 204 responses)
+jr issue edit --issueIdOrKey PROJ-123 --body '{"fields":{"summary":"Updated title"}}'
+
+# Delete issue
+jr issue delete --issueIdOrKey PROJ-123
+
+# Add comment
+jr issue add-comment --issueIdOrKey PROJ-123 --body '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"text":"A comment","type":"text"}]}]}}'
+
+# Raw API call (method is positional, not a flag; POST/PUT/PATCH require --body)
 jr raw GET /rest/api/3/myself
-jr raw POST /rest/api/3/search --body '{"jql":"project=PROJ"}'
+jr raw POST /rest/api/3/search/jql --body '{"jql":"project=PROJ"}'
+echo '{"jql":"project=PROJ"}' | jr raw POST /rest/api/3/search/jql --body -  # stdin
 
 # List projects
 jr project search --jq '[.values[] | {key, name}]'
@@ -49,8 +60,9 @@ echo '[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},{"co
 ## Discovery
 
 ```bash
-jr schema --list              # all resource names
-jr schema --compact           # resource → verbs mapping
+jr schema                     # resource → verbs mapping (default)
+jr schema --list              # all resource names only
+jr schema --compact           # same as default (resource → verbs)
 jr schema issue               # all operations for 'issue'
 jr schema issue get           # full schema with flags for one operation
 ```

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -19,15 +20,13 @@ var configureCmd = &cobra.Command{
 
 func init() {
 	f := configureCmd.Flags()
-	f.String("base-url", "", "Jira base URL (required)")
-	f.String("token", "", "API token or bearer token (required)")
+	f.String("base-url", "", "Jira base URL (required unless --delete)")
+	f.String("token", "", "API token or bearer token (required unless --delete)")
 	f.String("profile", "default", "profile name to save settings under")
 	f.String("auth-type", "basic", "auth type: basic or bearer")
 	f.String("username", "", "username for basic auth")
 	f.Bool("test", false, "test connection via GET /rest/api/3/myself before saving")
-
-	_ = configureCmd.MarkFlagRequired("base-url")
-	_ = configureCmd.MarkFlagRequired("token")
+	f.Bool("delete", false, "delete the named profile")
 }
 
 func runConfigure(cmd *cobra.Command, args []string) error {
@@ -37,6 +36,30 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	authType, _ := cmd.Flags().GetString("auth-type")
 	username, _ := cmd.Flags().GetString("username")
 	testConn, _ := cmd.Flags().GetBool("test")
+	deleteProfile, _ := cmd.Flags().GetBool("delete")
+
+	// Bug #20: Support profile deletion.
+	if deleteProfile {
+		return deleteProfileByName(profileName)
+	}
+
+	// Bug #1/#2: Validate required fields are not empty/whitespace.
+	if strings.TrimSpace(baseURL) == "" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "--base-url must not be empty",
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+	if strings.TrimSpace(token) == "" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "--token must not be empty",
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
 
 	if testConn {
 		if err := testConnection(baseURL, authType, username, token); err != nil {
@@ -88,6 +111,51 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	out, _ := json.Marshal(map[string]string{
 		"status":  "saved",
 		"profile": profileName,
+		"path":    configPath,
+	})
+	fmt.Fprintf(os.Stdout, "%s\n", out)
+	return nil
+}
+
+// deleteProfileByName removes a profile from the config file.
+func deleteProfileByName(name string) error {
+	configPath := config.DefaultPath()
+	cfg, err := config.LoadFrom(configPath)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "config_error",
+			Message:   "failed to load config: " + err.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitError}
+	}
+
+	if _, ok := cfg.Profiles[name]; !ok {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "not_found",
+			Message:   fmt.Sprintf("profile %q not found", name),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+
+	delete(cfg.Profiles, name)
+	if cfg.DefaultProfile == name {
+		cfg.DefaultProfile = ""
+	}
+
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "config_error",
+			Message:   "failed to save config: " + err.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitError}
+	}
+
+	out, _ := json.Marshal(map[string]string{
+		"status":  "deleted",
+		"profile": name,
 		"path":    configPath,
 	})
 	fmt.Fprintf(os.Stdout, "%s\n", out)

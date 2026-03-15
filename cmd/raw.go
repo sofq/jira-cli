@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -23,15 +25,35 @@ func init() {
 	f.StringArray("query", nil, "query parameters as key=value (repeatable)")
 }
 
+// validHTTPMethods is the set of allowed HTTP methods.
+var validHTTPMethods = map[string]bool{
+	"GET": true, "POST": true, "PUT": true, "DELETE": true,
+	"PATCH": true, "HEAD": true, "OPTIONS": true,
+}
+
+// methodNeedsBody returns true for HTTP methods that typically require a body.
+var methodsWithBody = map[string]bool{
+	"POST": true, "PUT": true, "PATCH": true,
+}
+
 func runRaw(cmd *cobra.Command, args []string) error {
 	method := strings.ToUpper(args[0])
 	path := args[1]
+
+	// Bug #7: Validate HTTP method client-side.
+	if !validHTTPMethods[method] {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("invalid HTTP method %q; must be one of GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS", method),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
 
 	c, err := client.FromContext(cmd.Context())
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "config_error",
-			Status:    0,
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
@@ -53,13 +75,15 @@ func runRaw(cmd *cobra.Command, args []string) error {
 
 	bodyFlag, _ := cmd.Flags().GetString("body")
 	switch {
+	case bodyFlag == "-":
+		// Explicit stdin: --body -
+		bodyReader = os.Stdin
 	case bodyFlag != "" && strings.HasPrefix(bodyFlag, "@"):
 		filename := bodyFlag[1:]
 		f, err := os.Open(filename)
 		if err != nil {
 			apiErr := &jrerrors.APIError{
 				ErrorType: "validation_error",
-				Status:    0,
 				Message:   "cannot open body file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
@@ -70,11 +94,29 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	case bodyFlag != "":
 		bodyReader = strings.NewReader(bodyFlag)
 	default:
-		// Use stdin if it is not a TTY.
-		fi, err := os.Stdin.Stat()
-		if err == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
-			bodyReader = os.Stdin
+		// Bug #3: Don't auto-read stdin for raw commands — require explicit --body - instead.
+		// This prevents hanging when no body is piped.
+	}
+
+	// Bug #16: Warn if --body is used with GET/HEAD/DELETE/OPTIONS.
+	if bodyFlag != "" && !methodsWithBody[method] {
+		warnMsg := map[string]any{
+			"type":    "warning",
+			"message": fmt.Sprintf("--body is ignored for %s requests", method),
 		}
+		warnJSON, _ := json.Marshal(warnMsg)
+		fmt.Fprintf(os.Stderr, "%s\n", warnJSON)
+		bodyReader = nil
+	}
+
+	// Bug #3: If method needs a body but none was provided, error instead of hanging on stdin.
+	if methodsWithBody[method] && bodyReader == nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("%s request requires a body; use --body '{...}' or pipe JSON to stdin", method),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
 	code := c.Do(cmd.Context(), method, path, q, bodyReader)

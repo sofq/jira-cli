@@ -27,6 +27,9 @@ var (
 var permissionsCmd = &cobra.Command{
 	Use:   "permissions",
 	Short: "permissions operations",
+	// Bug #22: Allow unknown flags so that "jr issue foobar --flag val" reports
+	// "unknown command" instead of "unknown flag".
+	FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			return fmt.Errorf("unknown command %q for %q; run `jr schema permissions` to list operations", args[0], cmd.CommandPath())

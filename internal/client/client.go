@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -208,6 +209,11 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		return apiErr.ExitCode()
 	}
 
+	// Bug #4: HTTP 204 No Content — emit empty JSON object to maintain JSON-only contract.
+	if len(respBody) == 0 || resp.StatusCode == http.StatusNoContent {
+		respBody = []byte("{}")
+	}
+
 	// Cache successful GET responses.
 	if cacheKey != "" {
 		cache.Set(cacheKey, respBody)
@@ -241,6 +247,15 @@ func isPaginated(body []byte) bool {
 // response envelope, and writes it to Stdout. Non-paginated responses are
 // passed through unchanged.
 func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path string, query url.Values) int {
+	// Bug #8: Check cache before fetching pages.
+	var cacheKey string
+	if c.CacheTTL > 0 {
+		cacheKey = cache.Key(method, firstURL)
+		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
+			return c.writeOutput(data)
+		}
+	}
+
 	// Fetch the first page using the original URL (preserves caller's query params).
 	firstBody, code := c.fetchPage(ctx, method, firstURL, path)
 	if code != jrerrors.ExitOK {
@@ -291,15 +306,24 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		return c.writeOutput(firstBody)
 	}
 
-	mergedValues, _ := json.Marshal(allValues)
-	envelope["values"] = mergedValues
+	// Bug #11: Marshal allValues without HTML escaping.
+	var valBuf bytes.Buffer
+	valEnc := json.NewEncoder(&valBuf)
+	valEnc.SetEscapeHTML(false)
+	_ = valEnc.Encode(allValues)
+	envelope["values"] = json.RawMessage(bytes.TrimRight(valBuf.Bytes(), "\n"))
 	envelope["startAt"] = json.RawMessage("0")
 	total, _ := json.Marshal(len(allValues))
 	envelope["total"] = json.RawMessage(total)
 	isLastTrue, _ := json.Marshal(true)
 	envelope["isLast"] = json.RawMessage(isLastTrue)
 
-	result, err := json.Marshal(envelope)
+	// Bug #11: Use SetEscapeHTML(false) to avoid \u0026 for & in URLs.
+	var resultBuf bytes.Buffer
+	enc := json.NewEncoder(&resultBuf)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(envelope)
+	result := bytes.TrimRight(resultBuf.Bytes(), "\n")
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "connection_error",
@@ -308,6 +332,11 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		}
 		apiErr.WriteJSON(c.Stderr)
 		return jrerrors.ExitError
+	}
+
+	// Bug #8: Cache the fully-paginated result.
+	if cacheKey != "" {
+		cache.Set(cacheKey, result)
 	}
 
 	return c.writeOutput(result)

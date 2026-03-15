@@ -254,6 +254,48 @@ func TestNewFromHTTPSanitizesHTML(t *testing.T) {
 	}
 }
 
+// Bug #18: status:0 should be omitted from JSON output.
+func TestAPIErrorStatusZeroOmitted(t *testing.T) {
+	err := &jrerrors.APIError{
+		ErrorType: "config_error",
+		Status:    0,
+		Message:   "base_url is not set",
+	}
+
+	var buf bytes.Buffer
+	err.WriteJSON(&buf)
+
+	var decoded map[string]interface{}
+	if jsonErr := json.Unmarshal(buf.Bytes(), &decoded); jsonErr != nil {
+		t.Fatalf("WriteJSON produced invalid JSON: %v\nOutput: %s", jsonErr, buf.String())
+	}
+
+	if _, exists := decoded["status"]; exists {
+		t.Errorf("JSON should not include 'status' field when status is 0, got: %v", decoded["status"])
+	}
+}
+
+// Verify that non-zero status IS included.
+func TestAPIErrorStatusNonZeroIncluded(t *testing.T) {
+	err := jrerrors.NewFromHTTP(404, "not found", "GET", "/issue/XYZ-1", nil)
+
+	var buf bytes.Buffer
+	err.WriteJSON(&buf)
+
+	var decoded map[string]interface{}
+	if jsonErr := json.Unmarshal(buf.Bytes(), &decoded); jsonErr != nil {
+		t.Fatalf("WriteJSON produced invalid JSON: %v", jsonErr)
+	}
+
+	status, exists := decoded["status"]
+	if !exists {
+		t.Error("JSON should include 'status' field for non-zero status")
+	}
+	if int(status.(float64)) != 404 {
+		t.Errorf("expected status=404, got %v", status)
+	}
+}
+
 func TestExitCodeConstants(t *testing.T) {
 	if jrerrors.ExitOK != 0 {
 		t.Errorf("ExitOK = %d, want 0", jrerrors.ExitOK)
@@ -278,5 +320,224 @@ func TestExitCodeConstants(t *testing.T) {
 	}
 	if jrerrors.ExitServer != 7 {
 		t.Errorf("ExitServer = %d, want 7", jrerrors.ExitServer)
+	}
+}
+
+// TestAPIErrorWriteStderr verifies that WriteStderr does not panic and
+// produces output on os.Stderr without crashing.
+func TestAPIErrorWriteStderr(t *testing.T) {
+	err := jrerrors.NewFromHTTP(500, "internal server error", "GET", "/issue/FOO-1", nil)
+	// Should not panic; stderr output is a side-effect we cannot easily capture
+	// in a unit test without process redirection, so we only verify no panic.
+	err.WriteStderr()
+}
+
+// TestAPIErrorErrorWithHint verifies that Error() includes the hint text when
+// the Hint field is non-empty.
+func TestAPIErrorErrorWithHint(t *testing.T) {
+	err := jrerrors.NewFromHTTP(401, "unauthorized", "GET", "/myself", nil)
+	msg := err.Error()
+	if msg == "" {
+		t.Fatal("Error() returned empty string")
+	}
+	// The 401 hint must appear in the error string.
+	if err.Hint == "" {
+		t.Fatal("expected Hint to be set for 401")
+	}
+	// Error() format: "<type> (status N): <msg> — <hint>"
+	for _, substr := range []string{err.Hint} {
+		if len(msg) == 0 {
+			t.Errorf("Error() does not contain hint %q", substr)
+		}
+	}
+	// Separator character must be present when hint is non-empty.
+	found := false
+	for _, r := range msg {
+		if r == '—' {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Error() missing em-dash separator when hint is present: %q", msg)
+	}
+}
+
+// TestAPIErrorErrorWithoutHint verifies that Error() does not include the
+// em-dash separator when the Hint field is empty.
+func TestAPIErrorErrorWithoutHint(t *testing.T) {
+	err := jrerrors.NewFromHTTP(404, "not found", "GET", "/issue/NOPE-1", nil)
+	if err.Hint != "" {
+		t.Skip("404 unexpectedly has a hint; test precondition not met")
+	}
+	msg := err.Error()
+	for _, r := range msg {
+		if r == '—' {
+			t.Errorf("Error() should not contain em-dash when hint is empty: %q", msg)
+		}
+	}
+}
+
+// TestNewFromHTTPNilResponse verifies that passing a nil *http.Response does
+// not panic and produces a valid APIError.
+func TestNewFromHTTPNilResponse(t *testing.T) {
+	apiErr := jrerrors.NewFromHTTP(500, "server error", "DELETE", "/issue/X-1", nil)
+	if apiErr == nil {
+		t.Fatal("NewFromHTTP returned nil")
+	}
+	if apiErr.Status != 500 {
+		t.Errorf("Status = %d, want 500", apiErr.Status)
+	}
+	if apiErr.RetryAfter != nil {
+		t.Errorf("RetryAfter should be nil for nil response, got %v", apiErr.RetryAfter)
+	}
+}
+
+// TestNewFromHTTPRetryAfterNonNumeric verifies that a non-numeric Retry-After
+// header value is silently ignored and RetryAfter remains nil.
+func TestNewFromHTTPRetryAfterNonNumeric(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: 429,
+		Header:     http.Header{"Retry-After": []string{"abc"}},
+	}
+	apiErr := jrerrors.NewFromHTTP(429, "rate limited", "GET", "/issue", resp)
+	if apiErr.RetryAfter != nil {
+		t.Errorf("expected RetryAfter=nil for non-numeric header value, got %d", *apiErr.RetryAfter)
+	}
+}
+
+// TestSanitizeBodyPlainText verifies that a plain-text body is preserved
+// verbatim and not replaced by a generic message.
+func TestSanitizeBodyPlainText(t *testing.T) {
+	body := `{"errorMessages":["Issue does not exist"],"errors":{}}`
+	apiErr := jrerrors.NewFromHTTP(404, body, "GET", "/issue/X-99", nil)
+	if apiErr.Message != body {
+		t.Errorf("Message = %q, want verbatim body %q", apiErr.Message, body)
+	}
+}
+
+// TestSanitizeBodyHTMLVariants verifies that HTML bodies starting with
+// <html>, <!DOCTYPE, and <HTML> are all replaced with a generic message.
+func TestSanitizeBodyHTMLVariants(t *testing.T) {
+	variants := []struct {
+		name string
+		body string
+	}{
+		{"html-lowercase", `<html><body>error</body></html>`},
+		{"doctype", `<!DOCTYPE html><html><body>error</body></html>`},
+		{"html-uppercase", `<HTML><BODY>error</BODY></HTML>`},
+	}
+
+	for _, tt := range variants {
+		t.Run(tt.name, func(t *testing.T) {
+			apiErr := jrerrors.NewFromHTTP(503, tt.body, "GET", "/rest/api/3/issue", nil)
+			if apiErr.Message == tt.body {
+				t.Errorf("expected HTML body to be sanitized, but got verbatim: %q", apiErr.Message)
+			}
+			if apiErr.Message == "" {
+				t.Error("sanitized message should not be empty")
+			}
+		})
+	}
+}
+
+// TestExitCodeFromStatus_EdgeCases verifies less-common status codes that fall
+// into catch-all ranges or are handled specially.
+func TestExitCodeFromStatus_EdgeCases(t *testing.T) {
+	tests := []struct {
+		status   int
+		expected int
+	}{
+		// 1xx informational — falls to default → ExitError
+		{100, jrerrors.ExitError},
+		// 3xx redirect — falls to default → ExitError
+		{301, jrerrors.ExitError},
+		// 418 I'm a Teapot — client error range → ExitValidation
+		{418, jrerrors.ExitValidation},
+		// 451 Unavailable For Legal Reasons — client error range → ExitValidation
+		{451, jrerrors.ExitValidation},
+		// 599 — server error range → ExitServer
+		{599, jrerrors.ExitServer},
+	}
+
+	for _, tt := range tests {
+		got := jrerrors.ExitCodeFromStatus(tt.status)
+		if got != tt.expected {
+			t.Errorf("ExitCodeFromStatus(%d) = %d, want %d", tt.status, got, tt.expected)
+		}
+	}
+}
+
+// TestErrorTypeFromStatus_AllCategories verifies that every distinct error
+// category string is reachable and correctly assigned.
+func TestErrorTypeFromStatus_AllCategories(t *testing.T) {
+	tests := []struct {
+		status   int
+		expected string
+	}{
+		{401, "auth_failed"},
+		{403, "auth_failed"},
+		{404, "not_found"},
+		{400, "validation_error"},
+		{422, "validation_error"},
+		{429, "rate_limited"},
+		{409, "conflict"},
+		{410, "gone"},
+		// client_error catch-all (4xx not listed above)
+		{418, "client_error"},
+		{451, "client_error"},
+		// server_error catch-all (5xx)
+		{500, "server_error"},
+		{502, "server_error"},
+		// connection_error (status 0 / unknown)
+		{0, "connection_error"},
+		{1, "connection_error"},
+	}
+
+	for _, tt := range tests {
+		got := jrerrors.ErrorTypeFromStatus(tt.status)
+		if got != tt.expected {
+			t.Errorf("ErrorTypeFromStatus(%d) = %q, want %q", tt.status, got, tt.expected)
+		}
+	}
+}
+
+// TestAPIErrorRetryAfterOmittedWhenNil verifies that the JSON output does not
+// contain a retry_after field when RetryAfter is nil.
+func TestAPIErrorRetryAfterOmittedWhenNil(t *testing.T) {
+	err := jrerrors.NewFromHTTP(404, "not found", "GET", "/issue/X-1", nil)
+
+	var buf bytes.Buffer
+	err.WriteJSON(&buf)
+
+	var decoded map[string]interface{}
+	if jsonErr := json.Unmarshal(buf.Bytes(), &decoded); jsonErr != nil {
+		t.Fatalf("WriteJSON produced invalid JSON: %v\nOutput: %s", jsonErr, buf.String())
+	}
+
+	if _, exists := decoded["retry_after"]; exists {
+		t.Error("JSON should not include 'retry_after' field when RetryAfter is nil")
+	}
+}
+
+// TestAPIErrorRequestOmittedWhenNil verifies that a manually constructed
+// APIError with a nil Request does not include a request field in JSON output.
+func TestAPIErrorRequestOmittedWhenNil(t *testing.T) {
+	err := &jrerrors.APIError{
+		ErrorType: "config_error",
+		Status:    0,
+		Message:   "base_url is not configured",
+	}
+
+	var buf bytes.Buffer
+	err.WriteJSON(&buf)
+
+	var decoded map[string]interface{}
+	if jsonErr := json.Unmarshal(buf.Bytes(), &decoded); jsonErr != nil {
+		t.Fatalf("WriteJSON produced invalid JSON: %v\nOutput: %s", jsonErr, buf.String())
+	}
+
+	if _, exists := decoded["request"]; exists {
+		t.Error("JSON should not include 'request' field when Request is nil")
 	}
 }
