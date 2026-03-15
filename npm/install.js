@@ -7,8 +7,6 @@ const path = require("path");
 const https = require("https");
 const { createWriteStream, mkdirSync } = require("fs");
 const { pipeline } = require("stream/promises");
-const zlib = require("zlib");
-const tar = require("tar");
 
 const REPO = "sofq/jira-cli";
 const BIN_DIR = path.join(__dirname, "bin");

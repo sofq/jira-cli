@@ -39,6 +39,46 @@ jobs:
         with:
           version: latest
 
+  npm-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Smoke test npm pack + install
+        run: |
+          cd npm
+          npm pack
+          mkdir /tmp/test-install && cd /tmp/test-install
+          npm init -y
+          npm install "$GITHUB_WORKSPACE"/npm/jira-jr-*.tgz 2>&1 | tee install.log
+          # postinstall will fail to download the binary (no matching release),
+          # but it must not fail on MODULE_NOT_FOUND
+          if grep -q "MODULE_NOT_FOUND" install.log; then
+            echo "ERROR: install.js has missing Node.js dependencies"
+            exit 1
+          fi
+
+  pypi-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Smoke test pip build + install
+        run: |
+          pip install build
+          cd python && python -m build
+          pip install dist/jira_jr-*.whl 2>&1 | tee install.log
+          # Verify the module imports cleanly (no missing dependencies)
+          python -c "from jira_jr import _get_binary_path; print('import ok')"
+
   integration:
     runs-on: ubuntu-latest
     needs: [test, lint]
