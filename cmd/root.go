@@ -119,6 +119,7 @@ func init() {
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(rawCmd)
+	rootCmd.AddCommand(workflowCmd)
 	generated.RegisterAll(rootCmd)
 }
 
