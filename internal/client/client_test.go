@@ -214,6 +214,256 @@ func TestDo_Pagination_NonPaginatedPassthrough(t *testing.T) {
 	}
 }
 
+// Test 6c: Pagination + jq filter on envelope — .values[].id works on paginated response.
+func TestDo_Pagination_JQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":2,"values":[{"id":1},{"id":2}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+	c.JQFilter = "[.values[].id]"
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	out := strings.TrimSpace(stdout.String())
+	if out != "[1,2]" {
+		t.Errorf("expected [1,2], got %q", out)
+	}
+}
+
+// Test 6d: Pagination with isLast field instead of total.
+func TestDo_Pagination_IsLast(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		callCount++
+		startAt := r.URL.Query().Get("startAt")
+		if startAt == "" || startAt == "0" {
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"isLast":false,"values":[{"id":1},{"id":2}]}`)
+		} else {
+			fmt.Fprintln(w, `{"startAt":2,"maxResults":2,"isLast":true,"values":[{"id":3}]}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls, got %d", callCount)
+	}
+
+	var envelope struct {
+		Values []map[string]interface{} `json:"values"`
+		IsLast bool                     `json:"isLast"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(envelope.Values) != 3 {
+		t.Errorf("expected 3 merged items, got %d", len(envelope.Values))
+	}
+	if !envelope.IsLast {
+		t.Error("expected isLast=true after merging all pages")
+	}
+}
+
+// Test 6e: Single-page paginated response (no extra requests).
+func TestDo_Pagination_SinglePage(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		callCount++
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":2,"values":[{"id":1},{"id":2}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	if callCount != 1 {
+		t.Errorf("expected 1 HTTP call for single page, got %d", callCount)
+	}
+
+	var envelope struct {
+		Values []map[string]interface{} `json:"values"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(envelope.Values) != 2 {
+		t.Errorf("expected 2 items, got %d", len(envelope.Values))
+	}
+}
+
+// Test 6f: Pagination with HTTP error on second page.
+func TestDo_Pagination_ErrorOnPage2(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		callCount++
+		if callCount == 1 {
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":4,"values":[{"id":1},{"id":2}]}`)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"errorMessages":["internal error"]}`)
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code == 0 {
+		t.Fatal("expected non-zero exit code on page 2 error")
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal(stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", stderr.String(), err)
+	}
+	if errObj["error_type"] != "server_error" {
+		t.Errorf("expected error_type 'server_error', got: %v", errObj["error_type"])
+	}
+}
+
+// Test 6g: jq filter on non-paginated response with pagination enabled.
+func TestDo_Pagination_JQOnNonPaginated(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"displayName":"Agent","emailAddress":"agent@test.com"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+	c.JQFilter = ".displayName"
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+	out := strings.TrimSpace(stdout.String())
+	if out != `"Agent"` {
+		t.Errorf("expected %q, got %q", `"Agent"`, out)
+	}
+}
+
+// Test 6h: Pagination with pretty print preserves envelope.
+func TestDo_Pagination_Pretty(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":1,"values":[{"id":1}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+	c.Pretty = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	// Pretty output should have newlines and indentation.
+	if !strings.Contains(out, "\n") {
+		t.Error("expected pretty-printed output with newlines")
+	}
+	// Should still be valid JSON with envelope.
+	var envelope struct {
+		Values []map[string]interface{} `json:"values"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("pretty output is not valid JSON: err=%v", err)
+	}
+	if len(envelope.Values) != 1 {
+		t.Errorf("expected 1 value, got %d", len(envelope.Values))
+	}
+}
+
+// Test 6i: Pagination with empty values array (0 results).
+func TestDo_Pagination_EmptyValues(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":0,"values":[]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = true
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+
+	var envelope struct {
+		Values []interface{} `json:"values"`
+		Total  int           `json:"total"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if len(envelope.Values) != 0 {
+		t.Errorf("expected 0 values, got %d", len(envelope.Values))
+	}
+}
+
+// Test 6j: Pagination disabled — paginated response returned as-is.
+func TestDo_NoPaginate_ReturnsRawResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":4,"values":[{"id":1},{"id":2}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = false
+
+	code := c.Do(context.Background(), "GET", "/path", nil, nil)
+	if code != 0 {
+		t.Fatalf("unexpected exit code %d; stderr=%s", code, stderr.String())
+	}
+
+	var envelope struct {
+		Total      int `json:"total"`
+		MaxResults int `json:"maxResults"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", stdout.String(), err)
+	}
+	if envelope.Total != 4 {
+		t.Errorf("expected total=4 in raw response, got %d", envelope.Total)
+	}
+	if envelope.MaxResults != 2 {
+		t.Errorf("expected maxResults=2, got %d", envelope.MaxResults)
+	}
+}
+
 // Test 7: DryRun outputs request JSON to stdout.
 func TestDo_DryRun(t *testing.T) {
 	var stdout, stderr bytes.Buffer

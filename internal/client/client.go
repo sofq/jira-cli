@@ -199,15 +199,16 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		return c.writeOutput(firstBody)
 	}
 
-	var page paginatedPage
-	if err := json.Unmarshal(firstBody, &page); err != nil {
+	var firstPage paginatedPage
+	if err := json.Unmarshal(firstBody, &firstPage); err != nil {
 		return c.writeOutput(firstBody)
 	}
 
-	allValues := append([]json.RawMessage{}, page.Values...)
+	allValues := append([]json.RawMessage{}, firstPage.Values...)
+	lastPage := firstPage
 
 	// Determine if we need more pages.
-	for !c.isLastPage(page, len(allValues)) && len(page.Values) > 0 {
+	for !c.isLastPage(lastPage, len(allValues)) && len(lastPage.Values) > 0 {
 		startAt := len(allValues)
 		q := url.Values{}
 		for k, v := range query {
@@ -221,10 +222,14 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 			return code
 		}
 
-		if err := json.Unmarshal(body, &page); err != nil {
+		// Use a fresh struct to avoid json.Unmarshal reusing RawMessage
+		// backing arrays from previous pages, which would corrupt allValues.
+		var nextPage paginatedPage
+		if err := json.Unmarshal(body, &nextPage); err != nil {
 			break
 		}
-		allValues = append(allValues, page.Values...)
+		allValues = append(allValues, nextPage.Values...)
+		lastPage = nextPage
 	}
 
 	// Re-serialize the original envelope with all values merged.
