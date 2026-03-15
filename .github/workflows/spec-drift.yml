@@ -1,0 +1,69 @@
+name: Spec Drift Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download latest Jira OpenAPI spec
+        run: |
+          curl -sL "https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json?_v=1.8420.0" -o spec/jira-v3-latest.json
+
+      - name: Check for spec changes
+        id: diff
+        run: |
+          if diff -q spec/jira-v3.json spec/jira-v3-latest.json > /dev/null 2>&1; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No spec changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Spec has changed!"
+          fi
+
+      - name: Regenerate commands from new spec
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cp spec/jira-v3-latest.json spec/jira-v3.json
+          go run ./gen/...
+
+      - name: Run tests against new spec
+        if: steps.diff.outputs.changed == 'true'
+        id: tests
+        run: |
+          if go test ./... 2>&1; then
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR for spec update
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "deps: update Jira OpenAPI spec"
+          title: "deps: update Jira OpenAPI spec"
+          body: |
+            The upstream Jira REST API v3 OpenAPI spec has changed.
+
+            This PR updates the spec and regenerates all commands.
+
+            **Tests:** ${{ steps.tests.outputs.tests_passed == 'true' && 'Passing' || 'Failing — manual review needed' }}
+
+            Source: https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
+          branch: auto/spec-update
+          labels: dependencies
+          delete-branch: true
