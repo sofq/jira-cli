@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +18,6 @@ var versionCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stdout, "%s\n", out)
-		return nil
+		return schemaOutput(cmd, out)
 	},
 }
