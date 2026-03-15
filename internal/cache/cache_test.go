@@ -18,7 +18,9 @@ func TestGetMiss(t *testing.T) {
 
 func TestSetAndGet(t *testing.T) {
 	key := cache.Key("GET", "https://test.example.com/test-"+t.Name())
-	cache.Set(key, []byte(`{"cached":true}`))
+	if err := cache.Set(key, []byte(`{"cached":true}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
 
 	data, ok := cache.Get(key, time.Minute)
 	if !ok {
@@ -31,7 +33,9 @@ func TestSetAndGet(t *testing.T) {
 
 func TestGetExpired(t *testing.T) {
 	key := cache.Key("GET", "https://test.example.com/expired-"+t.Name())
-	cache.Set(key, []byte(`{"old":true}`))
+	if err := cache.Set(key, []byte(`{"old":true}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
 
 	// TTL of 0 means immediately expired.
 	_, ok := cache.Get(key, 0)
@@ -53,8 +57,12 @@ func TestKey(t *testing.T) {
 func TestCacheSetOverwrite(t *testing.T) {
 	key := cache.Key("GET", "https://test.example.com/overwrite-"+t.Name())
 
-	cache.Set(key, []byte(`{"version":1}`))
-	cache.Set(key, []byte(`{"version":2}`))
+	if err := cache.Set(key, []byte(`{"version":1}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+	if err := cache.Set(key, []byte(`{"version":2}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
 
 	data, ok := cache.Get(key, time.Minute)
 	if !ok {
@@ -85,7 +93,9 @@ func TestCacheLargeData(t *testing.T) {
 	payload := bytes.Repeat(chunk, 1024) // 1 MB
 
 	key := cache.Key("GET", "https://test.example.com/large-"+t.Name())
-	cache.Set(key, payload)
+	if err := cache.Set(key, payload); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
 
 	data, ok := cache.Get(key, time.Minute)
 	if !ok {

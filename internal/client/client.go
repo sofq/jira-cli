@@ -216,7 +216,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 
 	// Cache successful GET responses.
 	if cacheKey != "" {
-		cache.Set(cacheKey, respBody)
+		_ = cache.Set(cacheKey, respBody)
 	}
 
 	return c.writeOutput(respBody)
@@ -416,7 +416,7 @@ func (c *Client) encodePaginatedResult(envelope map[string]json.RawMessage, cach
 	}
 
 	if cacheKey != "" {
-		cache.Set(cacheKey, result)
+		_ = cache.Set(cacheKey, result)
 	}
 
 	return c.writeOutput(result)
