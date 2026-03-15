@@ -40,8 +40,8 @@ func Get(key string, ttl time.Duration) ([]byte, bool) {
 	return data, true
 }
 
-// Set writes data to the cache.
-func Set(key string, data []byte) {
+// Set writes data to the cache. Returns an error if the write fails.
+func Set(key string, data []byte) error {
 	path := filepath.Join(Dir(), key)
-	os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o644)
 }

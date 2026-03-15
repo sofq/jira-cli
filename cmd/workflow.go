@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -173,7 +174,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	default:
 		body, code := fetchJSON(c, cmd.Context(), "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", to))
+			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
 		if code != jrerrors.ExitOK {
 			os.Exit(code)
 		}
