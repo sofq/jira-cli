@@ -27,6 +27,12 @@ var (
 var mypreferencesCmd = &cobra.Command{
 	Use:   "mypreferences",
 	Short: "mypreferences operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema mypreferences` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema mypreferences` to list operations", cmd.CommandPath())
+	},
 }
 
 var mypreferences_get_preference = &cobra.Command{

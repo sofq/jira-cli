@@ -27,6 +27,12 @@ var (
 var projectCmd = &cobra.Command{
 	Use:   "project",
 	Short: "project operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema project` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema project` to list operations", cmd.CommandPath())
+	},
 }
 
 var project_get_all = &cobra.Command{

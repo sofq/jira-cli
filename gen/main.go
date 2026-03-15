@@ -59,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 7. Generate init.go.
+	// 7. Generate init.go (excluding resources with hand-written commands).
 	fmt.Println("Generating init.go...")
 	if err := GenerateInit(resources, outDir); err != nil {
 		fmt.Fprintf(os.Stderr, "error generating init: %v\n", err)

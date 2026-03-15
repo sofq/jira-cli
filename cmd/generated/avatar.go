@@ -27,6 +27,12 @@ var (
 var avatarCmd = &cobra.Command{
 	Use:   "avatar",
 	Short: "avatar operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema avatar` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema avatar` to list operations", cmd.CommandPath())
+	},
 }
 
 var avatar_get_all_system = &cobra.Command{

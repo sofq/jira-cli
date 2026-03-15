@@ -27,6 +27,12 @@ var (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "config operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema config` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema config` to list operations", cmd.CommandPath())
+	},
 }
 
 var config_get_field_association_schemes = &cobra.Command{

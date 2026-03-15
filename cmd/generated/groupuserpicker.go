@@ -27,6 +27,12 @@ var (
 var groupuserpickerCmd = &cobra.Command{
 	Use:   "groupuserpicker",
 	Short: "groupuserpicker operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema groupuserpicker` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema groupuserpicker` to list operations", cmd.CommandPath())
+	},
 }
 
 var groupuserpicker_find_users_and_groups = &cobra.Command{

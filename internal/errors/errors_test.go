@@ -25,8 +25,9 @@ func TestExitCodeFromStatus(t *testing.T) {
 		{500, jrerrors.ExitServer},
 		{502, jrerrors.ExitServer},
 		{503, jrerrors.ExitServer},
+		{410, jrerrors.ExitNotFound},
 		{0, jrerrors.ExitError},
-		{418, jrerrors.ExitError},
+		{418, jrerrors.ExitValidation},
 	}
 
 	for _, tt := range tests {
@@ -51,8 +52,9 @@ func TestErrorTypeFromStatus(t *testing.T) {
 		{409, "conflict"},
 		{500, "server_error"},
 		{503, "server_error"},
+		{410, "gone"},
 		{0, "connection_error"},
-		{418, "connection_error"},
+		{418, "client_error"},
 	}
 
 	for _, tt := range tests {
@@ -238,6 +240,17 @@ func TestNewFromHTTPRetryAfterMissing(t *testing.T) {
 	apiErr := jrerrors.NewFromHTTP(429, "rate limited", "GET", "/issue", resp)
 	if apiErr.RetryAfter != nil {
 		t.Errorf("expected RetryAfter=nil, got %d", *apiErr.RetryAfter)
+	}
+}
+
+func TestNewFromHTTPSanitizesHTML(t *testing.T) {
+	htmlBody := `<!DOCTYPE html><html><head><title>Not Found</title></head><body>Page not found</body></html>`
+	apiErr := jrerrors.NewFromHTTP(404, htmlBody, "GET", "/nonexistent", nil)
+	if apiErr.Message == htmlBody {
+		t.Error("expected HTML body to be sanitized, but it was passed through verbatim")
+	}
+	if apiErr.Message == "" {
+		t.Error("expected a non-empty sanitized message")
 	}
 }
 

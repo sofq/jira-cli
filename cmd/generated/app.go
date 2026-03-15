@@ -27,6 +27,12 @@ var (
 var appCmd = &cobra.Command{
 	Use:   "app",
 	Short: "app operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema app` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema app` to list operations", cmd.CommandPath())
+	},
 }
 
 var app_get_custom_fields_configurations = &cobra.Command{

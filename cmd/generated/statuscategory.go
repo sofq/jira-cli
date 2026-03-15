@@ -27,6 +27,12 @@ var (
 var statuscategoryCmd = &cobra.Command{
 	Use:   "statuscategory",
 	Short: "statuscategory operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema statuscategory` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema statuscategory` to list operations", cmd.CommandPath())
+	},
 }
 
 var statuscategory_get_status_categories = &cobra.Command{

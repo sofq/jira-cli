@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 
@@ -22,11 +21,19 @@ var skipClientCommands = map[string]bool{
 	"schema":     true,
 }
 
+// errAlreadyWritten is a sentinel error indicating that the JSON error has
+// already been written to stderr by PersistentPreRunE, so Execute() should
+// not write a second one.
+type errAlreadyWritten struct{ code int }
+
+func (e *errAlreadyWritten) Error() string { return "error already written" }
+
 var rootCmd = &cobra.Command{
-	Use:          "jr",
-	Short:        "Agent-friendly Jira CLI",
-	SilenceUsage: true,
+	Use:           "jr",
+	Short:         "Agent-friendly Jira CLI",
+	SilenceUsage:  true,
 	SilenceErrors: true,
+	Version:       Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip client injection for built-in / setup commands.
 		name := cmd.Name()
@@ -68,7 +75,7 @@ var rootCmd = &cobra.Command{
 				Message:   "failed to resolve config: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return err
+			return &errAlreadyWritten{code: jrerrors.ExitError}
 		}
 
 		if resolved.BaseURL == "" {
@@ -78,7 +85,7 @@ var rootCmd = &cobra.Command{
 				Message:   "base_url is not set; run `jr configure --base-url <url> --token <token>` or set JR_BASE_URL",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return fmt.Errorf("base_url is required")
+			return &errAlreadyWritten{code: jrerrors.ExitError}
 		}
 
 		c := &client.Client{
@@ -116,16 +123,28 @@ func init() {
 	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
 	pf.Duration("cache", 0, "cache GET responses for this duration (e.g. 5m, 1h)")
 
-	rootCmd.AddCommand(configureCmd)
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(rawCmd)
-	rootCmd.AddCommand(workflowCmd)
+	// Override --version template to output JSON.
+	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
+
+	// Register generated commands first, then replace version/workflow parents
+	// with hand-written ones while preserving generated subcommands.
 	generated.RegisterAll(rootCmd)
+
+	// Merge hand-written version/workflow with their generated subcommands.
+	mergeCommand(rootCmd, versionCmd)
+	mergeCommand(rootCmd, workflowCmd)
+
+	rootCmd.AddCommand(configureCmd)
+	rootCmd.AddCommand(rawCmd)
 }
 
 // Execute runs the root command and returns an exit code.
 func Execute() int {
 	if err := rootCmd.Execute(); err != nil {
+		// If error was already written to stderr, don't write again.
+		if aw, ok := err.(*errAlreadyWritten); ok {
+			return aw.code
+		}
 		enc := json.NewEncoder(os.Stderr)
 		enc.SetEscapeHTML(false)
 		_ = enc.Encode(map[string]string{
@@ -135,4 +154,59 @@ func Execute() int {
 		return jrerrors.ExitError
 	}
 	return jrerrors.ExitOK
+}
+
+// mergeCommand replaces a generated parent command on root with a hand-written
+// one, while preserving any generated subcommands that are not already present
+// on the hand-written command.
+func mergeCommand(root *cobra.Command, handWritten *cobra.Command) {
+	name := handWritten.Name()
+	// Find existing generated command.
+	for _, c := range root.Commands() {
+		if c.Name() == name {
+			// Copy generated subcommands to hand-written command.
+			existingSubs := make(map[string]bool)
+			for _, sub := range handWritten.Commands() {
+				existingSubs[sub.Name()] = true
+			}
+			for _, sub := range c.Commands() {
+				if !existingSubs[sub.Name()] {
+					handWritten.AddCommand(sub)
+				}
+			}
+			root.RemoveCommand(c)
+			break
+		}
+	}
+	root.AddCommand(handWritten)
+}
+
+// writeJSONError writes a structured JSON error to stderr. Used by custom help
+// interceptors to maintain the JSON-only stdout contract.
+func writeJSONError(errType, message string) {
+	apiErr := &jrerrors.APIError{
+		ErrorType: errType,
+		Status:    0,
+		Message:   message,
+	}
+	apiErr.WriteJSON(os.Stderr)
+}
+
+func init() {
+	// Override cobra's default help output so that "jr" with no args and
+	// "jr help <resource>" emit JSON errors to stderr instead of plain text
+	// to stdout. This preserves the JSON-only stdout contract.
+	// Override help to write to stderr (preserving JSON-only stdout contract).
+	// For the root command with no args, emit a JSON hint instead.
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd == rootCmd {
+			writeJSONError("command_error", "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource")
+			os.Exit(jrerrors.ExitError)
+			return
+		}
+		// Write help text to stderr so stdout stays JSON-only.
+		cmd.SetOut(os.Stderr)
+		defaultHelp(cmd, args)
+	})
 }

@@ -27,6 +27,12 @@ var (
 var permissionsCmd = &cobra.Command{
 	Use:   "permissions",
 	Short: "permissions operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema permissions` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema permissions` to list operations", cmd.CommandPath())
+	},
 }
 
 var permissions_get_all = &cobra.Command{

@@ -27,6 +27,12 @@ var (
 var fieldconfigurationschemeCmd = &cobra.Command{
 	Use:   "fieldconfigurationscheme",
 	Short: "fieldconfigurationscheme operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema fieldconfigurationscheme` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema fieldconfigurationscheme` to list operations", cmd.CommandPath())
+	},
 }
 
 var fieldconfigurationscheme_get_all_field_configuration_schemes = &cobra.Command{

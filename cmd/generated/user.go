@@ -27,6 +27,12 @@ var (
 var userCmd = &cobra.Command{
 	Use:   "user",
 	Short: "user operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema user` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema user` to list operations", cmd.CommandPath())
+	},
 }
 
 var user_get = &cobra.Command{

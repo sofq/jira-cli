@@ -27,6 +27,12 @@ var (
 var universal_avatarCmd = &cobra.Command{
 	Use:   "universal_avatar",
 	Short: "universal_avatar operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema universal_avatar` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema universal_avatar` to list operations", cmd.CommandPath())
+	},
 }
 
 var universal_avatar_get_avatars = &cobra.Command{

@@ -27,6 +27,12 @@ var (
 var data_policyCmd = &cobra.Command{
 	Use:   "data-policy",
 	Short: "data-policy operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema data-policy` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema data-policy` to list operations", cmd.CommandPath())
+	},
 }
 
 var data_policy_get_policy = &cobra.Command{

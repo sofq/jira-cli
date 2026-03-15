@@ -27,6 +27,12 @@ var (
 var plansCmd = &cobra.Command{
 	Use:   "plans",
 	Short: "plans operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema plans` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema plans` to list operations", cmd.CommandPath())
+	},
 }
 
 var plans_get_plans = &cobra.Command{

@@ -27,6 +27,12 @@ var (
 var instanceCmd = &cobra.Command{
 	Use:   "instance",
 	Short: "instance operations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return fmt.Errorf("unknown command %q for %q; run `jr schema instance` to list operations", args[0], cmd.CommandPath())
+		}
+		return fmt.Errorf("missing subcommand for %q; run `jr schema instance` to list operations", cmd.CommandPath())
+	},
 }
 
 var instance_get_license = &cobra.Command{
