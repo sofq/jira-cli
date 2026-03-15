@@ -56,9 +56,21 @@ jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status --jq '{key: .ke
 
 ## Agent integration
 
+### Claude Code skill
+
+A [Claude Code skill](skill/jira-cli/SKILL.md) is included in this repo. Copy it to your project or global skills directory to give Claude Code full knowledge of `jr` commands, patterns, and troubleshooting:
+
+```bash
+# Project-level
+cp -r skill/jira-cli .claude/skills/
+
+# Global (all projects)
+cp -r skill/jira-cli ~/.claude/skills/
+```
+
 ### For Claude Code / Cursor / AI coding agents
 
-Drop a `CLAUDE.md` (included in this repo) or add to your agent's instructions:
+Or simply add to your agent's instructions:
 
 ```
 Use `jr` for all Jira operations. Output is always JSON.
@@ -198,6 +210,15 @@ make test        # run all tests (unit + conformance + e2e)
 make lint        # run golangci-lint
 make spec-update # fetch latest Jira OpenAPI spec
 ```
+
+## Acknowledgments
+
+jr is built on these excellent libraries:
+
+- [cobra](https://github.com/spf13/cobra) — CLI framework
+- [libopenapi](https://github.com/pb33f/libopenapi) — OpenAPI spec parsing that powers auto-generated commands
+- [gojq](https://github.com/itchyny/gojq) — Pure Go jq implementation for the `--jq` flag
+- [Restish](https://github.com/rest-sh/restish) — Inspiration for the "CLI generated from OpenAPI" approach
 
 ## License
 
