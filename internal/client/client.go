@@ -122,9 +122,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 	c.applyAuth(req)
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
-	}
+	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -138,9 +136,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 	defer resp.Body.Close()
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
-	}
+	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -286,9 +282,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	req.Header.Set("Accept", "application/json")
 	c.applyAuth(req)
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "> %s %s\n", method, rawURL)
-	}
+	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -302,9 +296,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 	defer resp.Body.Close()
 
-	if c.Verbose {
-		fmt.Fprintf(c.Stderr, "< %s\n", resp.Status)
-	}
+	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -324,6 +316,15 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 
 	return body, jrerrors.ExitOK
+}
+
+// verboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.
+func (c *Client) verboseLog(fields map[string]any) {
+	if !c.Verbose {
+		return
+	}
+	data, _ := json.Marshal(fields)
+	fmt.Fprintf(c.Stderr, "%s\n", data)
 }
 
 // writeOutput applies optional JQ filtering and pretty-printing, then writes

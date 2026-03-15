@@ -590,3 +590,42 @@ func TestDo_429RetryAfter(t *testing.T) {
 		t.Errorf("expected retry_after=60, got %v", errObj["retry_after"])
 	}
 }
+
+// Test 12: Verbose output is structured JSON.
+func TestDo_VerboseStructuredJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Verbose = true
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines in stderr, got %d: %s", len(lines), stderr.String())
+	}
+
+	var reqLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &reqLog); err != nil {
+		t.Fatalf("request log line not valid JSON: %s", lines[0])
+	}
+	if reqLog["type"] != "request" {
+		t.Errorf("expected type=request, got %v", reqLog["type"])
+	}
+
+	var respLog map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[1]), &respLog); err != nil {
+		t.Fatalf("response log line not valid JSON: %s", lines[1])
+	}
+	if respLog["type"] != "response" {
+		t.Errorf("expected type=response, got %v", respLog["type"])
+	}
+}
