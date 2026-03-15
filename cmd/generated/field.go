@@ -73,7 +73,9 @@ var field_create_custom = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -113,7 +115,9 @@ var field_create_associations = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -153,7 +157,9 @@ var field_remove_associations = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -236,7 +242,9 @@ var field_update_custom = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -299,7 +307,9 @@ var field_create_custom_field_context = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -362,7 +372,9 @@ var field_set_default_values = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -425,7 +437,9 @@ var field_get_custom_field_contexts_for_projects_and_issue_types = &cobra.Comman
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -489,7 +503,9 @@ var field_update_custom_field_context = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -554,7 +570,9 @@ var field_add_issue_types_to_context = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -596,7 +614,9 @@ var field_remove_issue_types_from_context = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -661,7 +681,9 @@ var field_create_custom_field_option = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -703,7 +725,9 @@ var field_update_custom_field_option = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -745,7 +769,9 @@ var field_reorder_custom_field_options = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -835,7 +861,9 @@ var field_assign_projects_to_custom_field_context = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -877,7 +905,9 @@ var field_remove_custom_field_context_from_projects = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -984,7 +1014,9 @@ var field_create_issue_field_option = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -1093,7 +1125,9 @@ var field_update_issue_field_option = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {

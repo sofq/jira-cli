@@ -52,7 +52,9 @@ var project_template_create_project_with_custom_template = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -92,7 +94,9 @@ var project_template_edit_template = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -174,7 +178,9 @@ var project_template_save_template = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {

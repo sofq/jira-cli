@@ -73,7 +73,9 @@ var issuetypescreenscheme_create_issue_type_screen_scheme = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -155,7 +157,9 @@ var issuetypescreenscheme_assign_issue_type_screen_scheme_to_project = &cobra.Co
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -196,7 +200,9 @@ var issuetypescreenscheme_update_issue_type_screen_scheme = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -259,7 +265,9 @@ var issuetypescreenscheme_append_mappings_for_issue_type_screen_scheme = &cobra.
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -300,7 +308,9 @@ var issuetypescreenscheme_update_default_screen_scheme = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -341,7 +351,9 @@ var issuetypescreenscheme_remove_mappings_from_issue_type_screen_scheme = &cobra
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {

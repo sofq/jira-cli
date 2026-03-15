@@ -99,7 +99,9 @@ var atlassian_connect_addon_properties_resource_put_addon_property_put = &cobra.
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -183,7 +185,9 @@ var atlassian_connect_dynamic_modules_resource_register_modules_post = &cobra.Co
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -244,7 +248,9 @@ var atlassian_connect_app_issue_field_value_update_resource_update_issue_fields_
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -285,7 +291,9 @@ var atlassian_connect_migration_resource_update_entity_properties_value_put = &c
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -325,7 +333,9 @@ var atlassian_connect_migration_resource_workflow_rule_search_post = &cobra.Comm
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {

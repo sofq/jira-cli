@@ -73,7 +73,9 @@ var notificationscheme_create_notification_scheme = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -157,7 +159,9 @@ var notificationscheme_update_notification_scheme = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
@@ -198,7 +202,9 @@ var notificationscheme_add_notifications = &cobra.Command{
 
 		var bodyReader io.Reader
 		bodyStr, _ := cmd.Flags().GetString("body")
-		if bodyStr != "" {
+		if bodyStr == "-" {
+			bodyReader = os.Stdin
+		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {

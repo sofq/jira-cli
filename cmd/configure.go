@@ -38,8 +38,17 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	testConn, _ := cmd.Flags().GetBool("test")
 	deleteProfile, _ := cmd.Flags().GetBool("delete")
 
-	// Bug #20: Support profile deletion.
 	if deleteProfile {
+		// Require explicit --profile when deleting to prevent accidental
+		// deletion of the default profile.
+		if !cmd.Flags().Changed("profile") {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--profile is required when using --delete (to prevent accidental deletion of the default profile)",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		}
 		return deleteProfileByName(profileName)
 	}
 
@@ -69,7 +78,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 				Message:   "connection test failed: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return err
+			return &errAlreadyWritten{code: jrerrors.ExitError}
 		}
 	}
 

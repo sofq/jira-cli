@@ -123,6 +123,10 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		query.Set("fields", c.Fields)
 	}
 
+	// Ensure path separator between BaseURL and path.
+	if path != "" && !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
 	rawURL := c.BaseURL + path
 	if len(query) > 0 {
 		rawURL = rawURL + "?" + query.Encode()
@@ -175,7 +179,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 	c.ApplyAuth(req)
 
-	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
+	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -189,7 +193,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 	defer resp.Body.Close()
 
-	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -450,7 +454,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	req.Header.Set("Accept", "application/json")
 	c.ApplyAuth(req)
 
-	c.verboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
+	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -464,7 +468,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 	defer resp.Body.Close()
 
-	c.verboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -486,8 +490,8 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	return body, jrerrors.ExitOK
 }
 
-// verboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.
-func (c *Client) verboseLog(fields map[string]any) {
+// VerboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.
+func (c *Client) VerboseLog(fields map[string]any) {
 	if !c.Verbose {
 		return
 	}
