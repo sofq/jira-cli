@@ -865,6 +865,67 @@ func TestBatchPrettyOutput(t *testing.T) {
 	}
 }
 
+// --- Bug #24: URL query merging when path has inline query params ---
+
+func TestClientDo_PathWithQueryParams(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify URL has both inline and additional params merged with &
+		if !strings.Contains(r.URL.RawQuery, "jql=project") {
+			t.Errorf("missing inline param jql, got query: %s", r.URL.RawQuery)
+		}
+		if !strings.Contains(r.URL.RawQuery, "maxResults=1") {
+			t.Errorf("missing added param maxResults, got query: %s", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = false
+
+	query := make(map[string][]string)
+	query["maxResults"] = []string{"1"}
+	// Path already has ?jql=... inline
+	code := c.Do(t.Context(), "GET", "/rest/api/3/search?jql=project%3DKAN", query, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// --- Bug #24: configure validates empty profile name ---
+
+func TestConfigureRejectsEmptyProfile(t *testing.T) {
+	cmd := configureCmd
+	cmd.ResetFlags()
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "", "profile name")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+
+	_ = cmd.Flags().Set("base-url", "https://test.atlassian.net")
+	_ = cmd.Flags().Set("token", "fake-token")
+	_ = cmd.Flags().Set("username", "user@test.com")
+	_ = cmd.Flags().Set("profile", "   ")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only profile name")
+	}
+	aw, ok := err.(*errAlreadyWritten)
+	if !ok {
+		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+	}
+	if aw.code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	}
+}
+
 func TestBatchAssign_JSONSafe(t *testing.T) {
 	// Verify that account IDs with special characters are properly escaped
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

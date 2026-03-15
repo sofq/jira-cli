@@ -129,7 +129,11 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	}
 	rawURL := c.BaseURL + path
 	if len(query) > 0 {
-		rawURL = rawURL + "?" + query.Encode()
+		if strings.Contains(rawURL, "?") {
+			rawURL = rawURL + "&" + query.Encode()
+		} else {
+			rawURL = rawURL + "?" + query.Encode()
+		}
 	}
 
 	// DryRun: emit the request as JSON and return immediately.
