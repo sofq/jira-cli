@@ -102,6 +102,11 @@ func (c *Client) fetchOAuth2Token() (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("oauth2 token request failed: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 	}
@@ -177,7 +182,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if c.CacheTTL > 0 && method == "GET" {
 		cacheKey = cache.Key(method, rawURL)
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
-			return c.writeOutput(data)
+			return c.WriteOutput(data)
 		}
 	}
 
@@ -242,7 +247,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		_ = cache.Set(cacheKey, respBody)
 	}
 
-	return c.writeOutput(respBody)
+	return c.WriteOutput(respBody)
 }
 
 // paginatedPage represents Jira's standard paginated response envelope.
@@ -296,7 +301,7 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	if c.CacheTTL > 0 {
 		cacheKey = cache.Key(method, firstURL)
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
-			return c.writeOutput(data)
+			return c.WriteOutput(data)
 		}
 	}
 
@@ -312,7 +317,7 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 		if cacheKey != "" {
 			_ = cache.Set(cacheKey, firstBody)
 		}
-		return c.writeOutput(firstBody)
+		return c.WriteOutput(firstBody)
 	}
 
 	// Dispatch to the appropriate pagination handler.
@@ -340,7 +345,7 @@ func (c *Client) buildURL(path string, query url.Values) string {
 func (c *Client) doStartAtPagination(ctx context.Context, method, path string, query url.Values, firstBody []byte, cacheKey string) int {
 	var firstPage paginatedPage
 	if err := json.Unmarshal(firstBody, &firstPage); err != nil {
-		return c.writeOutput(firstBody)
+		return c.WriteOutput(firstBody)
 	}
 
 	allValues := append([]json.RawMessage{}, firstPage.Values...)
@@ -370,7 +375,7 @@ func (c *Client) doStartAtPagination(ctx context.Context, method, path string, q
 
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(firstBody, &envelope); err != nil {
-		return c.writeOutput(firstBody)
+		return c.WriteOutput(firstBody)
 	}
 
 	var valBuf bytes.Buffer
@@ -391,7 +396,7 @@ func (c *Client) doStartAtPagination(ctx context.Context, method, path string, q
 func (c *Client) doTokenPagination(ctx context.Context, method, path string, query url.Values, firstBody []byte, cacheKey string) int {
 	var firstPage tokenPaginatedPage
 	if err := json.Unmarshal(firstBody, &firstPage); err != nil {
-		return c.writeOutput(firstBody)
+		return c.WriteOutput(firstBody)
 	}
 
 	allIssues := append([]json.RawMessage{}, firstPage.Issues...)
@@ -424,7 +429,7 @@ func (c *Client) doTokenPagination(ctx context.Context, method, path string, que
 
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(firstBody, &envelope); err != nil {
-		return c.writeOutput(firstBody)
+		return c.WriteOutput(firstBody)
 	}
 
 	var issBuf bytes.Buffer
@@ -460,7 +465,7 @@ func (c *Client) encodePaginatedResult(envelope map[string]json.RawMessage, cach
 		_ = cache.Set(cacheKey, result)
 	}
 
-	return c.writeOutput(result)
+	return c.WriteOutput(result)
 }
 
 // isLastPage returns true when there are no more pages to fetch.
@@ -534,9 +539,9 @@ func (c *Client) VerboseLog(fields map[string]any) {
 	fmt.Fprintf(c.Stderr, "%s\n", data)
 }
 
-// writeOutput applies optional JQ filtering and pretty-printing, then writes
+// WriteOutput applies optional JQ filtering and pretty-printing, then writes
 // the final JSON bytes to Stdout. Returns an exit code.
-func (c *Client) writeOutput(data []byte) int {
+func (c *Client) WriteOutput(data []byte) int {
 	// Apply JQ filter.
 	if c.JQFilter != "" {
 		filtered, err := jq.Apply(data, c.JQFilter)

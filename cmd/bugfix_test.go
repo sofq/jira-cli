@@ -951,3 +951,151 @@ func TestBatchAssign_JSONSafe(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
 }
+
+// --- Bug 25: Workflow transition and assign ignore --jq and --pretty flags ---
+
+func TestBatchTransition_JQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".issue"
+
+	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	got := strings.TrimSpace(stdout.String())
+	if got != `"TEST-1"` {
+		t.Errorf("expected jq-filtered output %q, got %q", `"TEST-1"`, got)
+	}
+}
+
+func TestBatchTransition_PrettyPrint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Pretty = true
+
+	code := batchTransition(t.Context(), c, "TEST-1", "In Progress")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	got := stdout.String()
+	// Pretty-printed JSON should contain indentation (at least two spaces or a newline between fields).
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
+		t.Errorf("expected pretty-printed output, got: %s", got)
+	}
+}
+
+func TestBatchAssign_JQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/assignee") && r.Method == "PUT" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".issue"
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	got := strings.TrimSpace(stdout.String())
+	if got != `"TEST-1"` {
+		t.Errorf("expected jq-filtered output %q, got %q", `"TEST-1"`, got)
+	}
+}
+
+func TestBatchAssign_None_JQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/assignee") && r.Method == "PUT" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".status"
+
+	code := batchAssign(t.Context(), c, "TEST-1", "none")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	got := strings.TrimSpace(stdout.String())
+	if got != `"unassigned"` {
+		t.Errorf("expected jq-filtered output %q, got %q", `"unassigned"`, got)
+	}
+}
+
+func TestBatchAssign_PrettyPrint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/assignee") && r.Method == "PUT" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Pretty = true
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	got := stdout.String()
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
+		t.Errorf("expected pretty-printed output, got: %s", got)
+	}
+}

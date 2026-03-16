@@ -141,7 +141,9 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		"issue":      issueKey,
 		"transition": matchedName,
 	})
-	fmt.Fprintf(c.Stdout, "%s\n", out)
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &errAlreadyWritten{code: exitCode}
+	}
 	return nil
 }
 
@@ -206,7 +208,9 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			"status": "unassigned",
 			"issue":  issueKey,
 		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
+		if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+			return &errAlreadyWritten{code: exitCode}
+		}
 		return nil
 
 	default:
@@ -252,7 +256,9 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"issue":  issueKey,
 		"to":     to,
 	})
-	fmt.Fprintf(c.Stdout, "%s\n", out)
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &errAlreadyWritten{code: exitCode}
+	}
 	return nil
 }
 

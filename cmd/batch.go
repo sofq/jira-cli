@@ -267,11 +267,9 @@ func executeBatchOp(
 	}
 
 	// Handle body.
-	var bodyReader strings.Reader
 	var bodyReaderPtr *strings.Reader
 	if bodyStr, exists := bop.Args["body"]; exists && bodyStr != "" {
-		bodyReader = *strings.NewReader(bodyStr)
-		bodyReaderPtr = &bodyReader
+		bodyReaderPtr = strings.NewReader(bodyStr)
 	}
 
 	var exitCode int
@@ -383,8 +381,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		"issue":      issueKey,
 		"transition": matchedName,
 	})
-	fmt.Fprintf(c.Stdout, "%s\n", out)
-	return jrerrors.ExitOK
+	return c.WriteOutput(out)
 }
 
 // batchAssign executes a workflow assign within a batch operation.
@@ -426,8 +423,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 			return code
 		}
 		out, _ := json.Marshal(map[string]string{"status": "unassigned", "issue": issueKey})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
-		return jrerrors.ExitOK
+		return c.WriteOutput(out)
 
 	default:
 		body, code := fetchJSON(c, ctx, "GET",
@@ -462,8 +458,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	}
 
 	out, _ := json.Marshal(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
-	fmt.Fprintf(c.Stdout, "%s\n", out)
-	return jrerrors.ExitOK
+	return c.WriteOutput(out)
 }
 
 // buildBatchResult constructs a BatchResult from captured stdout/stderr.
