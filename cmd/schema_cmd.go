@@ -31,21 +31,8 @@ var schemaCmd = &cobra.Command{
 		allOps := generated.AllSchemaOps()
 		allOps = append(allOps, HandWrittenSchemaOps()...)
 
-		if compactFlag {
-			compact := make(map[string][]string)
-			for _, op := range allOps {
-				compact[op.Resource] = append(compact[op.Resource], op.Verb)
-			}
-			data, _ := marshalNoEscape(compact)
-			return schemaOutput(cmd, data)
-		}
-
-		if len(args) == 0 && !listFlag {
-			compact := make(map[string][]string)
-			for _, op := range allOps {
-				compact[op.Resource] = append(compact[op.Resource], op.Verb)
-			}
-			data, _ := marshalNoEscape(compact)
+		if compactFlag || (len(args) == 0 && !listFlag) {
+			data, _ := marshalNoEscape(compactSchema(allOps))
 			return schemaOutput(cmd, data)
 		}
 
@@ -101,6 +88,15 @@ var schemaCmd = &cobra.Command{
 		apiErr.WriteJSON(os.Stderr)
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 	},
+}
+
+// compactSchema builds a resource→verbs map from a list of schema ops.
+func compactSchema(ops []generated.SchemaOp) map[string][]string {
+	compact := make(map[string][]string)
+	for _, op := range ops {
+		compact[op.Resource] = append(compact[op.Resource], op.Verb)
+	}
+	return compact
 }
 
 // marshalNoEscape serializes v to JSON without HTML escaping.
