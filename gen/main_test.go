@@ -42,7 +42,7 @@ func TestRunMkdirAllError(t *testing.T) {
 	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatalf("Chmod: %v", err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	err := run("../spec/jira-v3.json", outDir)
 	if err == nil {
@@ -70,7 +70,7 @@ func TestRunRemoveAllError(t *testing.T) {
 		t.Fatalf("Chmod: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(outDir, 0o755)
+		_ = os.Chmod(outDir, 0o755)
 	})
 
 	err := run("../spec/jira-v3.json", outDir)
@@ -140,9 +140,9 @@ func TestMainSuccess(t *testing.T) {
 		t.Fatalf("Chdir: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chdir(origDir)
+		_ = os.Chdir(origDir)
 		// Clean up generated files.
-		os.RemoveAll(filepath.Join("cmd", "generated"))
+		_ = os.RemoveAll(filepath.Join("cmd", "generated"))
 	})
 
 	// Override exitFn so os.Exit isn't called.
@@ -168,7 +168,7 @@ func TestMainError(t *testing.T) {
 	if err := os.Chdir(t.TempDir()); err != nil {
 		t.Fatalf("Chdir: %v", err)
 	}
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
 
 	exitCalled := false
 	exitCode := 0
