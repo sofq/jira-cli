@@ -283,7 +283,15 @@ func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path strin
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c.ApplyAuth(req)
+	if err := c.ApplyAuth(req); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "auth_error",
+			Message:   err.Error(),
+			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitAuth
+	}
 
 	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
 

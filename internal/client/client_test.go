@@ -2047,20 +2047,19 @@ func TestOAuth2_ErrorStatusCode(t *testing.T) {
 	}
 
 	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
-	// The request should still succeed (auth failure is soft in ApplyAuth),
-	// but the Authorization header should NOT contain a bearer token.
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	// ApplyAuth now propagates OAuth2 errors: the request should fail
+	// with ExitAuth (2) and never reach the API server.
+	if code != 2 {
+		t.Fatalf("expected exit 2 (auth), got %d; stderr=%s", code, stderr.String())
 	}
 
-	var result map[string]string
-	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
-		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "auth_error") {
+		t.Errorf("expected auth_error in stderr, got: %s", stderrStr)
 	}
-	// With the fix, the error status is properly detected, token is empty,
-	// so no Bearer token should be set.
-	if strings.Contains(result["auth_header"], "Bearer") {
-		t.Errorf("expected no Bearer token after OAuth2 failure, got: %s", result["auth_header"])
+	// Stdout should be empty — no API request was made.
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout, got: %s", stdout.String())
 	}
 }
 
@@ -2090,18 +2089,18 @@ func TestOAuth2_HTMLErrorResponse(t *testing.T) {
 	}
 
 	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	// ApplyAuth now propagates OAuth2 errors: the request should fail
+	// with ExitAuth (2) and never reach the API server.
+	if code != 2 {
+		t.Fatalf("expected exit 2 (auth), got %d; stderr=%s", code, stderr.String())
 	}
 
-	var result map[string]string
-	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
-		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "auth_error") {
+		t.Errorf("expected auth_error in stderr, got: %s", stderrStr)
 	}
-	// Before the fix, this would try to decode HTML as JSON, potentially getting
-	// a confusing "decode failed" error. Now it properly detects the HTTP error.
-	if strings.Contains(result["auth_header"], "Bearer") {
-		t.Errorf("expected no Bearer token after OAuth2 failure, got: %s", result["auth_header"])
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout, got: %s", stdout.String())
 	}
 }
 
