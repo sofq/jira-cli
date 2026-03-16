@@ -162,8 +162,7 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		enc := json.NewEncoder(&buf)
 		enc.SetEscapeHTML(false)
 		_ = enc.Encode(dryOut)
-		fmt.Fprintf(c.Stdout, "%s", buf.String())
-		return jrerrors.ExitOK
+		return c.WriteOutput(bytes.TrimRight(buf.Bytes(), "\n"))
 	}
 
 	// Pagination only for GET requests.

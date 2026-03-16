@@ -2104,3 +2104,70 @@ func TestOAuth2_HTMLErrorResponse(t *testing.T) {
 		t.Errorf("expected no Bearer token after OAuth2 failure, got: %s", result["auth_header"])
 	}
 }
+
+// Test: DryRun respects --jq filter.
+func TestDo_DryRunRespectsJQ(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.atlassian.net",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+		JQFilter:   ".method",
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/TEST-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := strings.TrimSpace(stdout.String())
+	if got != `"GET"` {
+		t.Errorf("expected jq-filtered output %q, got %q", `"GET"`, got)
+	}
+}
+
+// Test: DryRun respects --pretty flag.
+func TestDo_DryRunRespectsPretty(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.atlassian.net",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+		Pretty:     true,
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/issue/TEST-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
+		t.Errorf("expected pretty-printed output with indentation, got: %s", got)
+	}
+}
+
+// Test: DryRun with POST body respects --jq.
+func TestDo_DryRunWithBodyRespectsJQ(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.atlassian.net",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+		JQFilter:   ".body.fields.summary",
+	}
+
+	body := strings.NewReader(`{"fields":{"summary":"Test issue"}}`)
+	code := c.Do(context.Background(), "POST", "/rest/api/3/issue", nil, body)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := strings.TrimSpace(stdout.String())
+	if got != `"Test issue"` {
+		t.Errorf("expected jq-filtered body output %q, got %q", `"Test issue"`, got)
+	}
+}

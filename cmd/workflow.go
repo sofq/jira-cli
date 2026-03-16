@@ -64,7 +64,9 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &errAlreadyWritten{code: code}
+		}
 		return nil
 	}
 
@@ -163,7 +165,9 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &errAlreadyWritten{code: code}
+		}
 		return nil
 	}
 

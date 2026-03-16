@@ -310,8 +310,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
-		return jrerrors.ExitOK
+		return c.WriteOutput(out)
 	}
 
 	transitionsBody, exitCode := fetchJSON(c, ctx, "GET",
@@ -392,8 +391,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
-		fmt.Fprintf(c.Stdout, "%s\n", out)
-		return jrerrors.ExitOK
+		return c.WriteOutput(out)
 	}
 
 	var accountID string
