@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -62,7 +63,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 
 	// Build query values.
 	queryPairs, _ := cmd.Flags().GetStringArray("query")
-	q := client.QueryFromFlags(cmd) // empty; query is handled manually below
+	q := url.Values{}
 	for _, pair := range queryPairs {
 		parts := strings.SplitN(pair, "=", 2)
 		if len(parts) != 2 || parts[0] == "" {
@@ -119,7 +120,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 			"message": fmt.Sprintf("--body is ignored for %s requests", method),
 		}
 		warnJSON, _ := json.Marshal(warnMsg)
-		fmt.Fprintf(os.Stderr, "%s\n", warnJSON)
+		fmt.Fprintf(c.Stderr, "%s\n", warnJSON)
 		bodyReader = nil
 	}
 

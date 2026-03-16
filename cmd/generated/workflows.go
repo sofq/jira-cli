@@ -56,7 +56,16 @@ var workflows_read = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -133,7 +142,16 @@ var workflows_create = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -189,7 +207,16 @@ var workflows_validate_create = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -266,7 +293,16 @@ var workflows_read_previews = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -343,7 +379,16 @@ var workflows_update = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -399,7 +444,16 @@ var workflows_validate_update = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",

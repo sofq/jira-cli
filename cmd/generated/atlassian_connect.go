@@ -143,7 +143,16 @@ var atlassian_connect_addon_properties_resource_put_addon_property_put = &cobra.
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -259,7 +268,16 @@ var atlassian_connect_dynamic_modules_resource_register_modules_post = &cobra.Co
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -336,7 +354,16 @@ var atlassian_connect_app_issue_field_value_update_resource_update_issue_fields_
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -401,7 +428,16 @@ var atlassian_connect_migration_resource_update_entity_properties_value_put = &c
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -457,7 +493,16 @@ var atlassian_connect_migration_resource_workflow_rule_search_post = &cobra.Comm
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",

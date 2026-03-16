@@ -77,7 +77,16 @@ var fieldconfigurationscheme_create_field_configuration_scheme = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -175,7 +184,16 @@ var fieldconfigurationscheme_assign_field_configuration_scheme_to_project = &cob
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -240,7 +258,16 @@ var fieldconfigurationscheme_update_field_configuration_scheme = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -335,7 +362,16 @@ var fieldconfigurationscheme_set_field_configuration_scheme_mapping = &cobra.Com
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -400,7 +436,16 @@ var fieldconfigurationscheme_remove_issue_types_from_global_field_configuration_
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",

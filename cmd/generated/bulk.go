@@ -56,7 +56,16 @@ var bulk_submit_delete = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -133,7 +142,16 @@ var bulk_submit_edit = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -189,7 +207,16 @@ var bulk_submit_move = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -266,7 +293,16 @@ var bulk_submit_transition = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -322,7 +358,16 @@ var bulk_submit_unwatch = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -378,7 +423,16 @@ var bulk_submit_watch = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",

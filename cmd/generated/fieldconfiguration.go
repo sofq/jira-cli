@@ -77,7 +77,16 @@ var fieldconfiguration_create_field_configuration = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -142,7 +151,16 @@ var fieldconfiguration_update_field_configuration = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",
@@ -267,7 +285,16 @@ var fieldconfiguration_update_field_configuration_items = &cobra.Command{
 			bodyReader = os.Stdin
 		} else if bodyStr != "" {
 			if strings.HasPrefix(bodyStr, "@") {
-				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
+				filename := strings.TrimPrefix(bodyStr, "@")
+				if filename == "" {
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "--body @<filename> requires a filename after @",
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+				}
+				f, err := os.Open(filename)
 				if err != nil {
 					apiErr := &jerrors.APIError{
 						ErrorType: "validation_error",

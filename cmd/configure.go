@@ -248,9 +248,14 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 	}
 
 	if _, ok := cfg.Profiles[name]; !ok {
+		availableNames := make([]string, 0, len(cfg.Profiles))
+		for k := range cfg.Profiles {
+			availableNames = append(availableNames, k)
+		}
+		sort.Strings(availableNames)
 		apiErr := &jrerrors.APIError{
 			ErrorType: "not_found",
-			Message:   fmt.Sprintf("profile %q not found", name),
+			Message:   fmt.Sprintf("profile %q not found; available profiles: %s", name, strings.Join(availableNames, ", ")),
 		}
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
