@@ -336,29 +336,22 @@ func TestFetchOAuth2Token_EmptyAccessToken(t *testing.T) {
 // Bug #73: batch global --fields overwrites per-op fields args
 // ============================================================
 
-func TestBatch_PerOpFieldsOverrideGlobal(t *testing.T) {
-	// When a batch op specifies "fields" in its args, that value should
-	// take precedence over the global --fields flag, not be overwritten.
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fieldsParam := r.URL.Query().Get("fields")
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"fields_received":"%s"}`, fieldsParam)
-	}))
-	defer ts.Close()
-
-	var stdout, stderr bytes.Buffer
-	c := newTestClient(ts.URL, &stdout, &stderr)
-	c.Fields = "key" // Simulates global --fields key
-
-	ctx := client.NewContext(t.Context(), c)
-	cmd := &cobra.Command{Use: "batch"}
-	cmd.Flags().String("input", "", "")
-	cmd.SetContext(ctx)
-
-	// Build a batch op that specifies its own "fields" arg.
-	bop := BatchOp{
-		Command: "issue get",
-		Args:    map[string]string{"issueIdOrKey": "TEST-1", "fields": "summary,status"},
+func TestBatch_FieldsPrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       map[string]string
+		wantFields string
+	}{
+		{
+			name:       "per-op fields override global",
+			args:       map[string]string{"issueIdOrKey": "TEST-1", "fields": "summary,status"},
+			wantFields: "summary,status",
+		},
+		{
+			name:       "global fields applied when no per-op fields",
+			args:       map[string]string{"issueIdOrKey": "TEST-1"},
+			wantFields: "key",
+		},
 	}
 
 	allOps := generated.AllSchemaOps()
@@ -368,70 +361,40 @@ func TestBatch_PerOpFieldsOverrideGlobal(t *testing.T) {
 		opMap[op.Resource+" "+op.Verb] = op
 	}
 
-	result := executeBatchOp(cmd, c, 0, bop, opMap)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fieldsParam := r.URL.Query().Get("fields")
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"fields_received":"%s"}`, fieldsParam)
+			}))
+			defer ts.Close()
 
-	if result.ExitCode != jrerrors.ExitOK {
-		t.Fatalf("expected exit 0, got %d; error=%s", result.ExitCode, string(result.Error))
-	}
+			var stdout, stderr bytes.Buffer
+			c := newTestClient(ts.URL, &stdout, &stderr)
+			c.Fields = "key" // Simulates global --fields key
 
-	// Parse the data to check which fields value was sent.
-	var data map[string]string
-	if err := json.Unmarshal(result.Data, &data); err != nil {
-		t.Fatalf("failed to parse result data: %v (raw: %s)", err, string(result.Data))
-	}
+			ctx := client.NewContext(t.Context(), c)
+			cmd := &cobra.Command{Use: "batch"}
+			cmd.Flags().String("input", "", "")
+			cmd.SetContext(ctx)
 
-	// The per-op "summary,status" should win over global "key".
-	if data["fields_received"] != "summary,status" {
-		t.Errorf("expected per-op fields 'summary,status', got '%s' — global --fields overwrote per-op fields", data["fields_received"])
-	}
-}
+			bop := BatchOp{Command: "issue get", Args: tt.args}
+			result := executeBatchOp(cmd, c, 0, bop, opMap)
 
-func TestBatch_GlobalFieldsAppliedWhenNoPerOpFields(t *testing.T) {
-	// When a batch op does NOT specify "fields" in its args, the global --fields
-	// should still be applied.
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fieldsParam := r.URL.Query().Get("fields")
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"fields_received":"%s"}`, fieldsParam)
-	}))
-	defer ts.Close()
+			if result.ExitCode != jrerrors.ExitOK {
+				t.Fatalf("expected exit 0, got %d; error=%s", result.ExitCode, string(result.Error))
+			}
 
-	var stdout, stderr bytes.Buffer
-	c := newTestClient(ts.URL, &stdout, &stderr)
-	c.Fields = "key" // Simulates global --fields key
+			var data map[string]string
+			if err := json.Unmarshal(result.Data, &data); err != nil {
+				t.Fatalf("failed to parse result data: %v (raw: %s)", err, string(result.Data))
+			}
 
-	ctx := client.NewContext(t.Context(), c)
-	cmd := &cobra.Command{Use: "batch"}
-	cmd.Flags().String("input", "", "")
-	cmd.SetContext(ctx)
-
-	// Batch op WITHOUT "fields" in args.
-	bop := BatchOp{
-		Command: "issue get",
-		Args:    map[string]string{"issueIdOrKey": "TEST-1"},
-	}
-
-	allOps := generated.AllSchemaOps()
-	allOps = append(allOps, HandWrittenSchemaOps()...)
-	opMap := make(map[string]generated.SchemaOp, len(allOps))
-	for _, op := range allOps {
-		opMap[op.Resource+" "+op.Verb] = op
-	}
-
-	result := executeBatchOp(cmd, c, 0, bop, opMap)
-
-	if result.ExitCode != jrerrors.ExitOK {
-		t.Fatalf("expected exit 0, got %d; error=%s", result.ExitCode, string(result.Error))
-	}
-
-	var data map[string]string
-	if err := json.Unmarshal(result.Data, &data); err != nil {
-		t.Fatalf("failed to parse result data: %v (raw: %s)", err, string(result.Data))
-	}
-
-	// Global "key" should be applied since no per-op fields.
-	if data["fields_received"] != "key" {
-		t.Errorf("expected global fields 'key', got '%s'", data["fields_received"])
+			if data["fields_received"] != tt.wantFields {
+				t.Errorf("expected fields %q, got %q", tt.wantFields, data["fields_received"])
+			}
+		})
 	}
 }
 
