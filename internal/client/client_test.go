@@ -1573,7 +1573,7 @@ func TestFetch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.status)
-				w.Write([]byte(tt.body))
+				_, _ = w.Write([]byte(tt.body))
 			})
 			defer te.Close()
 			body, code := te.Client.Fetch(context.Background(), tt.method, "/test", nil)
