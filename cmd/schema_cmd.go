@@ -49,7 +49,19 @@ var schemaCmd = &cobra.Command{
 		}
 
 		if listFlag {
-			data, _ := json.Marshal(generated.AllResources())
+			// Include hand-written resources alongside generated ones.
+			resources := generated.AllResources()
+			seen := make(map[string]bool, len(resources))
+			for _, r := range resources {
+				seen[r] = true
+			}
+			for _, op := range allOps {
+				if !seen[op.Resource] {
+					resources = append(resources, op.Resource)
+					seen[op.Resource] = true
+				}
+			}
+			data, _ := json.Marshal(resources)
 			return schemaOutput(cmd, data)
 		}
 

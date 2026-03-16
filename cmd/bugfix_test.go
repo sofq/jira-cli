@@ -1503,3 +1503,202 @@ func TestDryRunPostNilBodyDoesNotHang(t *testing.T) {
 		t.Errorf("expected method POST in dry-run, got %v", result["method"])
 	}
 }
+
+// --- Bug #35: schema --list missing hand-written resources (workflow) ---
+
+func TestSchemaListIncludesWorkflow(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+
+	// Build the same resource list as the fix in schema_cmd.go
+	resources := generated.AllResources()
+	seen := make(map[string]bool, len(resources))
+	for _, r := range resources {
+		seen[r] = true
+	}
+	for _, op := range allOps {
+		if !seen[op.Resource] {
+			resources = append(resources, op.Resource)
+			seen[op.Resource] = true
+		}
+	}
+
+	found := false
+	for _, r := range resources {
+		if r == "workflow" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("schema --list should include 'workflow' resource, but it was missing")
+	}
+}
+
+// --- Bug #36: testConnection doesn't handle oauth2 auth type ---
+
+func TestTestConnection_OAuth2ReturnsError(t *testing.T) {
+	err := testConnection("https://example.atlassian.net", "oauth2", "", "")
+	if err == nil {
+		t.Fatal("expected error for oauth2 auth type in testConnection")
+	}
+	if !strings.Contains(err.Error(), "oauth2") {
+		t.Errorf("expected error mentioning oauth2, got: %s", err.Error())
+	}
+}
+
+// --- Bug #37: testConnection double-slash when base URL has trailing slash ---
+
+func TestTestConnection_TrailingSlashNormalized(t *testing.T) {
+	var receivedPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"accountId":"abc123"}`)
+	}))
+	defer ts.Close()
+
+	// URL with trailing slash — should NOT produce double-slash in request
+	err := testConnection(ts.URL+"/", "basic", "user", "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(receivedPath, "//") {
+		t.Errorf("testConnection produced double-slash in path: %s", receivedPath)
+	}
+}
+
+// --- Bug #38: configure saves base URL with trailing slash ---
+
+func TestConfigureNormalizesTrailingSlash(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+	origPath := os.Getenv("JR_CONFIG_PATH")
+	os.Setenv("JR_CONFIG_PATH", configPath)
+	defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "default", "")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+	f.String("jq", "", "")
+	f.Bool("pretty", false, "")
+
+	_ = cmd.Flags().Set("base-url", "https://example.atlassian.net/")
+	_ = cmd.Flags().Set("token", "test-token")
+	_ = cmd.Flags().Set("username", "user@example.com")
+
+	captureStdout(t, func() {
+		if err := runConfigure(cmd, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	cfg, err := config.LoadFrom(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.Profiles["default"].BaseURL
+	if strings.HasSuffix(got, "/") {
+		t.Errorf("expected trailing slash to be stripped, got: %s", got)
+	}
+}
+
+// --- Bug #39: raw --query with malformed param (no =) ---
+
+func TestRawCmd_MalformedQueryParam(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := &cobra.Command{Use: "raw"}
+	f := cmd.Flags()
+	f.String("body", "", "")
+	f.StringArray("query", nil, "")
+	f.String("fields", "", "")
+
+	_ = cmd.Flags().Set("query", "malformed-no-equals")
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"GET", "/test"})
+	if err == nil {
+		t.Fatal("expected error for malformed query param")
+	}
+	aw, ok := err.(*errAlreadyWritten)
+	if !ok {
+		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+	}
+	if aw.code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	}
+}
+
+func TestRawCmd_ValidQueryParam(t *testing.T) {
+	var receivedQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Paginate = false
+
+	cmd := &cobra.Command{Use: "raw"}
+	f := cmd.Flags()
+	f.String("body", "", "")
+	f.StringArray("query", nil, "")
+	f.String("fields", "", "")
+
+	_ = cmd.Flags().Set("query", "key=value")
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"GET", "/test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(receivedQuery, "key=value") {
+		t.Errorf("expected query to contain key=value, got: %s", receivedQuery)
+	}
+}
+
+// --- Bug #40: generated commands return structured error for @file open failures ---
+// The template fix is verified by the conformance test (gen/conformance_test.go)
+// which ensures generated files match the template. Here we verify the template
+// itself contains the structured error pattern.
+
+func TestGeneratedTemplate_FileOpenError_HasStructuredError(t *testing.T) {
+	// Read the template file and verify it uses AlreadyWrittenError for @file failures.
+	tmplData, err := os.ReadFile("../gen/templates/resource.go.tmpl")
+	if err != nil {
+		t.Fatalf("cannot read template: %v", err)
+	}
+	tmpl := string(tmplData)
+
+	// The old pattern was: `return err` after os.Open failure.
+	// The new pattern should use AlreadyWrittenError.
+	if strings.Contains(tmpl, "os.Open(strings.TrimPrefix(bodyStr,") &&
+		!strings.Contains(tmpl, "AlreadyWrittenError") {
+		t.Error("template should use AlreadyWrittenError for @file open failures, not raw error return")
+	}
+
+	if !strings.Contains(tmpl, `"cannot open body file: "`) {
+		t.Error("template should include descriptive error message for @file open failures")
+	}
+}
