@@ -296,8 +296,6 @@ func testConnection(baseURL, authType, username, token string) error {
 	switch strings.ToLower(authType) {
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+token)
-	case "oauth2":
-		return fmt.Errorf("oauth2 auth type cannot be tested with --test; configure and verify manually")
 	default: // basic
 		req.SetBasicAuth(username, token)
 	}

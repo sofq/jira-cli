@@ -1540,13 +1540,18 @@ func TestSchemaListIncludesWorkflow(t *testing.T) {
 
 // --- Bug #36: testConnection doesn't handle oauth2 auth type ---
 
-func TestTestConnection_OAuth2ReturnsError(t *testing.T) {
-	err := testConnection("https://example.atlassian.net", "oauth2", "", "")
-	if err == nil {
-		t.Fatal("expected error for oauth2 auth type in testConnection")
-	}
-	if !strings.Contains(err.Error(), "oauth2") {
-		t.Errorf("expected error mentioning oauth2, got: %s", err.Error())
+func TestTestConnection_OAuth2FallsToBasic(t *testing.T) {
+	// After removing the dead oauth2 branch (runConfigure rejects oauth2 before
+	// testConnection is reached), oauth2 now falls through to basic auth.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"accountId":"abc123"}`)
+	}))
+	defer ts.Close()
+
+	err := testConnection(ts.URL, "oauth2", "user", "token")
+	if err != nil {
+		t.Errorf("expected testConnection to succeed with oauth2 falling through to basic, got: %v", err)
 	}
 }
 

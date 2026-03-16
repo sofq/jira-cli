@@ -497,8 +497,36 @@ func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder
 		if json.Valid([]byte(errOutput)) {
 			rawErr = json.RawMessage(errOutput)
 		} else {
-			encoded, _ := json.Marshal(map[string]string{"message": errOutput})
-			rawErr = json.RawMessage(encoded)
+			// Multiple JSON error lines? Try to parse each line and collect into an array.
+			lines := strings.Split(errOutput, "\n")
+			if len(lines) > 1 {
+				var jsonLines []json.RawMessage
+				allValid := true
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					if json.Valid([]byte(line)) {
+						jsonLines = append(jsonLines, json.RawMessage(line))
+					} else {
+						allValid = false
+						break
+					}
+				}
+				if allValid && len(jsonLines) == 1 {
+					rawErr = jsonLines[0]
+				} else if allValid && len(jsonLines) > 1 {
+					arrBytes, _ := json.Marshal(jsonLines)
+					rawErr = json.RawMessage(arrBytes)
+				} else {
+					encoded, _ := json.Marshal(map[string]string{"message": errOutput})
+					rawErr = json.RawMessage(encoded)
+				}
+			} else {
+				encoded, _ := json.Marshal(map[string]string{"message": errOutput})
+				rawErr = json.RawMessage(encoded)
+			}
 		}
 		return BatchResult{
 			Index:    index,

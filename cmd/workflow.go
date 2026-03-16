@@ -320,7 +320,7 @@ func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path strin
 		return nil, jrerrors.ExitError
 	}
 	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, string(respBody), method, path, resp)
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
 		return nil, apiErr.ExitCode()
 	}

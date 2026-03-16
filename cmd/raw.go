@@ -125,7 +125,8 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	}
 
 	// Bug #3: If method needs a body but none was provided, error instead of hanging on stdin.
-	if methodsWithBody[method] && bodyReader == nil {
+	// Skip this check in dry-run mode to match generated command behavior.
+	if methodsWithBody[method] && bodyReader == nil && !c.DryRun {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
 			Message:   fmt.Sprintf("%s request requires a body; use --body '{...}' or pipe JSON to stdin", method),
