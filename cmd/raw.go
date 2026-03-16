@@ -65,7 +65,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	q := client.QueryFromFlags(cmd) // empty; query is handled manually below
 	for _, pair := range queryPairs {
 		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
+		if len(parts) != 2 || parts[0] == "" {
 			apiErr := &jrerrors.APIError{
 				ErrorType: "validation_error",
 				Message:   fmt.Sprintf("invalid --query %q: expected key=value format", pair),

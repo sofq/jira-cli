@@ -2191,7 +2191,7 @@ func TestBatchVerboseLogDetection_ErrorWithTypeField(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 		// Error body that contains the text "type":"request" to try to trick
 		// the verbose log detection heuristic.
-		w.Write([]byte(`{"errorMessages":["invalid \"type\":\"request\" field"]}`))
+		_, _ = w.Write([]byte(`{"errorMessages":["invalid \"type\":\"request\" field"]}`))
 	}))
 	defer srv.Close()
 
@@ -2233,5 +2233,66 @@ func TestBatchVerboseLogDetection_ErrorWithTypeField(t *testing.T) {
 	errStr := string(result.Error)
 	if !strings.Contains(errStr, "errorMessages") && !strings.Contains(errStr, "validation_error") && !strings.Contains(errStr, "client_error") {
 		t.Errorf("error result should contain the API error, got: %s", errStr)
+	}
+}
+
+// --- Bug #59: fetchJSONWithBody handles body read errors ---
+
+func TestFetchJSONWithBody_ReadError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hijack the connection to force a body read error by closing early.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			// Can't hijack — write a normal response and let the test just verify
+			// fetchJSONWithBody works without panicking.
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		}
+		conn, bufrw, _ := hj.Hijack()
+		// Write HTTP headers but then close immediately (incomplete body).
+		_, _ = bufrw.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\npartial")
+		_ = bufrw.Flush()
+		_ = conn.Close()
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	body, exitCode := fetchJSONWithBody(c, t.Context(), "GET", "/test", nil)
+
+	// We expect either:
+	// 1. A connection_error (if the read fails), or
+	// 2. A success with partial body (if the client managed to read what was sent)
+	// Before the fix, a read error would be silently ignored and return empty body with ExitOK.
+	// After the fix, a read error should return ExitError.
+	if exitCode == jrerrors.ExitOK && len(body) == 0 {
+		t.Error("expected either non-zero exit code or non-empty body; got exit=0 body=empty")
+	}
+}
+
+// --- Bug #60: marshalNoEscape does not HTML-escape ---
+
+func TestMarshalNoEscape_PreservesSpecialChars(t *testing.T) {
+	data, err := marshalNoEscape(map[string]string{
+		"url": "http://example.com?a=1&b=2",
+		"tag": "<html>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if strings.Contains(s, `\u0026`) {
+		t.Error("marshalNoEscape should not escape & to \\u0026")
+	}
+	if strings.Contains(s, `\u003c`) {
+		t.Error("marshalNoEscape should not escape < to \\u003c")
+	}
+	if !strings.Contains(s, `&`) {
+		t.Error("marshalNoEscape should contain literal &")
+	}
+	if !strings.Contains(s, `<html>`) {
+		t.Error("marshalNoEscape should contain literal <html>")
 	}
 }
