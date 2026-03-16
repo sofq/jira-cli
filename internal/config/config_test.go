@@ -464,6 +464,60 @@ func TestResolveProfileWithOAuth2(t *testing.T) {
 	}
 }
 
+// Bug #44: Resolve must carry OAuth2 fields (client_id, client_secret, token_url,
+// scopes) from the profile into the ResolvedConfig.
+func TestResolvePreservesOAuth2Fields(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "oauth",
+		Profiles: map[string]config.Profile{
+			"oauth": {
+				BaseURL: "https://oauth.atlassian.net",
+				Auth: config.AuthConfig{
+					Type:         "oauth2",
+					ClientID:     "my-client-id",
+					ClientSecret: "my-client-secret",
+					TokenURL:     "https://auth.atlassian.com/oauth/token",
+					Scopes:       "read:jira-work write:jira-work",
+				},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	setEnv(t, map[string]string{
+		"JR_BASE_URL":   "",
+		"JR_AUTH_TYPE":  "",
+		"JR_AUTH_USER":  "",
+		"JR_AUTH_TOKEN": "",
+	})
+
+	resolved, err := config.Resolve(cfgPath, "oauth", nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	if resolved.Auth.Type != "oauth2" {
+		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "oauth2")
+	}
+	if resolved.Auth.ClientID != "my-client-id" {
+		t.Errorf("Auth.ClientID = %q, want %q", resolved.Auth.ClientID, "my-client-id")
+	}
+	if resolved.Auth.ClientSecret != "my-client-secret" {
+		t.Errorf("Auth.ClientSecret = %q, want %q", resolved.Auth.ClientSecret, "my-client-secret")
+	}
+	if resolved.Auth.TokenURL != "https://auth.atlassian.com/oauth/token" {
+		t.Errorf("Auth.TokenURL = %q, want %q", resolved.Auth.TokenURL, "https://auth.atlassian.com/oauth/token")
+	}
+	if resolved.Auth.Scopes != "read:jira-work write:jira-work" {
+		t.Errorf("Auth.Scopes = %q, want %q", resolved.Auth.Scopes, "read:jira-work write:jira-work")
+	}
+}
+
 // TestLoadFromInvalidJSON verifies that a file with malformed JSON returns an
 // error rather than an empty config.
 func TestLoadFromInvalidJSON(t *testing.T) {

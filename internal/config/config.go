@@ -139,11 +139,16 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 	}
 
 	var fileBaseURL, fileAuthType, fileUsername, fileToken string
+	var fileClientID, fileClientSecret, fileTokenURL, fileScopes string
 	if p, ok := cfg.Profiles[name]; ok {
 		fileBaseURL = p.BaseURL
 		fileAuthType = p.Auth.Type
 		fileUsername = p.Auth.Username
 		fileToken = p.Auth.Token
+		fileClientID = p.Auth.ClientID
+		fileClientSecret = p.Auth.ClientSecret
+		fileTokenURL = p.Auth.TokenURL
+		fileScopes = p.Auth.Scopes
 	} else if profileName != "" {
 		// Bug #10: Explicit --profile that doesn't exist should give a clear error.
 		return nil, fmt.Errorf("profile %q not found; available profiles: %s", name, availableProfiles(cfg))
@@ -210,9 +215,13 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 	return &ResolvedConfig{
 		BaseURL: baseURL,
 		Auth: AuthConfig{
-			Type:     authType,
-			Username: username,
-			Token:    token,
+			Type:         authType,
+			Username:     username,
+			Token:        token,
+			ClientID:     fileClientID,
+			ClientSecret: fileClientSecret,
+			TokenURL:     fileTokenURL,
+			Scopes:       fileScopes,
 		},
 	}, nil
 }
