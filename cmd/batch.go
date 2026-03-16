@@ -323,8 +323,8 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		return c.WriteOutput(out)
 	}
 
-	transitionsBody, exitCode := fetchJSON(c, ctx, "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
+	transitionsBody, exitCode := c.Fetch(ctx, "GET",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey), nil)
 	if exitCode != jrerrors.ExitOK {
 		return exitCode
 	}
@@ -378,7 +378,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
 	body := string(transBody)
-	_, code := fetchJSONWithBody(c, ctx, "POST",
+	_, code := c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		strings.NewReader(body))
 	if code != jrerrors.ExitOK {
@@ -408,7 +408,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 
 	switch strings.ToLower(to) {
 	case "me":
-		body, code := fetchJSON(c, ctx, "GET", "/rest/api/3/myself")
+		body, code := c.Fetch(ctx, "GET", "/rest/api/3/myself", nil)
 		if code != jrerrors.ExitOK {
 			return code
 		}
@@ -424,7 +424,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 
 	case "none", "unassign":
 		assignBody := `{"accountId":null}`
-		_, code := fetchJSONWithBody(c, ctx, "PUT",
+		_, code := c.Fetch(ctx, "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			strings.NewReader(assignBody))
 		if code != jrerrors.ExitOK {
@@ -434,8 +434,8 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		return c.WriteOutput(out)
 
 	default:
-		body, code := fetchJSON(c, ctx, "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
+		body, code := c.Fetch(ctx, "GET",
+			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)), nil)
 		if code != jrerrors.ExitOK {
 			return code
 		}
@@ -458,7 +458,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	assignBody := string(marshaledAssign)
-	_, code := fetchJSONWithBody(c, ctx, "PUT",
+	_, code := c.Fetch(ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		strings.NewReader(assignBody))
 	if code != jrerrors.ExitOK {

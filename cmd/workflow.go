@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -71,8 +68,8 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	}
 
 	// 1. Fetch available transitions.
-	transitionsBody, exitCode := fetchJSON(c, cmd.Context(), "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
+	transitionsBody, exitCode := c.Fetch(cmd.Context(), "GET",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey), nil)
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
@@ -128,10 +125,10 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
-	// 3. Execute transition. Use fetchJSON to avoid c.Do() writing "{}" to stdout.
+	// 3. Execute transition. Use c.Fetch to avoid c.Do() writing "{}" to stdout.
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
 	body := string(transBody)
-	_, exitCode = fetchJSONWithBody(c, cmd.Context(), "POST",
+	_, exitCode = c.Fetch(cmd.Context(), "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		strings.NewReader(body))
 	if exitCode != jrerrors.ExitOK {
@@ -175,7 +172,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	switch strings.ToLower(to) {
 	case "me":
-		body, code := fetchJSON(c, cmd.Context(), "GET", "/rest/api/3/myself")
+		body, code := c.Fetch(cmd.Context(), "GET", "/rest/api/3/myself", nil)
 		if code != jrerrors.ExitOK {
 			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
@@ -202,7 +199,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	case "none", "unassign":
 		assignBody := `{"accountId":null}`
-		_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
+		_, exitCode := c.Fetch(cmd.Context(), "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			strings.NewReader(assignBody))
 		if exitCode != jrerrors.ExitOK {
@@ -218,8 +215,8 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		return nil
 
 	default:
-		body, code := fetchJSON(c, cmd.Context(), "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
+		body, code := c.Fetch(cmd.Context(), "GET",
+			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)), nil)
 		if code != jrerrors.ExitOK {
 			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
@@ -248,7 +245,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	assignBody := string(marshaledAssign)
-	_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
+	_, exitCode := c.Fetch(cmd.Context(), "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		strings.NewReader(assignBody))
 	if exitCode != jrerrors.ExitOK {
@@ -266,63 +263,3 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// fetchJSON performs an HTTP request and returns the raw response body.
-// It uses the client's verbose logging so --verbose works for all requests.
-func fetchJSON(c *client.Client, ctx context.Context, method, path string) ([]byte, int) {
-	return fetchJSONWithBody(c, ctx, method, path, nil)
-}
-
-// fetchJSONWithBody performs an HTTP request with an optional body and returns the raw response body.
-func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
-	fullURL := c.BaseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Message:   "failed to create request: " + err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if err := c.ApplyAuth(req); err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "auth_error",
-			Message:   err.Error(),
-			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitAuth
-	}
-
-	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	defer resp.Body.Close()
-
-	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Message:   "reading response body: " + err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
-		apiErr.WriteJSON(c.Stderr)
-		return nil, apiErr.ExitCode()
-	}
-	return respBody, jrerrors.ExitOK
-}

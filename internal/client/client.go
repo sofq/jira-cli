@@ -573,6 +573,63 @@ func (c *Client) VerboseLog(fields map[string]any) {
 	fmt.Fprintf(c.Stderr, "%s\n", data)
 }
 
+// Fetch performs an HTTP request and returns the raw response body and an exit code.
+// Unlike Do, it does not write to Stdout — callers handle the body themselves.
+// This is used by workflow commands and batch operations that need the raw response.
+func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
+	fullURL := c.BaseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "failed to create request: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if err := c.ApplyAuth(req); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "auth_error",
+			Message:   err.Error(),
+			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitAuth
+	}
+
+	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	defer resp.Body.Close()
+
+	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "reading response body: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	if resp.StatusCode >= 400 {
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
+		apiErr.WriteJSON(c.Stderr)
+		return nil, apiErr.ExitCode()
+	}
+	return respBody, jrerrors.ExitOK
+}
+
 // WriteOutput applies optional JQ filtering and pretty-printing, then writes
 // the final JSON bytes to Stdout. Returns an exit code.
 func (c *Client) WriteOutput(data []byte) int {

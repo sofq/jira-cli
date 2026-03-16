@@ -232,13 +232,13 @@ func TestFetchJSONWithBody_SingleOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	body, code := fetchJSONWithBody(c, t.Context(), "POST", "/test", strings.NewReader(`{}`))
+	body, code := c.Fetch(t.Context(), "POST", "/test", strings.NewReader(`{}`))
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
-	// fetchJSONWithBody should NOT write anything to stdout.
+	// c.Fetch should NOT write anything to stdout.
 	if stdout.String() != "" {
-		t.Errorf("fetchJSONWithBody should not write to stdout, got: %s", stdout.String())
+		t.Errorf("c.Fetch should not write to stdout, got: %s", stdout.String())
 	}
 	// Body should be empty for 204.
 	if len(body) != 0 {
@@ -374,7 +374,7 @@ func TestFetchJSON_VerboseLogging(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.Verbose = true
 
-	_, code := fetchJSON(c, t.Context(), "GET", "/test")
+	_, code := c.Fetch(t.Context(), "GET", "/test", nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -398,7 +398,7 @@ func TestFetchJSON_NoVerboseByDefault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	_, code := fetchJSON(c, t.Context(), "GET", "/test")
+	_, code := c.Fetch(t.Context(), "GET", "/test", nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -599,7 +599,7 @@ func TestFetchJSONWithBody_Error(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	_, code := fetchJSONWithBody(c, t.Context(), "POST", "/test", strings.NewReader(`{}`))
+	_, code := c.Fetch(t.Context(), "POST", "/test", strings.NewReader(`{}`))
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit code for 403 response")
 	}
@@ -2265,7 +2265,7 @@ func TestFetchJSONWithBody_ReadError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	body, exitCode := fetchJSONWithBody(c, t.Context(), "GET", "/test", nil)
+	body, exitCode := c.Fetch(t.Context(), "GET", "/test", nil)
 
 	// We expect either:
 	// 1. A connection_error (if the read fails), or
