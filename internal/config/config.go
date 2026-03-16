@@ -11,6 +11,10 @@ import (
 	"strings"
 )
 
+// goos is the operating system identifier used by DefaultPath.
+// It defaults to runtime.GOOS and can be overridden in tests.
+var goos = runtime.GOOS
+
 // AuthConfig holds authentication credentials for a profile.
 type AuthConfig struct {
 	Type         string `json:"type"`
@@ -56,7 +60,7 @@ func DefaultPath() string {
 	if v := os.Getenv("JR_CONFIG_PATH"); v != "" {
 		return v
 	}
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "Library", "Application Support", "jr", "config.json")
@@ -92,16 +96,13 @@ func LoadFrom(path string) (*Config, error) {
 
 // SaveTo serialises cfg as indented JSON and writes it to path with 0o600
 // permissions, creating any missing parent directories.
+// Config contains only strings and maps, so json.MarshalIndent cannot fail.
 func SaveTo(cfg *Config, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-
+	data, _ := json.MarshalIndent(cfg, "", "  ")
 	return os.WriteFile(path, data, 0o600)
 }
 
