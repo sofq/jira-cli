@@ -145,9 +145,18 @@ type InitData struct {
 	Resources []ResourceEntry
 }
 
-// loadTemplate loads a template by name, searching gen/templates/ relative to
-// the source file location, then falling back to templates/ in the cwd.
+// loadTemplateFn is the function used to load templates. It can be overridden
+// in tests to inject errors or custom template content.
+var loadTemplateFn = loadTemplateDefault
+
+// loadTemplate loads a template by name via loadTemplateFn.
 func loadTemplate(name string) (string, error) {
+	return loadTemplateFn(name)
+}
+
+// loadTemplateDefault searches gen/templates/ relative to the source file
+// location, then falls back to templates/ in the cwd.
+func loadTemplateDefault(name string) (string, error) {
 	// Try relative to this source file (runtime caller).
 	_, filename, _, ok := runtime.Caller(0)
 	if ok {

@@ -7,16 +7,13 @@ import (
 	"sort"
 )
 
-func main() {
-	specPath := filepath.Join("spec", "jira-v3.json")
-	outDir := filepath.Join("cmd", "generated")
-
+// run is the main logic, extracted for testability.
+func run(specPath, outDir string) error {
 	// 1. Parse the OpenAPI spec.
 	fmt.Printf("Parsing spec: %s\n", specPath)
 	ops, err := ParseSpec(specPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error parsing spec: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error parsing spec: %w", err)
 	}
 	fmt.Printf("  Found %d operations\n", len(ops))
 
@@ -34,20 +31,17 @@ func main() {
 	// 4. Clean and recreate the output directory.
 	fmt.Printf("Cleaning output directory: %s\n", outDir)
 	if err := os.RemoveAll(outDir); err != nil {
-		fmt.Fprintf(os.Stderr, "error cleaning output dir: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error cleaning output dir: %w", err)
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating output dir: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error creating output dir: %w", err)
 	}
 
 	// 5. Generate one file per resource.
 	fmt.Println("Generating resource files...")
 	for _, resource := range resources {
 		if err := GenerateResource(resource, groups[resource], outDir); err != nil {
-			fmt.Fprintf(os.Stderr, "error generating resource %q: %v\n", resource, err)
-			os.Exit(1)
+			return fmt.Errorf("error generating resource %q: %w", resource, err)
 		}
 		fmt.Printf("  %s (%d ops)\n", resource, len(groups[resource]))
 	}
@@ -55,18 +49,29 @@ func main() {
 	// 6. Generate schema data.
 	fmt.Println("Generating schema_data.go...")
 	if err := GenerateSchemaData(groups, resources, outDir); err != nil {
-		fmt.Fprintf(os.Stderr, "error generating schema data: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error generating schema data: %w", err)
 	}
 
 	// 7. Generate init.go (excluding resources with hand-written commands).
 	fmt.Println("Generating init.go...")
 	if err := GenerateInit(resources, outDir); err != nil {
-		fmt.Fprintf(os.Stderr, "error generating init: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error generating init: %w", err)
 	}
 
 	// 8. Summary.
 	fmt.Printf("\nDone! Generated %d resource files + schema_data.go + init.go in %s\n",
 		len(resources), outDir)
+	return nil
+}
+
+// exitFn is the function used to exit. Overridable in tests.
+var exitFn = os.Exit
+
+func main() {
+	specPath := filepath.Join("spec", "jira-v3.json")
+	outDir := filepath.Join("cmd", "generated")
+	if err := run(specPath, outDir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		exitFn(1)
+	}
 }
