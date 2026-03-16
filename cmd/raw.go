@@ -86,6 +86,14 @@ func runRaw(cmd *cobra.Command, args []string) error {
 		bodyReader = os.Stdin
 	case bodyFlag != "" && strings.HasPrefix(bodyFlag, "@"):
 		filename := bodyFlag[1:]
+		if filename == "" {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--body @<filename> requires a filename after @",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		}
 		f, err := os.Open(filename)
 		if err != nil {
 			apiErr := &jrerrors.APIError{

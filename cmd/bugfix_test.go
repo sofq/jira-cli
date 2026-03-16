@@ -1723,7 +1723,14 @@ func TestResolveAcceptsValidAuthTypes(t *testing.T) {
 		Profiles: map[string]config.Profile{
 			"default": {
 				BaseURL: "https://example.com",
-				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+				Auth: config.AuthConfig{
+					Type:         "basic",
+					Username:     "u",
+					Token:        "t",
+					ClientID:     "cid",
+					ClientSecret: "csecret",
+					TokenURL:     "https://auth.example.com/token",
+				},
 			},
 		},
 		DefaultProfile: "default",
@@ -2068,5 +2075,163 @@ func TestOAuth2Failure_SingleError_ExitAuth(t *testing.T) {
 	}
 	if !strings.Contains(lines[0], "auth_error") {
 		t.Errorf("expected auth_error in stderr, got: %s", lines[0])
+	}
+}
+
+// --- Bug #53: OAuth2 auth type via env var should validate required fields ---
+
+func TestResolveOAuth2MissingFields(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := dir + "/config.json"
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	// Override auth type to oauth2 via flags (simulating env var or --auth-type).
+	flags := &config.FlagOverrides{AuthType: "oauth2"}
+	_, err := config.Resolve(cfgPath, "", flags)
+	if err == nil {
+		t.Fatal("expected error for oauth2 without required fields, got nil")
+	}
+	if !strings.Contains(err.Error(), "client_id") {
+		t.Errorf("error should mention client_id, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "client_secret") {
+		t.Errorf("error should mention client_secret, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "token_url") {
+		t.Errorf("error should mention token_url, got: %v", err)
+	}
+}
+
+func TestResolveOAuth2WithAllFieldsSucceeds(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := dir + "/config.json"
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth: config.AuthConfig{
+					Type:         "oauth2",
+					ClientID:     "my-client",
+					ClientSecret: "my-secret",
+					TokenURL:     "https://auth.example.com/token",
+				},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	resolved, err := config.Resolve(cfgPath, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Auth.Type != "oauth2" {
+		t.Errorf("Auth.Type = %q, want oauth2", resolved.Auth.Type)
+	}
+	if resolved.Auth.ClientID != "my-client" {
+		t.Errorf("Auth.ClientID = %q, want my-client", resolved.Auth.ClientID)
+	}
+}
+
+func TestResolveOAuth2PartialFieldsMissing(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := dir + "/config.json"
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth: config.AuthConfig{
+					Type:     "oauth2",
+					ClientID: "my-client",
+					// Missing client_secret and token_url.
+				},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	_, err := config.Resolve(cfgPath, "", nil)
+	if err == nil {
+		t.Fatal("expected error for oauth2 with missing client_secret and token_url")
+	}
+	if !strings.Contains(err.Error(), "client_secret") {
+		t.Errorf("error should mention client_secret, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "token_url") {
+		t.Errorf("error should mention token_url, got: %v", err)
+	}
+	// Should NOT mention client_id since it IS provided.
+	if strings.Contains(err.Error(), "client_id") {
+		t.Errorf("error should NOT mention client_id (it is provided), got: %v", err)
+	}
+}
+
+// --- Bug #54: Batch verbose log detection should use JSON parsing ---
+
+func TestBatchVerboseLogDetection_ErrorWithTypeField(t *testing.T) {
+	// Verify that an error message containing "type":"request" is NOT
+	// incorrectly forwarded as a verbose log line.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		// Error body that contains the text "type":"request" to try to trick
+		// the verbose log detection heuristic.
+		w.Write([]byte(`{"errorMessages":["invalid \"type\":\"request\" field"]}`))
+	}))
+	defer srv.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    srv.URL,
+		Auth:       config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+		Verbose:    true,
+	}
+
+	ctx := client.NewContext(context.Background(), c)
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetContext(ctx)
+
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp, len(allOps))
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	bop := BatchOp{
+		Command: "issue get",
+		Args:    map[string]string{"issueIdOrKey": "TEST-1"},
+	}
+	result := executeBatchOp(cmd, c, 0, bop, opMap)
+
+	if result.ExitCode == 0 {
+		t.Error("expected non-zero exit code for 400 error")
+	}
+	// The error result should contain the error, not have it swallowed by verbose detection.
+	if result.Error == nil {
+		t.Error("expected error in batch result, got nil")
+	}
+	errStr := string(result.Error)
+	if !strings.Contains(errStr, "errorMessages") && !strings.Contains(errStr, "validation_error") && !strings.Contains(errStr, "client_error") {
+		t.Errorf("error result should contain the API error, got: %s", errStr)
 	}
 }

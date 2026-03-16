@@ -2233,3 +2233,124 @@ func TestDo_DryRunWithBodyRespectsJQ(t *testing.T) {
 		t.Errorf("expected jq-filtered body output %q, got %q", `"Test issue"`, got)
 	}
 }
+
+// --- Bug #55: Pagination startAt offset should account for initial startAt ---
+
+func TestPagination_StartAtOffset_NonZeroFirstPage(t *testing.T) {
+	// Server returns paginated results where the first page starts at offset 2.
+	// This simulates a user passing --startAt 2. The bug was that subsequent
+	// pages would use len(allValues) instead of firstPage.StartAt + len(allValues),
+	// causing duplicate fetches.
+	requestCount := 0
+	requestedStartAts := []string{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		startAt := r.URL.Query().Get("startAt")
+		requestedStartAts = append(requestedStartAts, startAt)
+		w.Header().Set("Content-Type", "application/json")
+
+		switch startAt {
+		case "", "0":
+			// Should not be requested when first page starts at 2.
+			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"A"},{"id":"B"}]}`))
+		case "2":
+			w.Write([]byte(`{"startAt":2,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"C"},{"id":"D"}]}`))
+		case "4":
+			w.Write([]byte(`{"startAt":4,"maxResults":2,"total":6,"isLast":true,"values":[{"id":"E"},{"id":"F"}]}`))
+		default:
+			t.Errorf("unexpected startAt=%q", startAt)
+			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":true,"values":[]}`))
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	// Simulate requesting with startAt=2 in the query params.
+	q := make(map[string][]string)
+	q["startAt"] = []string{"2"}
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", q, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	// Parse the merged result.
+	var envelope struct {
+		Values []map[string]string `json:"values"`
+		Total  json.RawMessage     `json:"total"`
+		IsLast bool                `json:"isLast"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &envelope); err != nil {
+		t.Fatalf("failed to parse output: %v\nstdout: %s", err, stdout.String())
+	}
+
+	// Should have fetched pages starting at 2 and 4.
+	if len(envelope.Values) != 4 {
+		t.Errorf("expected 4 merged values (from startAt=2 and startAt=4), got %d", len(envelope.Values))
+	}
+
+	// Verify the IDs are correct (no duplicates from re-fetching startAt=2).
+	ids := make([]string, len(envelope.Values))
+	for i, v := range envelope.Values {
+		ids[i] = v["id"]
+	}
+	expectedIDs := []string{"C", "D", "E", "F"}
+	for i, expected := range expectedIDs {
+		if i >= len(ids) || ids[i] != expected {
+			t.Errorf("value[%d]: expected id=%q, got ids=%v", i, expected, ids)
+			break
+		}
+	}
+
+	// The server should have been called exactly twice (startAt=2, startAt=4).
+	if requestCount != 2 {
+		t.Errorf("expected 2 server requests, got %d (startAts: %v)", requestCount, requestedStartAts)
+	}
+}
+
+func TestPagination_StartAtZero_StillWorks(t *testing.T) {
+	// Verify that normal pagination (starting at 0) is not broken.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		startAt := r.URL.Query().Get("startAt")
+		if startAt == "" || startAt == "0" {
+			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":3,"isLast":false,"values":[{"id":"1"},{"id":"2"}]}`))
+		} else {
+			w.Write([]byte(`{"startAt":2,"maxResults":2,"total":3,"isLast":true,"values":[{"id":"3"}]}`))
+		}
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var envelope struct {
+		Values []map[string]string `json:"values"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &envelope); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+	if len(envelope.Values) != 3 {
+		t.Errorf("expected 3 merged values, got %d", len(envelope.Values))
+	}
+}

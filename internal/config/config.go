@@ -209,7 +209,24 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 	}
 	authType = strings.ToLower(authType)
 
-	// 7. Trim trailing slash from BaseURL.
+	// 7. Validate OAuth2 required fields when auth type is oauth2.
+	if authType == "oauth2" {
+		var missing []string
+		if fileClientID == "" {
+			missing = append(missing, "client_id")
+		}
+		if fileClientSecret == "" {
+			missing = append(missing, "client_secret")
+		}
+		if fileTokenURL == "" {
+			missing = append(missing, "token_url")
+		}
+		if len(missing) > 0 {
+			return nil, fmt.Errorf("auth type oauth2 requires %s to be set in the config file (%s)", strings.Join(missing, ", "), configPath)
+		}
+	}
+
+	// 8. Trim trailing slash from BaseURL.
 	baseURL = strings.TrimRight(baseURL, "/")
 
 	return &ResolvedConfig{
