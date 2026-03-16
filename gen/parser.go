@@ -126,15 +126,12 @@ func ParseSpec(path string) ([]Operation, error) {
 }
 
 // schemaType extracts a simple type string from a SchemaProxy.
+// Falls back to "string" for nil, unresolvable, or untyped schemas.
 func schemaType(schema *base.SchemaProxy) string {
 	if schema == nil {
 		return "string"
 	}
-	s := schema.Schema()
-	if s == nil {
-		return "string"
-	}
-	if len(s.Type) > 0 {
+	if s := schema.Schema(); s != nil && len(s.Type) > 0 {
 		return s.Type[0]
 	}
 	return "string"
