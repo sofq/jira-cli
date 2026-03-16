@@ -323,64 +323,15 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		return c.WriteOutput(out)
 	}
 
-	transitionsBody, exitCode := c.Fetch(ctx, "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey), nil)
-	if exitCode != jrerrors.ExitOK {
-		return exitCode
+	match, code := resolveTransition(ctx, c, issueKey, toStatus)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
-	var transResp struct {
-		Transitions []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			To   struct {
-				Name string `json:"name"`
-			} `json:"to"`
-		} `json:"transitions"`
-	}
-	if err := json.Unmarshal(transitionsBody, &transResp); err != nil {
-		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse transitions: " + err.Error()}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-
-	toLower := strings.ToLower(toStatus)
-	var matchedID, matchedName string
-	for _, tr := range transResp.Transitions {
-		if strings.ToLower(tr.Name) == toLower || strings.ToLower(tr.To.Name) == toLower {
-			matchedID = tr.ID
-			matchedName = tr.Name
-			break
-		}
-	}
-	if matchedID == "" {
-		for _, tr := range transResp.Transitions {
-			if strings.Contains(strings.ToLower(tr.Name), toLower) ||
-				strings.Contains(strings.ToLower(tr.To.Name), toLower) {
-				matchedID = tr.ID
-				matchedName = tr.Name
-				break
-			}
-		}
-	}
-	if matchedID == "" {
-		names := make([]string, len(transResp.Transitions))
-		for i, tr := range transResp.Transitions {
-			names[i] = tr.Name
-		}
-		apiErr := &jrerrors.APIError{
-			ErrorType: "validation_error",
-			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitValidation
-	}
-
-	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
-	body := string(transBody)
-	_, code := c.Fetch(ctx, "POST",
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
+	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		strings.NewReader(body))
+		strings.NewReader(string(transBody)))
 	if code != jrerrors.ExitOK {
 		return code
 	}
@@ -388,7 +339,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 	out, _ := marshalNoEscape(map[string]string{
 		"status":     "transitioned",
 		"issue":      issueKey,
-		"transition": matchedName,
+		"transition": match.Name,
 	})
 	return c.WriteOutput(out)
 }
@@ -404,25 +355,12 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		return c.WriteOutput(out)
 	}
 
-	var accountID string
+	accountID, isUnassign, code := resolveAssignee(ctx, c, to)
+	if code != jrerrors.ExitOK {
+		return code
+	}
 
-	switch strings.ToLower(to) {
-	case "me":
-		body, code := c.Fetch(ctx, "GET", "/rest/api/3/myself", nil)
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		var me struct {
-			AccountID string `json:"accountId"`
-		}
-		if err := json.Unmarshal(body, &me); err != nil || me.AccountID == "" {
-			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "could not determine your account ID from /myself"}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-		accountID = me.AccountID
-
-	case "none", "unassign":
+	if isUnassign {
 		assignBody := `{"accountId":null}`
 		_, code := c.Fetch(ctx, "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
@@ -432,35 +370,12 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		}
 		out, _ := marshalNoEscape(map[string]string{"status": "unassigned", "issue": issueKey})
 		return c.WriteOutput(out)
-
-	default:
-		body, code := c.Fetch(ctx, "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)), nil)
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		var users []struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		}
-		if err := json.Unmarshal(body, &users); err != nil {
-			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse user search response: " + err.Error()}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-		if len(users) == 0 {
-			apiErr := &jrerrors.APIError{ErrorType: "not_found", Message: fmt.Sprintf("no user found matching %q", to)}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitNotFound
-		}
-		accountID = users[0].AccountID
 	}
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-	assignBody := string(marshaledAssign)
-	_, code := c.Fetch(ctx, "PUT",
+	_, code = c.Fetch(ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		strings.NewReader(assignBody))
+		strings.NewReader(string(marshaledAssign)))
 	if code != jrerrors.ExitOK {
 		return code
 	}
