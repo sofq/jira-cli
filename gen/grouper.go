@@ -93,23 +93,38 @@ func DeriveVerb(operationID, method, path, resource string) string {
 	// e.g., "getIssueTransitions" → rest=["Issue","Transitions"], resource="issue"
 	// → strip "Issue" → suffix = ["transitions"] → "get-transitions"
 	if restSingular[0] == resourceSingular || restLower[0] == resourceLower {
-		suffix := restLower[1:]
-		if len(suffix) == 0 {
-			return verb
-		}
-		return verb + "-" + strings.Join(suffix, "-")
+		// len(rest)==1 is already handled by Case 1 (identical condition), so suffix is never empty here.
+		return verb + "-" + strings.Join(restLower[1:], "-")
 	}
 
 	// Fallback: verb + kebab-joined rest
 	return verb + "-" + strings.Join(restLower, "-")
 }
 
-// singularize does a very simple singularization (strip trailing 's').
+// singularizeExceptions maps words whose singular form does not follow simple stripping rules.
+var singularizeExceptions = map[string]string{
+	"statuses":  "status",
+	"status":    "status",
+	"class":     "class",
+	"classes":   "class",
+	"address":   "address",
+	"addresses": "address",
+	"bus":       "bus",
+	"buses":     "bus",
+}
+
+// singularize does a simple singularization with an exceptions map for known irregular words.
 func singularize(s string) string {
-	if strings.HasSuffix(s, "ies") {
+	if exc, ok := singularizeExceptions[s]; ok {
+		return exc
+	}
+	if strings.HasSuffix(s, "sses") {
+		return s[:len(s)-2]
+	}
+	if strings.HasSuffix(s, "ies") && len(s) > 3 {
 		return s[:len(s)-3] + "y"
 	}
-	if strings.HasSuffix(s, "s") && len(s) > 1 {
+	if strings.HasSuffix(s, "s") && !strings.HasSuffix(s, "ss") && !strings.HasSuffix(s, "us") && len(s) > 1 {
 		return s[:len(s)-1]
 	}
 	return s
