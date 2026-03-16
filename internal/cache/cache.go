@@ -5,15 +5,23 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
-// Dir returns the cache directory, creating it if needed.
+var (
+	cacheDir     string
+	cacheDirOnce sync.Once
+)
+
+// Dir returns the cache directory, creating it on first call.
 func Dir() string {
-	dir, _ := os.UserCacheDir()
-	p := filepath.Join(dir, "jr")
-	_ = os.MkdirAll(p, 0o755)
-	return p
+	cacheDirOnce.Do(func() {
+		dir, _ := os.UserCacheDir()
+		cacheDir = filepath.Join(dir, "jr")
+		_ = os.MkdirAll(cacheDir, 0o755)
+	})
+	return cacheDir
 }
 
 // Key generates a cache key from method + URL + auth context.
