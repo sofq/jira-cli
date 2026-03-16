@@ -99,6 +99,9 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	}
 	authType = strings.ToLower(authType)
 
+	// Normalize base URL: strip trailing slashes to avoid double-slash issues.
+	baseURL = strings.TrimRight(baseURL, "/")
+
 	if testConn {
 		if err := testConnection(baseURL, authType, username, token); err != nil {
 			apiErr := &jrerrors.APIError{
@@ -262,8 +265,9 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 
 // testConnection performs a GET /rest/api/3/myself against baseURL to verify credentials.
 func testConnection(baseURL, authType, username, token string) error {
-	url := baseURL + "/rest/api/3/myself"
-	req, err := http.NewRequest("GET", url, nil)
+	baseURL = strings.TrimRight(baseURL, "/")
+	testURL := baseURL + "/rest/api/3/myself"
+	req, err := http.NewRequest("GET", testURL, nil)
 	if err != nil {
 		return err
 	}
@@ -272,6 +276,8 @@ func testConnection(baseURL, authType, username, token string) error {
 	switch authType {
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+token)
+	case "oauth2":
+		return fmt.Errorf("oauth2 auth type cannot be tested with --test; configure and verify manually")
 	default: // basic
 		req.SetBasicAuth(username, token)
 	}

@@ -79,7 +79,12 @@ var issuetypescreenscheme_create_issue_type_screen_scheme = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -172,7 +177,12 @@ var issuetypescreenscheme_assign_issue_type_screen_scheme_to_project = &cobra.Co
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -232,7 +242,12 @@ var issuetypescreenscheme_update_issue_type_screen_scheme = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -322,7 +337,12 @@ var issuetypescreenscheme_append_mappings_for_issue_type_screen_scheme = &cobra.
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -382,7 +402,12 @@ var issuetypescreenscheme_update_default_screen_scheme = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -442,7 +467,12 @@ var issuetypescreenscheme_remove_mappings_from_issue_type_screen_scheme = &cobra
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f

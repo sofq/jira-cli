@@ -79,7 +79,12 @@ var project_create = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -313,7 +318,12 @@ var project_update = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -433,7 +443,12 @@ var project_update_avatar = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -532,7 +547,12 @@ var project_create_avatar = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -682,7 +702,12 @@ var project_update_default_project_classification = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -901,7 +926,12 @@ var project_toggle_feature_for = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -1039,7 +1069,12 @@ var project_set_property = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -1246,7 +1281,12 @@ var project_add_actor_users = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -1315,7 +1355,12 @@ var project_set_actors = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -1564,7 +1609,12 @@ var project_update_email = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -1744,7 +1794,12 @@ var project_assign_permission_scheme = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f

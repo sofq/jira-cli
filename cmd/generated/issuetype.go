@@ -79,7 +79,12 @@ var issuetype_create_issue_type = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -190,7 +195,12 @@ var issuetype_update_issue_type = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -310,7 +320,12 @@ var issuetype_create_issue_type_avatar = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
@@ -448,7 +463,12 @@ var issuetype_set_issue_type_property = &cobra.Command{
 			if strings.HasPrefix(bodyStr, "@") {
 				f, err := os.Open(strings.TrimPrefix(bodyStr, "@"))
 				if err != nil {
-					return err
+					apiErr := &jerrors.APIError{
+						ErrorType: "validation_error",
+						Message:   "cannot open body file: " + err.Error(),
+					}
+					apiErr.WriteJSON(os.Stderr)
+					return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
 				}
 				defer f.Close()
 				bodyReader = f
