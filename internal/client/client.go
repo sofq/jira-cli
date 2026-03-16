@@ -365,8 +365,8 @@ func (c *Client) doStartAtPagination(ctx context.Context, method, path string, q
 	allValues := append([]json.RawMessage{}, firstPage.Values...)
 	lastPage := firstPage
 
-	for !c.isLastPage(lastPage, len(allValues)) && len(lastPage.Values) > 0 {
-		startAt := len(allValues)
+	for !c.isLastPage(lastPage, firstPage.StartAt+len(allValues)) && len(lastPage.Values) > 0 {
+		startAt := firstPage.StartAt + len(allValues)
 		q := url.Values{}
 		for k, v := range query {
 			q[k] = v

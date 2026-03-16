@@ -2771,3 +2771,70 @@ func TestE2E_Configure_ShortProfileFlag(t *testing.T) {
 		t.Errorf("expected 'staging' profile in config, got profiles: %v", profiles)
 	}
 }
+
+// --- Bug #56: raw --body @ (empty filename) should produce clear error ---
+
+func TestE2E_Raw_BodyAtEmptyFilename(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	_, stderr, exitCode := runJR(t, binary, srv, "raw", "POST", "/rest/api/3/echo", "--body", "@")
+
+	if exitCode != 4 {
+		t.Fatalf("expected exit code 4 (validation), got %d; stderr=%s", exitCode, stderr)
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal([]byte(stderr), &errObj); err != nil {
+		t.Fatalf("stderr not valid JSON: %s", stderr)
+	}
+	if errObj["error_type"] != "validation_error" {
+		t.Errorf("expected error_type=validation_error, got %v", errObj["error_type"])
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "filename") {
+		t.Errorf("error message should mention 'filename', got: %s", msg)
+	}
+}
+
+// --- Bug #53: OAuth2 without required fields should error at resolve time ---
+
+func TestE2E_OAuth2MissingFieldsError(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	// Run a command with oauth2 auth type but no oauth2 fields configured.
+	cmd := exec.Command(binary, "issue", "get", "--issueIdOrKey", "TEST-1")
+	cmd.Env = append(os.Environ(),
+		"JR_BASE_URL="+srv.URL,
+		"JR_AUTH_TYPE=oauth2",
+		"JR_CONFIG_PATH="+filepath.Join(t.TempDir(), "config.json"),
+	)
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected non-zero exit for oauth2 without required fields")
+	}
+
+	var errObj map[string]interface{}
+	if jsonErr := json.Unmarshal(errBuf.Bytes(), &errObj); jsonErr != nil {
+		t.Fatalf("stderr not valid JSON: %s", errBuf.String())
+	}
+	if errObj["error_type"] != "config_error" {
+		t.Errorf("expected error_type=config_error, got %v", errObj["error_type"])
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "oauth2") || !strings.Contains(msg, "client_id") {
+		t.Errorf("error should mention oauth2 required fields, got: %s", msg)
+	}
+}

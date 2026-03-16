@@ -478,12 +478,15 @@ func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder
 			if line == "" {
 				continue
 			}
-			// Quick heuristic: verbose logs contain "type":"request" or "type":"response"
-			if strings.Contains(line, `"type":"request"`) || strings.Contains(line, `"type":"response"`) {
-				fmt.Fprintln(os.Stderr, line)
-			} else {
-				errorLines = append(errorLines, line)
+			// Detect verbose logs by parsing JSON and checking the "type" field.
+			var parsed map[string]interface{}
+			if json.Unmarshal([]byte(line), &parsed) == nil {
+				if tp, ok := parsed["type"].(string); ok && (tp == "request" || tp == "response") {
+					fmt.Fprintln(os.Stderr, line)
+					continue
+				}
 			}
+			errorLines = append(errorLines, line)
 		}
 		stderrStr = strings.Join(errorLines, "\n")
 	}
