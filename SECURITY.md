@@ -20,4 +20,3 @@ If you discover a security vulnerability, please report it responsibly:
 
 - All dependencies are monitored via Dependabot and govulncheck.
 - Static analysis is run on every push via gosec.
-- The project is enrolled in the [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/sofq/jira-cli) program.
