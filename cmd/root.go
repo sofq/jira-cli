@@ -187,7 +187,7 @@ func init() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd == rootCmd {
-			// Bug #6: Output a helpful JSON hint and exit 0 for explicit --help / help.
+			// Output a helpful JSON hint and exit 0 for explicit --help / help.
 			var buf bytes.Buffer
 			enc := json.NewEncoder(&buf)
 			enc.SetEscapeHTML(false)
@@ -196,7 +196,6 @@ func init() {
 				"version": Version,
 			})
 			fmt.Fprintf(os.Stdout, "%s", buf.String())
-			os.Exit(jrerrors.ExitOK)
 			return
 		}
 		// Write help text to stderr so stdout stays JSON-only.

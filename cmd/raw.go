@@ -32,7 +32,7 @@ var validHTTPMethods = map[string]bool{
 	"PATCH": true, "HEAD": true, "OPTIONS": true,
 }
 
-// methodNeedsBody returns true for HTTP methods that typically require a body.
+// methodsWithBody lists HTTP methods that typically require a request body.
 var methodsWithBody = map[string]bool{
 	"POST": true, "PUT": true, "PATCH": true,
 }
@@ -41,7 +41,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	method := strings.ToUpper(args[0])
 	path := args[1]
 
-	// Bug #7: Validate HTTP method client-side.
+	// Validate HTTP method client-side.
 	if !validHTTPMethods[method] {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
@@ -109,11 +109,11 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	case bodyFlag != "":
 		bodyReader = strings.NewReader(bodyFlag)
 	default:
-		// Bug #3: Don't auto-read stdin for raw commands — require explicit --body - instead.
+		// Don't auto-read stdin for raw commands — require explicit --body - instead.
 		// This prevents hanging when no body is piped.
 	}
 
-	// Bug #16: Warn if --body is used with GET/HEAD/DELETE/OPTIONS.
+	// Warn if --body is used with GET/HEAD/DELETE/OPTIONS.
 	if bodyFlag != "" && !methodsWithBody[method] {
 		warnMsg := map[string]any{
 			"type":    "warning",
@@ -124,7 +124,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 		bodyReader = nil
 	}
 
-	// Bug #3: If method needs a body but none was provided, error instead of hanging on stdin.
+	// If method needs a body but none was provided, error instead of hanging on stdin.
 	// Skip this check in dry-run mode to match generated command behavior.
 	if methodsWithBody[method] && bodyReader == nil && !c.DryRun {
 		apiErr := &jrerrors.APIError{

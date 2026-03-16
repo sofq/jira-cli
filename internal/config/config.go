@@ -159,7 +159,7 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 		fileTokenURL = p.Auth.TokenURL
 		fileScopes = p.Auth.Scopes
 	} else if profileName != "" {
-		// Bug #10: Explicit --profile that doesn't exist should give a clear error.
+		// Explicit --profile that doesn't exist should give a clear error.
 		return nil, fmt.Errorf("profile %q not found; available profiles: %s", name, availableProfiles(cfg))
 	}
 

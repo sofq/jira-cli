@@ -123,7 +123,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
-	// Bug #17: Reject null/empty input explicitly.
+	// Reject null/empty input explicitly.
 	if ops == nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
@@ -191,7 +191,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stdout, "%s\n", strings.TrimRight(string(output), "\n"))
 
-	// Bug #9: Exit with highest-severity exit code from batch operations.
+	// Exit with highest-severity exit code from batch operations.
 	maxExit := 0
 	for _, r := range results {
 		if r.ExitCode > maxExit {
@@ -269,7 +269,7 @@ func executeBatchOp(
 		}
 	}
 
-	// Bug #73: If the batch op explicitly specifies "fields" in its args,
+	// If the batch op explicitly specifies "fields" in its args,
 	// clear the per-op client's Fields so that client.Do() does not overwrite
 	// the per-op value with the global --fields flag.
 	if _, hasFields := bop.Args["fields"]; hasFields {
@@ -469,6 +469,61 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	return c.WriteOutput(out)
 }
 
+// stripVerboseLogs separates verbose log lines from error lines in captured stderr.
+// Verbose lines (with "type":"request"/"response") are forwarded to real stderr.
+// Returns only the non-verbose (error) lines joined as a single string.
+func stripVerboseLogs(stderrStr string) string {
+	var errorLines []string
+	for _, line := range strings.Split(strings.TrimSpace(stderrStr), "\n") {
+		if line == "" {
+			continue
+		}
+		var parsed map[string]any
+		if json.Unmarshal([]byte(line), &parsed) == nil {
+			if tp, ok := parsed["type"].(string); ok && (tp == "request" || tp == "response") {
+				fmt.Fprintln(os.Stderr, line)
+				continue
+			}
+		}
+		errorLines = append(errorLines, line)
+	}
+	return strings.Join(errorLines, "\n")
+}
+
+// parseErrorJSON parses stderr output into a json.RawMessage.
+// Handles single JSON objects, multiple JSON lines, and plain text.
+func parseErrorJSON(errOutput string) json.RawMessage {
+	if json.Valid([]byte(errOutput)) {
+		return json.RawMessage(errOutput)
+	}
+	lines := strings.Split(errOutput, "\n")
+	if len(lines) > 1 {
+		var jsonLines []json.RawMessage
+		allValid := true
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if json.Valid([]byte(line)) {
+				jsonLines = append(jsonLines, json.RawMessage(line))
+			} else {
+				allValid = false
+				break
+			}
+		}
+		if allValid && len(jsonLines) == 1 {
+			return jsonLines[0]
+		}
+		if allValid && len(jsonLines) > 1 {
+			arrBytes, _ := json.Marshal(jsonLines)
+			return json.RawMessage(arrBytes)
+		}
+	}
+	encoded, _ := json.Marshal(map[string]string{"message": errOutput})
+	return json.RawMessage(encoded)
+}
+
 // buildBatchResult constructs a BatchResult from captured stdout/stderr.
 // Verbose log lines (from --verbose) are forwarded to real stderr so they
 // are visible to the caller, while structured error JSON is kept in the result.
@@ -476,69 +531,14 @@ func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder
 	stderrStr := stderrBuf.String()
 
 	if verbose && stderrStr != "" {
-		// Forward verbose log lines to real stderr. Verbose lines are JSON
-		// objects with a "type" field ("request" or "response"). Error lines
-		// are JSON objects with an "error_type" field. We forward verbose
-		// lines and keep error lines for the result.
-		var errorLines []string
-		for _, line := range strings.Split(strings.TrimSpace(stderrStr), "\n") {
-			if line == "" {
-				continue
-			}
-			// Detect verbose logs by parsing JSON and checking the "type" field.
-			var parsed map[string]interface{}
-			if json.Unmarshal([]byte(line), &parsed) == nil {
-				if tp, ok := parsed["type"].(string); ok && (tp == "request" || tp == "response") {
-					fmt.Fprintln(os.Stderr, line)
-					continue
-				}
-			}
-			errorLines = append(errorLines, line)
-		}
-		stderrStr = strings.Join(errorLines, "\n")
+		stderrStr = stripVerboseLogs(stderrStr)
 	}
 
 	if exitCode != jrerrors.ExitOK {
-		errOutput := strings.TrimSpace(stderrStr)
-		var rawErr json.RawMessage
-		if json.Valid([]byte(errOutput)) {
-			rawErr = json.RawMessage(errOutput)
-		} else {
-			// Multiple JSON error lines? Try to parse each line and collect into an array.
-			lines := strings.Split(errOutput, "\n")
-			if len(lines) > 1 {
-				var jsonLines []json.RawMessage
-				allValid := true
-				for _, line := range lines {
-					line = strings.TrimSpace(line)
-					if line == "" {
-						continue
-					}
-					if json.Valid([]byte(line)) {
-						jsonLines = append(jsonLines, json.RawMessage(line))
-					} else {
-						allValid = false
-						break
-					}
-				}
-				if allValid && len(jsonLines) == 1 {
-					rawErr = jsonLines[0]
-				} else if allValid && len(jsonLines) > 1 {
-					arrBytes, _ := json.Marshal(jsonLines)
-					rawErr = json.RawMessage(arrBytes)
-				} else {
-					encoded, _ := json.Marshal(map[string]string{"message": errOutput})
-					rawErr = json.RawMessage(encoded)
-				}
-			} else {
-				encoded, _ := json.Marshal(map[string]string{"message": errOutput})
-				rawErr = json.RawMessage(encoded)
-			}
-		}
 		return BatchResult{
 			Index:    index,
 			ExitCode: exitCode,
-			Error:    rawErr,
+			Error:    parseErrorJSON(strings.TrimSpace(stderrStr)),
 		}
 	}
 
