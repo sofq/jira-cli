@@ -2018,3 +2018,89 @@ func TestDo_CacheNonPaginatedGET(t *testing.T) {
 		t.Errorf("cached response differs: %q vs %q", stdout1.String(), stdout2.String())
 	}
 }
+
+// --- Bug 25: OAuth2 token request should check HTTP status code ---
+
+func TestOAuth2_ErrorStatusCode(t *testing.T) {
+	// OAuth2 token endpoint returns 401 with an error body.
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"error":"invalid_client","error_description":"bad credentials"}`)
+	}))
+	defer tokenServer.Close()
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If the OAuth2 token fetch failed, the Authorization header should be empty.
+		authHeader := r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"auth_header":%q}`, authHeader)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(apiServer.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		TokenURL:     tokenServer.URL,
+		ClientID:     "bad-id",
+		ClientSecret: "bad-secret",
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	// The request should still succeed (auth failure is soft in ApplyAuth),
+	// but the Authorization header should NOT contain a bearer token.
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	// With the fix, the error status is properly detected, token is empty,
+	// so no Bearer token should be set.
+	if strings.Contains(result["auth_header"], "Bearer") {
+		t.Errorf("expected no Bearer token after OAuth2 failure, got: %s", result["auth_header"])
+	}
+}
+
+func TestOAuth2_HTMLErrorResponse(t *testing.T) {
+	// OAuth2 token endpoint returns 500 with HTML body (not JSON).
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `<html><body>Internal Server Error</body></html>`)
+	}))
+	defer tokenServer.Close()
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"auth_header":%q}`, authHeader)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(apiServer.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		TokenURL:     tokenServer.URL,
+		ClientID:     "id",
+		ClientSecret: "secret",
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	// Before the fix, this would try to decode HTML as JSON, potentially getting
+	// a confusing "decode failed" error. Now it properly detects the HTTP error.
+	if strings.Contains(result["auth_header"], "Bearer") {
+		t.Errorf("expected no Bearer token after OAuth2 failure, got: %s", result["auth_header"])
+	}
+}
