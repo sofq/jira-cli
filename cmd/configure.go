@@ -88,8 +88,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate auth-type before saving or testing.
-	validAuthTypes := map[string]bool{"basic": true, "bearer": true, "oauth2": true}
-	if !validAuthTypes[strings.ToLower(authType)] {
+	if !config.ValidAuthType(authType) {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
 			Message:   fmt.Sprintf("invalid --auth-type %q; must be one of: basic, bearer, oauth2", authType),
