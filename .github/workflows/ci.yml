@@ -79,7 +79,7 @@ jobs:
 
       - name: Smoke test pip build + install
         run: |
-          pip install build
+          pip install build==1.4.0
           cd python && python -m build
           pip install dist/jira_jr-*.whl 2>&1 | tee install.log
           # Verify the module imports cleanly (no missing dependencies)
