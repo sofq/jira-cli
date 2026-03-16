@@ -12703,7 +12703,7 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "status",
-			Verb:     "get",
+			Verb:     "get-status",
 			Method:   "GET",
 			Path:     "/rest/api/3/status/{idOrName}",
 			Summary:  "Get status",
@@ -12883,7 +12883,7 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "statuses",
-			Verb:     "get-project-issue-type-usages-for-status",
+			Verb:     "get-project-issue-type-usages-for",
 			Method:   "GET",
 			Path:     "/rest/api/3/statuses/{statusId}/project/{projectId}/issueTypeUsages",
 			Summary:  "Get issue type usages by status and project",
@@ -12921,7 +12921,7 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "statuses",
-			Verb:     "get-project-usages-for-status",
+			Verb:     "get-project-usages-for",
 			Method:   "GET",
 			Path:     "/rest/api/3/statuses/{statusId}/projectUsages",
 			Summary:  "Get project usages by status",
@@ -12952,7 +12952,7 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "statuses",
-			Verb:     "get-workflow-usages-for-status",
+			Verb:     "get-workflow-usages-for",
 			Method:   "GET",
 			Path:     "/rest/api/3/statuses/{statusId}/workflowUsages",
 			Summary:  "Get workflow usages by status",
