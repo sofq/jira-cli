@@ -73,8 +73,6 @@ func QueryFromFlags(cmd *cobra.Command, names ...string) url.Values {
 // client's Auth configuration.
 func (c *Client) ApplyAuth(req *http.Request) {
 	switch strings.ToLower(c.Auth.Type) {
-	case "basic":
-		req.SetBasicAuth(c.Auth.Username, c.Auth.Token)
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+c.Auth.Token)
 	case "oauth2":
@@ -82,6 +80,8 @@ func (c *Client) ApplyAuth(req *http.Request) {
 		if err == nil && token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
+	default: // "basic" and any unrecognized type default to basic auth
+		req.SetBasicAuth(c.Auth.Username, c.Auth.Token)
 	}
 }
 
