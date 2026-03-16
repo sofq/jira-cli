@@ -1560,6 +1560,169 @@ func TestE2E_Configure_MultipleProfiles(t *testing.T) {
 	}
 }
 
+// TestE2E_Configure_TestStandalone verifies that --test without --base-url/--token
+// loads the saved profile and tests its connection.
+func TestE2E_Configure_TestStandalone(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+
+	// First, save a valid profile.
+	cmd1 := exec.Command(binary, "configure", "--base-url", srv.URL, "--token", "tok", "--username", "user@test.com")
+	cmd1.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	if err := cmd1.Run(); err != nil {
+		t.Fatalf("failed to create profile: %v", err)
+	}
+
+	// Now run --test standalone (no --base-url or --token).
+	cmd2 := exec.Command(binary, "configure", "--test")
+	cmd2.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd2.Stdout = &outBuf
+	cmd2.Stderr = &errBuf
+
+	if err := cmd2.Run(); err != nil {
+		t.Fatalf("expected exit 0 for --test standalone, got error: %v; stderr=%s", err, errBuf.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(outBuf.Bytes(), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", outBuf.String())
+	}
+	if result["status"] != "ok" {
+		t.Errorf("expected status=ok, got %v", result["status"])
+	}
+}
+
+// TestE2E_Configure_TestStandaloneWithProfile verifies that --test --profile loads
+// the named profile and tests its connection.
+func TestE2E_Configure_TestStandaloneWithProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+
+	// Create a named profile.
+	cmd1 := exec.Command(binary, "configure", "--base-url", srv.URL, "--token", "tok", "--username", "user@test.com", "--profile", "myprofile")
+	cmd1.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	if err := cmd1.Run(); err != nil {
+		t.Fatalf("failed to create profile: %v", err)
+	}
+
+	// Test the named profile standalone.
+	cmd2 := exec.Command(binary, "configure", "--test", "--profile", "myprofile")
+	cmd2.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd2.Stdout = &outBuf
+	cmd2.Stderr = &errBuf
+
+	if err := cmd2.Run(); err != nil {
+		t.Fatalf("expected exit 0 for --test --profile, got error: %v; stderr=%s", err, errBuf.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(outBuf.Bytes(), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", outBuf.String())
+	}
+	if result["status"] != "ok" {
+		t.Errorf("expected status=ok, got %v", result["status"])
+	}
+	if result["profile"] != "myprofile" {
+		t.Errorf("expected profile=myprofile, got %v", result["profile"])
+	}
+}
+
+// TestE2E_Configure_TestStandaloneNonexistentProfile verifies that --test with a
+// nonexistent profile returns not_found.
+func TestE2E_Configure_TestStandaloneNonexistentProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+
+	// Create a profile so the config file exists.
+	cmd1 := exec.Command(binary, "configure", "--base-url", "http://example.com", "--token", "tok")
+	cmd1.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	if err := cmd1.Run(); err != nil {
+		t.Fatalf("failed to create profile: %v", err)
+	}
+
+	// Test with nonexistent profile.
+	cmd2 := exec.Command(binary, "configure", "--test", "--profile", "nonexistent")
+	cmd2.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var errBuf bytes.Buffer
+	cmd2.Stderr = &errBuf
+
+	err := cmd2.Run()
+	if err == nil {
+		t.Fatal("expected non-zero exit for --test with nonexistent profile")
+	}
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("unexpected error type: %v", err)
+	}
+	if exitErr.ExitCode() != 3 {
+		t.Errorf("expected exit code 3 (not_found), got %d", exitErr.ExitCode())
+	}
+
+	var errObj map[string]interface{}
+	if jsonErr := json.Unmarshal(errBuf.Bytes(), &errObj); jsonErr != nil {
+		t.Fatalf("stderr not valid JSON: %s", errBuf.String())
+	}
+	if errObj["error_type"] != "not_found" {
+		t.Errorf("expected error_type=not_found, got %v", errObj["error_type"])
+	}
+}
+
+// TestE2E_Configure_TestStandaloneConnectionFail verifies that --test standalone
+// with a saved profile that has an unreachable URL returns a connection error.
+func TestE2E_Configure_TestStandaloneConnectionFail(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+
+	// Save a profile pointing at an unreachable URL.
+	cmd1 := exec.Command(binary, "configure", "--base-url", "http://127.0.0.1:19999", "--token", "tok")
+	cmd1.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	if err := cmd1.Run(); err != nil {
+		t.Fatalf("failed to create profile: %v", err)
+	}
+
+	// Test standalone — should fail with connection error.
+	cmd2 := exec.Command(binary, "configure", "--test")
+	cmd2.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var errBuf bytes.Buffer
+	cmd2.Stderr = &errBuf
+
+	err := cmd2.Run()
+	if err == nil {
+		t.Fatal("expected non-zero exit when testing unreachable saved profile")
+	}
+	if errBuf.Len() == 0 {
+		t.Error("expected error output on stderr for failed connection test")
+	}
+
+	var errObj map[string]interface{}
+	if jsonErr := json.Unmarshal(errBuf.Bytes(), &errObj); jsonErr != nil {
+		t.Fatalf("stderr not valid JSON: %s", errBuf.String())
+	}
+	if errObj["error_type"] != "connection_error" {
+		t.Errorf("expected error_type=connection_error, got %v", errObj["error_type"])
+	}
+}
+
 // === Batch command tests ===
 
 // TestE2E_Batch_EmptyArray verifies that an empty batch input yields an empty array output.
