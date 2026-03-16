@@ -70,28 +70,25 @@ func QueryFromFlags(cmd *cobra.Command, names ...string) url.Values {
 }
 
 // ApplyAuth sets authentication headers on the request according to the
-// client's Auth configuration.
-func (c *Client) ApplyAuth(req *http.Request) {
+// client's Auth configuration. Returns an error if authentication setup fails
+// (e.g. OAuth2 token fetch failure or empty token).
+func (c *Client) ApplyAuth(req *http.Request) error {
 	switch strings.ToLower(c.Auth.Type) {
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+c.Auth.Token)
 	case "oauth2":
 		token, err := c.fetchOAuth2Token()
 		if err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "auth_error",
-				Message:   err.Error(),
-				Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return
+			return fmt.Errorf("oauth2 authentication failed: %w", err)
 		}
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+		if token == "" {
+			return fmt.Errorf("oauth2 token endpoint returned an empty access_token")
 		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	default: // "basic" and any unrecognized type default to basic auth
 		req.SetBasicAuth(c.Auth.Username, c.Auth.Token)
 	}
+	return nil
 }
 
 // fetchOAuth2Token performs a client_credentials grant and returns the access token.
@@ -209,7 +206,16 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c.ApplyAuth(req)
+	if err := c.ApplyAuth(req); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "auth_error",
+			Status:    0,
+			Message:   err.Error(),
+			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitAuth
+	}
 
 	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 
@@ -500,7 +506,16 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 		return nil, jrerrors.ExitError
 	}
 	req.Header.Set("Accept", "application/json")
-	c.ApplyAuth(req)
+	if err := c.ApplyAuth(req); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "auth_error",
+			Status:    0,
+			Message:   err.Error(),
+			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitAuth
+	}
 
 	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
 

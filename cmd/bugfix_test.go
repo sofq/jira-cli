@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1407,7 +1408,7 @@ func TestConfigureRejectsInvalidAuthType(t *testing.T) {
 }
 
 func TestConfigureAcceptsValidAuthTypes(t *testing.T) {
-	for _, authType := range []string{"basic", "bearer", "oauth2", "BASIC", "Bearer", "OAuth2"} {
+	for _, authType := range []string{"basic", "bearer", "BASIC", "Bearer"} {
 		t.Run(authType, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			configPath := tmpDir + "/config.json"
@@ -1462,7 +1463,9 @@ func TestApplyAuthDefaultsToBasicForUnknownType(t *testing.T) {
 		Auth: config.AuthConfig{Type: "unknown", Username: "user", Token: "tok"},
 	}
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
-	c.ApplyAuth(req)
+	if err := c.ApplyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	auth := req.Header.Get("Authorization")
 	if auth == "" {
@@ -1778,5 +1781,215 @@ func TestGeneratedTemplate_FileOpenError_HasStructuredError(t *testing.T) {
 
 	if !strings.Contains(tmpl, `"cannot open body file: "`) {
 		t.Error("template should include descriptive error message for @file open failures")
+	}
+}
+
+// --- Bug #46: ApplyAuth OAuth2 error propagation ---
+// When fetchOAuth2Token fails, ApplyAuth must return an error so callers
+// stop the request instead of proceeding without auth (which caused double errors).
+
+func TestApplyAuth_OAuth2Error_ReturnsError(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"error":"invalid_client"}`)
+	}))
+	defer tokenServer.Close()
+
+	c := &client.Client{
+		HTTPClient: &http.Client{},
+		Auth: config.AuthConfig{
+			Type:     "oauth2",
+			TokenURL: tokenServer.URL,
+		},
+	}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	err := c.ApplyAuth(req)
+	if err == nil {
+		t.Fatal("expected error from ApplyAuth when OAuth2 token fetch fails")
+	}
+	if !strings.Contains(err.Error(), "oauth2 authentication failed") {
+		t.Errorf("expected 'oauth2 authentication failed' in error, got: %s", err.Error())
+	}
+	// Authorization header must NOT be set.
+	if req.Header.Get("Authorization") != "" {
+		t.Error("Authorization header should not be set after OAuth2 failure")
+	}
+}
+
+// --- Bug #47: Empty OAuth2 access_token ---
+// If the token endpoint returns {"access_token": ""}, ApplyAuth must return
+// an error instead of silently proceeding without auth.
+
+func TestApplyAuth_OAuth2EmptyToken_ReturnsError(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":""}`)
+	}))
+	defer tokenServer.Close()
+
+	c := &client.Client{
+		HTTPClient: &http.Client{},
+		Auth: config.AuthConfig{
+			Type:         "oauth2",
+			TokenURL:     tokenServer.URL,
+			ClientID:     "id",
+			ClientSecret: "secret",
+		},
+	}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	err := c.ApplyAuth(req)
+	if err == nil {
+		t.Fatal("expected error from ApplyAuth when OAuth2 returns empty token")
+	}
+	if !strings.Contains(err.Error(), "empty access_token") {
+		t.Errorf("expected 'empty access_token' in error, got: %s", err.Error())
+	}
+}
+
+func TestApplyAuth_OAuth2Success_SetsBearer(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"good-token-123"}`)
+	}))
+	defer tokenServer.Close()
+
+	c := &client.Client{
+		HTTPClient: &http.Client{},
+		Auth: config.AuthConfig{
+			Type:         "oauth2",
+			TokenURL:     tokenServer.URL,
+			ClientID:     "id",
+			ClientSecret: "secret",
+		},
+	}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	if err := c.ApplyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	auth := req.Header.Get("Authorization")
+	if auth != "Bearer good-token-123" {
+		t.Errorf("expected 'Bearer good-token-123', got: %s", auth)
+	}
+}
+
+func TestApplyAuth_BasicAndBearer_NoError(t *testing.T) {
+	tests := []struct {
+		authType string
+		wantAuth string
+	}{
+		{"basic", "Basic"},
+		{"bearer", "Bearer tok"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.authType, func(t *testing.T) {
+			c := &client.Client{
+				Auth: config.AuthConfig{Type: tc.authType, Username: "u", Token: "tok"},
+			}
+			req, _ := http.NewRequest("GET", "http://example.com", nil)
+			if err := c.ApplyAuth(req); err != nil {
+				t.Fatalf("unexpected error for %s: %v", tc.authType, err)
+			}
+			auth := req.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, tc.wantAuth) {
+				t.Errorf("expected Authorization starting with %q, got %q", tc.wantAuth, auth)
+			}
+		})
+	}
+}
+
+// --- Bug #48: Configure rejects --auth-type oauth2 ---
+// The configure command lacks OAuth2-specific flags (client_id, client_secret,
+// token_url), so saving an oauth2 profile would always fail at runtime.
+
+func TestConfigureRejectsOAuth2(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+	origPath := os.Getenv("JR_CONFIG_PATH")
+	os.Setenv("JR_CONFIG_PATH", configPath)
+	defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "default", "")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+	f.String("jq", "", "")
+	f.Bool("pretty", false, "")
+
+	_ = cmd.Flags().Set("base-url", "https://example.atlassian.net")
+	_ = cmd.Flags().Set("token", "test-token")
+	_ = cmd.Flags().Set("auth-type", "oauth2")
+
+	var stderrBuf bytes.Buffer
+	origStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	err := runConfigure(cmd, nil)
+
+	w.Close()
+	stderrData := make([]byte, 4096)
+	n, _ := r.Read(stderrData)
+	os.Stderr = origStderr
+
+	if err == nil {
+		t.Fatal("expected error when configuring oauth2")
+	}
+	stderrStr := string(stderrData[:n])
+	_ = stderrBuf // suppress unused warning
+	if !strings.Contains(stderrStr, "oauth2 is not supported by the configure command") {
+		t.Errorf("expected helpful oauth2 rejection message, got: %s", stderrStr)
+	}
+}
+
+// --- Bug #46 (e2e): OAuth2 failure produces single error, not double ---
+// Verifies that Do() returns ExitAuth (2) with a single auth_error on stderr
+// when OAuth2 token fetch fails, instead of the old behavior where the request
+// continued without auth and produced a second 401 error.
+
+func TestOAuth2Failure_SingleError_ExitAuth(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, `{"error":"invalid_grant"}`)
+	}))
+	defer tokenServer.Close()
+
+	apiHit := false
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiHit = true
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"error":"not_authenticated"}`)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(apiServer.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		TokenURL:     tokenServer.URL,
+		ClientID:     "id",
+		ClientSecret: "secret",
+	}
+
+	code := c.Do(context.Background(), "GET", "/rest/api/3/myself", nil, nil)
+
+	if code != jrerrors.ExitAuth {
+		t.Errorf("expected exit code %d (auth), got %d", jrerrors.ExitAuth, code)
+	}
+	if apiHit {
+		t.Error("API server should NOT have been hit when OAuth2 token fetch failed")
+	}
+
+	// Stderr should contain exactly one error (auth_error), not two.
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 error line on stderr, got %d: %s", len(lines), stderr.String())
+	}
+	if !strings.Contains(lines[0], "auth_error") {
+		t.Errorf("expected auth_error in stderr, got: %s", lines[0])
 	}
 }

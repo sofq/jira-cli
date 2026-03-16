@@ -99,6 +99,18 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	}
 	authType = strings.ToLower(authType)
 
+	// Reject oauth2 in configure: required fields (client_id, client_secret,
+	// token_url) cannot be set via CLI flags, so saving an oauth2 profile here
+	// would always produce an incomplete config that fails at runtime.
+	if authType == "oauth2" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "--auth-type oauth2 is not supported by the configure command; oauth2 profiles require client_id, client_secret, and token_url which must be set manually in the config file (" + config.DefaultPath() + ")",
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+
 	// Normalize base URL: strip trailing slashes to avoid double-slash issues.
 	baseURL = strings.TrimRight(baseURL, "/")
 
