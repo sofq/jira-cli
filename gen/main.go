@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,12 +11,12 @@ import (
 // run is the main logic, extracted for testability.
 func run(specPath, outDir string) error {
 	// 1. Parse the OpenAPI spec.
-	fmt.Printf("Parsing spec: %s\n", specPath)
+	log.Printf("Parsing spec: %s", specPath)
 	ops, err := ParseSpec(specPath)
 	if err != nil {
 		return fmt.Errorf("error parsing spec: %w", err)
 	}
-	fmt.Printf("  Found %d operations\n", len(ops))
+	log.Printf("  Found %d operations", len(ops))
 
 	// 2. Group operations by resource.
 	groups := GroupOperations(ops)
@@ -26,10 +27,10 @@ func run(specPath, outDir string) error {
 		resources = append(resources, r)
 	}
 	sort.Strings(resources)
-	fmt.Printf("  Found %d resource groups\n", len(resources))
+	log.Printf("  Found %d resource groups", len(resources))
 
 	// 4. Clean and recreate the output directory.
-	fmt.Printf("Cleaning output directory: %s\n", outDir)
+	log.Printf("Cleaning output directory: %s", outDir)
 	if err := os.RemoveAll(outDir); err != nil {
 		return fmt.Errorf("error cleaning output dir: %w", err)
 	}
@@ -38,28 +39,28 @@ func run(specPath, outDir string) error {
 	}
 
 	// 5. Generate one file per resource.
-	fmt.Println("Generating resource files...")
+	log.Println("Generating resource files...")
 	for _, resource := range resources {
 		if err := GenerateResource(resource, groups[resource], outDir); err != nil {
 			return fmt.Errorf("error generating resource %q: %w", resource, err)
 		}
-		fmt.Printf("  %s (%d ops)\n", resource, len(groups[resource]))
+		log.Printf("  %s (%d ops)", resource, len(groups[resource]))
 	}
 
 	// 6. Generate schema data.
-	fmt.Println("Generating schema_data.go...")
+	log.Println("Generating schema_data.go...")
 	if err := GenerateSchemaData(groups, resources, outDir); err != nil {
 		return fmt.Errorf("error generating schema data: %w", err)
 	}
 
 	// 7. Generate init.go (excluding resources with hand-written commands).
-	fmt.Println("Generating init.go...")
+	log.Println("Generating init.go...")
 	if err := GenerateInit(resources, outDir); err != nil {
 		return fmt.Errorf("error generating init: %w", err)
 	}
 
 	// 8. Summary.
-	fmt.Printf("\nDone! Generated %d resource files + schema_data.go + init.go in %s\n",
+	log.Printf("Done! Generated %d resource files + schema_data.go + init.go in %s",
 		len(resources), outDir)
 	return nil
 }
@@ -71,7 +72,7 @@ func main() {
 	specPath := filepath.Join("spec", "jira-v3.json")
 	outDir := filepath.Join("cmd", "generated")
 	if err := run(specPath, outDir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		log.Println(err)
 		exitFn(1)
 	}
 }

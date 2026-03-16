@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -299,7 +300,8 @@ func testConnection(baseURL, authType, username, token string) error {
 		req.SetBasicAuth(username, token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
