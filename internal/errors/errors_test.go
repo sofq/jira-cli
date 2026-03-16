@@ -526,6 +526,18 @@ func TestAPIErrorRetryAfterOmittedWhenNil(t *testing.T) {
 	}
 }
 
+// TestAlreadyWrittenErrorError verifies that the AlreadyWrittenError sentinel
+// implements the error interface with the expected message.
+func TestAlreadyWrittenErrorError(t *testing.T) {
+	err := &jrerrors.AlreadyWrittenError{Code: 3}
+	if err.Error() != "error already written" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "error already written")
+	}
+	if err.Code != 3 {
+		t.Errorf("Code = %d, want 3", err.Code)
+	}
+}
+
 // TestAPIErrorRequestOmittedWhenNil verifies that a manually constructed
 // APIError with a nil Request does not include a request field in JSON output.
 func TestAPIErrorRequestOmittedWhenNil(t *testing.T) {

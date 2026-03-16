@@ -23,7 +23,12 @@ jobs:
         run: go build ./...
 
       - name: Unit tests
-        run: go test ./internal/... ./gen/... ./test/e2e/ -v
+        run: go test ./internal/... ./gen/... ./test/e2e/ -v -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
 
   lint:
     runs-on: ubuntu-latest

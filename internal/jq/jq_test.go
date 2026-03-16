@@ -380,6 +380,19 @@ func TestApplyNoHTMLEscapingMultipleResults(t *testing.T) {
 	}
 }
 
+// TestApplyRuntimeError verifies that a jq expression that produces a runtime
+// error (via the error() builtin) is surfaced as a Go error.
+func TestApplyRuntimeError(t *testing.T) {
+	input := []byte(`{"x":1}`)
+	_, err := jq.Apply(input, `error("boom")`)
+	if err == nil {
+		t.Fatal("expected error from jq error() builtin, got nil")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("expected error to contain 'boom', got: %v", err)
+	}
+}
+
 // TestApplyLargeInput verifies that Apply handles a ~50 KB JSON document with
 // a complex filter without error and returns a non-empty result.
 func TestApplyLargeInput(t *testing.T) {

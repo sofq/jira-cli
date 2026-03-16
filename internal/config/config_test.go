@@ -706,6 +706,238 @@ func TestResolveRejectsInvalidAuthType(t *testing.T) {
 	}
 }
 
+// TestDefaultPathWithoutEnv verifies that DefaultPath returns a non-empty
+// OS-specific path when JR_CONFIG_PATH is not set.
+func TestDefaultPathWithoutEnv(t *testing.T) {
+	setEnv(t, map[string]string{"JR_CONFIG_PATH": ""})
+
+	got := config.DefaultPath()
+	if got == "" {
+		t.Error("DefaultPath() returned empty string when JR_CONFIG_PATH is unset")
+	}
+	if !strings.Contains(got, "config.json") {
+		t.Errorf("DefaultPath() = %q, expected path ending in config.json", got)
+	}
+}
+
+// TestDefaultPathPerOS verifies the OS-specific branches in DefaultPath.
+func TestDefaultPathPerOS(t *testing.T) {
+	setEnv(t, map[string]string{"JR_CONFIG_PATH": ""})
+
+	tests := []struct {
+		goos     string
+		wantSub  string
+	}{
+		{"darwin", filepath.Join("Library", "Application Support", "jr", "config.json")},
+		{"linux", filepath.Join(".config", "jr", "config.json")},
+		{"windows", filepath.Join("jr", "config.json")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			if tt.goos == "windows" {
+				setEnv(t, map[string]string{"APPDATA": "/fake/appdata"})
+			}
+			config.SetGOOS(tt.goos)
+			t.Cleanup(func() { config.ResetGOOS() })
+
+			got := config.DefaultPath()
+			if !strings.Contains(got, tt.wantSub) {
+				t.Errorf("DefaultPath() with GOOS=%s = %q, want substring %q", tt.goos, got, tt.wantSub)
+			}
+		})
+	}
+}
+
+// TestLoadFromReadError verifies that LoadFrom returns an error (not a
+// fallback empty config) when the file exists but cannot be read.
+func TestLoadFromReadError(t *testing.T) {
+	dir := t.TempDir()
+	// Use a directory as the file path — reading a directory as a file fails.
+	_, err := config.LoadFrom(dir)
+	if err == nil {
+		t.Fatal("expected error when reading a directory as a file, got nil")
+	}
+}
+
+// TestLoadFromNullProfiles verifies that LoadFrom initialises the Profiles
+// map when the JSON has "profiles": null.
+func TestLoadFromNullProfiles(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	if err := os.WriteFile(cfgPath, []byte(`{"profiles":null,"default_profile":"x"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := config.LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Profiles == nil {
+		t.Error("expected Profiles to be initialised (non-nil), got nil")
+	}
+}
+
+// TestSaveToMkdirAllError verifies that SaveTo returns an error when it
+// cannot create parent directories.
+func TestSaveToMkdirAllError(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file where a directory is expected.
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	// Try to save under blocker/sub/config.json — MkdirAll should fail.
+	cfgPath := filepath.Join(blocker, "sub", "config.json")
+	cfg := &config.Config{Profiles: map[string]config.Profile{}}
+	if err := config.SaveTo(cfg, cfgPath); err == nil {
+		t.Fatal("expected MkdirAll error, got nil")
+	}
+}
+
+// TestResolveLoadFromError verifies that Resolve surfaces LoadFrom errors.
+func TestResolveLoadFromError(t *testing.T) {
+	dir := t.TempDir()
+	setEnv(t, map[string]string{
+		"JR_BASE_URL":   "",
+		"JR_AUTH_TYPE":  "",
+		"JR_AUTH_USER":  "",
+		"JR_AUTH_TOKEN": "",
+	})
+	// Use a directory as the config path to trigger a read error.
+	_, err := config.Resolve(dir, "", nil)
+	if err == nil {
+		t.Fatal("expected Resolve to return error from LoadFrom, got nil")
+	}
+}
+
+// TestResolveNonexistentProfileNoProfiles verifies the "(none)" branch of
+// availableProfiles when the config has zero profiles.
+func TestResolveNonexistentProfileNoProfiles(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{Profiles: map[string]config.Profile{}}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	setEnv(t, map[string]string{
+		"JR_BASE_URL":   "",
+		"JR_AUTH_TYPE":  "",
+		"JR_AUTH_USER":  "",
+		"JR_AUTH_TOKEN": "",
+	})
+
+	_, err := config.Resolve(cfgPath, "nonexistent", nil)
+	if err == nil {
+		t.Fatal("expected error for nonexistent profile, got nil")
+	}
+	if !strings.Contains(err.Error(), "(none)") {
+		t.Errorf("error should contain '(none)' for empty profiles, got: %v", err)
+	}
+}
+
+// TestResolveFlagsUsernameAndAuthType verifies that flags.Username and
+// flags.AuthType override all other sources.
+func TestResolveFlagsUsernameAndAuthType(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "file-user", Token: "tok"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	setEnv(t, map[string]string{
+		"JR_BASE_URL":   "",
+		"JR_AUTH_TYPE":  "",
+		"JR_AUTH_USER":  "",
+		"JR_AUTH_TOKEN": "",
+	})
+
+	flags := &config.FlagOverrides{
+		Username: "flag-user",
+		AuthType: "bearer",
+	}
+	resolved, err := config.Resolve(cfgPath, "", flags)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if resolved.Auth.Username != "flag-user" {
+		t.Errorf("Auth.Username = %q, want %q", resolved.Auth.Username, "flag-user")
+	}
+	if resolved.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "bearer")
+	}
+}
+
+// TestResolveOAuth2MissingFields verifies that each required OAuth2 field
+// produces a validation error when missing.
+func TestResolveOAuth2MissingFields(t *testing.T) {
+	tests := []struct {
+		name         string
+		clientID     string
+		clientSecret string
+		tokenURL     string
+		wantMissing  string
+	}{
+		{"missing_client_id", "", "secret", "https://tok", "client_id"},
+		{"missing_client_secret", "cid", "", "https://tok", "client_secret"},
+		{"missing_token_url", "cid", "secret", "", "token_url"},
+		{"missing_all", "", "", "", "client_id"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.json")
+
+			cfg := &config.Config{
+				Profiles: map[string]config.Profile{
+					"default": {
+						BaseURL: "https://example.com",
+						Auth: config.AuthConfig{
+							Type:         "oauth2",
+							ClientID:     tt.clientID,
+							ClientSecret: tt.clientSecret,
+							TokenURL:     tt.tokenURL,
+						},
+					},
+				},
+				DefaultProfile: "default",
+			}
+			if err := config.SaveTo(cfg, cfgPath); err != nil {
+				t.Fatalf("SaveTo: %v", err)
+			}
+
+			setEnv(t, map[string]string{
+				"JR_BASE_URL":   "",
+				"JR_AUTH_TYPE":  "",
+				"JR_AUTH_USER":  "",
+				"JR_AUTH_TOKEN": "",
+			})
+
+			_, err := config.Resolve(cfgPath, "", nil)
+			if err == nil {
+				t.Fatal("expected error for missing OAuth2 fields, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantMissing) {
+				t.Errorf("error should mention %q, got: %v", tt.wantMissing, err)
+			}
+		})
+	}
+}
+
 // TestResolveNormalizesAuthTypeCase verifies that auth type is lowercased.
 func TestResolveNormalizesAuthTypeCase(t *testing.T) {
 	dir := t.TempDir()
