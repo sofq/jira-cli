@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/client"
@@ -54,6 +55,7 @@ var rootCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		fields, _ := cmd.Flags().GetString("fields")
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
+		timeout, _ := cmd.Flags().GetDuration("timeout")
 
 		flags := &config.FlagOverrides{
 			BaseURL:  baseURL,
@@ -86,7 +88,7 @@ var rootCmd = &cobra.Command{
 		c := &client.Client{
 			BaseURL:    resolved.BaseURL,
 			Auth:       resolved.Auth,
-			HTTPClient: http.DefaultClient,
+			HTTPClient: &http.Client{Timeout: timeout},
 			Stdout:     os.Stdout,
 			Stderr:     os.Stderr,
 			JQFilter:   jqFilter,
@@ -117,6 +119,7 @@ func init() {
 	pf.Bool("dry-run", false, "print the request as JSON without executing it")
 	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
 	pf.Duration("cache", 0, "cache GET responses for this duration (e.g. 5m, 1h)")
+	pf.Duration("timeout", 30*time.Second, "HTTP request timeout (e.g. 10s, 1m)")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
