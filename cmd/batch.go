@@ -234,7 +234,7 @@ func executeBatchOp(
 		Paginate:   baseClient.Paginate,
 		DryRun:     baseClient.DryRun,
 		Verbose:    baseClient.Verbose,
-		Pretty:     baseClient.Pretty,
+		Pretty:     false, // Pretty is applied to the batch output array, not per-op.
 		Fields:     baseClient.Fields,
 		CacheTTL:   baseClient.CacheTTL,
 	}
