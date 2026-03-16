@@ -140,7 +140,8 @@ func HintFromStatus(status int) string {
 // it returns a generic message with the HTTP status instead of the raw HTML.
 func sanitizeBody(body string, status int) string {
 	trimmed := strings.TrimSpace(body)
-	if strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<html") || strings.HasPrefix(trimmed, "<HTML") {
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "<!") || strings.HasPrefix(lower, "<html") || strings.HasPrefix(lower, "<head") || strings.HasPrefix(lower, "<body") {
 		return fmt.Sprintf("HTTP %d: server returned HTML error page", status)
 	}
 	return body

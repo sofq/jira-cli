@@ -417,7 +417,7 @@ func TestSanitizeBodyPlainText(t *testing.T) {
 }
 
 // TestSanitizeBodyHTMLVariants verifies that HTML bodies starting with
-// <html>, <!DOCTYPE, and <HTML> are all replaced with a generic message.
+// various HTML-like prefixes are replaced with a generic message.
 func TestSanitizeBodyHTMLVariants(t *testing.T) {
 	variants := []struct {
 		name string
@@ -426,6 +426,12 @@ func TestSanitizeBodyHTMLVariants(t *testing.T) {
 		{"html-lowercase", `<html><body>error</body></html>`},
 		{"doctype", `<!DOCTYPE html><html><body>error</body></html>`},
 		{"html-uppercase", `<HTML><BODY>error</BODY></HTML>`},
+		// Bug #52: case-insensitive and additional HTML prefixes
+		{"html-mixed-case", `<Html><Body>Error</Body></Html>`},
+		{"head-tag", `<head><title>Error</title></head><body>error</body>`},
+		{"HEAD-uppercase", `<HEAD><TITLE>Error</TITLE></HEAD>`},
+		{"body-tag", `<body>Server Error</body>`},
+		{"doctype-mixed", `<!doctype html><HTML>error</HTML>`},
 	}
 
 	for _, tt := range variants {
