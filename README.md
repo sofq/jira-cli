@@ -3,7 +3,6 @@
 [![CI](https://github.com/sofq/jira-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/sofq/jira-cli/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/sofq/jira-cli/graph/badge.svg)](https://codecov.io/gh/sofq/jira-cli)
 [![Security](https://github.com/sofq/jira-cli/actions/workflows/security.yml/badge.svg)](https://github.com/sofq/jira-cli/actions/workflows/security.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/sofq/jira-cli/badge)](https://scorecard.dev/viewer/?uri=github.com/sofq/jira-cli)
 [![Release](https://github.com/sofq/jira-cli/actions/workflows/release.yml/badge.svg)](https://github.com/sofq/jira-cli/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
