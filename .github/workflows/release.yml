@@ -11,9 +11,7 @@ on:
         required: true
 
 permissions:
-  contents: write
-  packages: write
-  id-token: write
+  contents: read
 
 env:
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -21,6 +19,11 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
     # Skip if manually dispatched — release already exists
     if: github.event_name != 'workflow_dispatch'
     steps:
@@ -51,8 +54,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
+      - name: Generate provenance attestation
+        uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
+        with:
+          subject-path: dist/*.tar.gz,dist/*.zip,dist/checksums.txt
+
   npm-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: release
     if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
     continue-on-error: true
@@ -77,6 +87,9 @@ jobs:
 
   pypi-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: release
     if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
     continue-on-error: true
@@ -95,7 +108,7 @@ jobs:
 
       - name: Build package
         run: |
-          pip install build
+          pip install build==1.4.0
           cd python && python -m build
 
       - name: Publish to PyPI
