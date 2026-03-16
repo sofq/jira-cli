@@ -174,6 +174,7 @@ Example error output:
 | `--no-paginate` | disable automatic pagination |
 | `--dry-run` | show the request without executing it |
 | `--verbose` | log HTTP details to stderr (JSON) |
+| `--timeout <duration>` | HTTP request timeout (default 30s) |
 | `--profile <name>` | use a named config profile |
 
 ## Pagination

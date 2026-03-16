@@ -59,8 +59,8 @@ var status_get_statuses = &cobra.Command{
 	},
 }
 
-var status_get = &cobra.Command{
-	Use:   "get",
+var status_get_status = &cobra.Command{
+	Use:   "get-status",
 	Short: "Get status",
 	Long:  "Returns a status. The status must be associated with an active workflow to be returned.\n\nIf a name is used on more than one status, only the status found first is returned. Therefore, identifying the status by its ID may be preferable.\n\nThis operation can be accessed anonymously.\n\n[Permissions](#permissions) required: *Browse projects* [project permission](https://support.atlassian.com/jira-cloud-administration/docs/manage-project-permissions/) for the project.",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,8 +93,8 @@ func init() {
 
 	statusCmd.AddCommand(status_get_statuses)
 
-	status_get.Flags().String("idOrName", "", "The ID or name of the status.")
-	status_get.MarkFlagRequired("idOrName")
-	statusCmd.AddCommand(status_get)
+	status_get_status.Flags().String("idOrName", "", "The ID or name of the status.")
+	status_get_status.MarkFlagRequired("idOrName")
+	statusCmd.AddCommand(status_get_status)
 
 }

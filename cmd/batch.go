@@ -69,7 +69,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	// Read input.
@@ -85,7 +85,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "cannot read input file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 	} else {
 		// Read from stdin.
@@ -97,7 +97,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "no input provided: use --input <file> or pipe JSON to stdin",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		inputData, err = io.ReadAll(os.Stdin)
 		if err != nil {
@@ -107,7 +107,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "failed to read stdin: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 	}
 
@@ -120,10 +120,10 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "invalid JSON input: expected a JSON array of operations; " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
-	// Bug #17: Reject null/empty input explicitly.
+	// Reject null/empty input explicitly.
 	if ops == nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
@@ -131,7 +131,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "invalid JSON input: expected a JSON array of operations, got null",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Load all schema ops for lookup (generated + hand-written).
@@ -164,7 +164,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "failed to encode results: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	output := bytes.TrimRight(resultBuf.Bytes(), "\n")
@@ -179,7 +179,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "jq: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		output = filtered
 	}
@@ -191,7 +191,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stdout, "%s\n", strings.TrimRight(string(output), "\n"))
 
-	// Bug #9: Exit with highest-severity exit code from batch operations.
+	// Exit with highest-severity exit code from batch operations.
 	maxExit := 0
 	for _, r := range results {
 		if r.ExitCode > maxExit {
@@ -199,7 +199,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if maxExit != 0 {
-		return &errAlreadyWritten{code: maxExit}
+		return &jrerrors.AlreadyWrittenError{Code: maxExit}
 	}
 
 	return nil
@@ -269,7 +269,7 @@ func executeBatchOp(
 		}
 	}
 
-	// Bug #73: If the batch op explicitly specifies "fields" in its args,
+	// If the batch op explicitly specifies "fields" in its args,
 	// clear the per-op client's Fields so that client.Do() does not overwrite
 	// the per-op value with the global --fields flag.
 	if _, hasFields := bop.Args["fields"]; hasFields {
@@ -323,64 +323,15 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		return c.WriteOutput(out)
 	}
 
-	transitionsBody, exitCode := fetchJSON(c, ctx, "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
-	if exitCode != jrerrors.ExitOK {
-		return exitCode
+	match, code := resolveTransition(ctx, c, issueKey, toStatus)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
-	var transResp struct {
-		Transitions []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			To   struct {
-				Name string `json:"name"`
-			} `json:"to"`
-		} `json:"transitions"`
-	}
-	if err := json.Unmarshal(transitionsBody, &transResp); err != nil {
-		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse transitions: " + err.Error()}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-
-	toLower := strings.ToLower(toStatus)
-	var matchedID, matchedName string
-	for _, tr := range transResp.Transitions {
-		if strings.ToLower(tr.Name) == toLower || strings.ToLower(tr.To.Name) == toLower {
-			matchedID = tr.ID
-			matchedName = tr.Name
-			break
-		}
-	}
-	if matchedID == "" {
-		for _, tr := range transResp.Transitions {
-			if strings.Contains(strings.ToLower(tr.Name), toLower) ||
-				strings.Contains(strings.ToLower(tr.To.Name), toLower) {
-				matchedID = tr.ID
-				matchedName = tr.Name
-				break
-			}
-		}
-	}
-	if matchedID == "" {
-		names := make([]string, len(transResp.Transitions))
-		for i, tr := range transResp.Transitions {
-			names[i] = tr.Name
-		}
-		apiErr := &jrerrors.APIError{
-			ErrorType: "validation_error",
-			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitValidation
-	}
-
-	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
-	body := string(transBody)
-	_, code := fetchJSONWithBody(c, ctx, "POST",
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
+	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		strings.NewReader(body))
+		strings.NewReader(string(transBody)))
 	if code != jrerrors.ExitOK {
 		return code
 	}
@@ -388,7 +339,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 	out, _ := marshalNoEscape(map[string]string{
 		"status":     "transitioned",
 		"issue":      issueKey,
-		"transition": matchedName,
+		"transition": match.Name,
 	})
 	return c.WriteOutput(out)
 }
@@ -404,27 +355,14 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		return c.WriteOutput(out)
 	}
 
-	var accountID string
+	accountID, isUnassign, code := resolveAssignee(ctx, c, to)
+	if code != jrerrors.ExitOK {
+		return code
+	}
 
-	switch strings.ToLower(to) {
-	case "me":
-		body, code := fetchJSON(c, ctx, "GET", "/rest/api/3/myself")
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		var me struct {
-			AccountID string `json:"accountId"`
-		}
-		if err := json.Unmarshal(body, &me); err != nil || me.AccountID == "" {
-			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "could not determine your account ID from /myself"}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-		accountID = me.AccountID
-
-	case "none", "unassign":
+	if isUnassign {
 		assignBody := `{"accountId":null}`
-		_, code := fetchJSONWithBody(c, ctx, "PUT",
+		_, code := c.Fetch(ctx, "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			strings.NewReader(assignBody))
 		if code != jrerrors.ExitOK {
@@ -432,41 +370,73 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		}
 		out, _ := marshalNoEscape(map[string]string{"status": "unassigned", "issue": issueKey})
 		return c.WriteOutput(out)
-
-	default:
-		body, code := fetchJSON(c, ctx, "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		var users []struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		}
-		if err := json.Unmarshal(body, &users); err != nil {
-			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "failed to parse user search response: " + err.Error()}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitError
-		}
-		if len(users) == 0 {
-			apiErr := &jrerrors.APIError{ErrorType: "not_found", Message: fmt.Sprintf("no user found matching %q", to)}
-			apiErr.WriteJSON(c.Stderr)
-			return jrerrors.ExitNotFound
-		}
-		accountID = users[0].AccountID
 	}
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-	assignBody := string(marshaledAssign)
-	_, code := fetchJSONWithBody(c, ctx, "PUT",
+	_, code = c.Fetch(ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		strings.NewReader(assignBody))
+		strings.NewReader(string(marshaledAssign)))
 	if code != jrerrors.ExitOK {
 		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
 	return c.WriteOutput(out)
+}
+
+// stripVerboseLogs separates verbose log lines from error lines in captured stderr.
+// Verbose lines (with "type":"request"/"response") are forwarded to real stderr.
+// Returns only the non-verbose (error) lines joined as a single string.
+func stripVerboseLogs(stderrStr string) string {
+	var errorLines []string
+	for _, line := range strings.Split(strings.TrimSpace(stderrStr), "\n") {
+		if line == "" {
+			continue
+		}
+		var parsed map[string]any
+		if json.Unmarshal([]byte(line), &parsed) == nil {
+			if tp, ok := parsed["type"].(string); ok && (tp == "request" || tp == "response") {
+				fmt.Fprintln(os.Stderr, line)
+				continue
+			}
+		}
+		errorLines = append(errorLines, line)
+	}
+	return strings.Join(errorLines, "\n")
+}
+
+// parseErrorJSON parses stderr output into a json.RawMessage.
+// Handles single JSON objects, multiple JSON lines, and plain text.
+func parseErrorJSON(errOutput string) json.RawMessage {
+	if json.Valid([]byte(errOutput)) {
+		return json.RawMessage(errOutput)
+	}
+	lines := strings.Split(errOutput, "\n")
+	if len(lines) > 1 {
+		var jsonLines []json.RawMessage
+		allValid := true
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if json.Valid([]byte(line)) {
+				jsonLines = append(jsonLines, json.RawMessage(line))
+			} else {
+				allValid = false
+				break
+			}
+		}
+		if allValid && len(jsonLines) == 1 {
+			return jsonLines[0]
+		}
+		if allValid && len(jsonLines) > 1 {
+			arrBytes, _ := json.Marshal(jsonLines)
+			return json.RawMessage(arrBytes)
+		}
+	}
+	encoded, _ := json.Marshal(map[string]string{"message": errOutput})
+	return json.RawMessage(encoded)
 }
 
 // buildBatchResult constructs a BatchResult from captured stdout/stderr.
@@ -476,69 +446,14 @@ func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder
 	stderrStr := stderrBuf.String()
 
 	if verbose && stderrStr != "" {
-		// Forward verbose log lines to real stderr. Verbose lines are JSON
-		// objects with a "type" field ("request" or "response"). Error lines
-		// are JSON objects with an "error_type" field. We forward verbose
-		// lines and keep error lines for the result.
-		var errorLines []string
-		for _, line := range strings.Split(strings.TrimSpace(stderrStr), "\n") {
-			if line == "" {
-				continue
-			}
-			// Detect verbose logs by parsing JSON and checking the "type" field.
-			var parsed map[string]interface{}
-			if json.Unmarshal([]byte(line), &parsed) == nil {
-				if tp, ok := parsed["type"].(string); ok && (tp == "request" || tp == "response") {
-					fmt.Fprintln(os.Stderr, line)
-					continue
-				}
-			}
-			errorLines = append(errorLines, line)
-		}
-		stderrStr = strings.Join(errorLines, "\n")
+		stderrStr = stripVerboseLogs(stderrStr)
 	}
 
 	if exitCode != jrerrors.ExitOK {
-		errOutput := strings.TrimSpace(stderrStr)
-		var rawErr json.RawMessage
-		if json.Valid([]byte(errOutput)) {
-			rawErr = json.RawMessage(errOutput)
-		} else {
-			// Multiple JSON error lines? Try to parse each line and collect into an array.
-			lines := strings.Split(errOutput, "\n")
-			if len(lines) > 1 {
-				var jsonLines []json.RawMessage
-				allValid := true
-				for _, line := range lines {
-					line = strings.TrimSpace(line)
-					if line == "" {
-						continue
-					}
-					if json.Valid([]byte(line)) {
-						jsonLines = append(jsonLines, json.RawMessage(line))
-					} else {
-						allValid = false
-						break
-					}
-				}
-				if allValid && len(jsonLines) == 1 {
-					rawErr = jsonLines[0]
-				} else if allValid && len(jsonLines) > 1 {
-					arrBytes, _ := json.Marshal(jsonLines)
-					rawErr = json.RawMessage(arrBytes)
-				} else {
-					encoded, _ := json.Marshal(map[string]string{"message": errOutput})
-					rawErr = json.RawMessage(encoded)
-				}
-			} else {
-				encoded, _ := json.Marshal(map[string]string{"message": errOutput})
-				rawErr = json.RawMessage(encoded)
-			}
-		}
 		return BatchResult{
 			Index:    index,
 			ExitCode: exitCode,
-			Error:    rawErr,
+			Error:    parseErrorJSON(strings.TrimSpace(stderrStr)),
 		}
 	}
 

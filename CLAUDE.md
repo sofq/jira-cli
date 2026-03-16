@@ -78,6 +78,7 @@ jr schema issue get           # full schema with flags for one operation
 | `--no-paginate` | disable auto-pagination |
 | `--dry-run` | show request without executing |
 | `--verbose` | log HTTP details to stderr (JSON) |
+| `--timeout <duration>` | HTTP request timeout (default 30s) |
 | `--profile <name>` | use named config profile |
 
 ## Development

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/client"
@@ -22,13 +23,6 @@ var skipClientCommands = map[string]bool{
 	"help":       true,
 	"schema":     true,
 }
-
-// errAlreadyWritten is a sentinel error indicating that the JSON error has
-// already been written to stderr by PersistentPreRunE, so Execute() should
-// not write a second one.
-type errAlreadyWritten struct{ code int }
-
-func (e *errAlreadyWritten) Error() string { return "error already written" }
 
 var rootCmd = &cobra.Command{
 	Use:           "jr",
@@ -61,6 +55,7 @@ var rootCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		fields, _ := cmd.Flags().GetString("fields")
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
+		timeout, _ := cmd.Flags().GetDuration("timeout")
 
 		flags := &config.FlagOverrides{
 			BaseURL:  baseURL,
@@ -77,7 +72,7 @@ var rootCmd = &cobra.Command{
 				Message:   "failed to resolve config: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 
 		if resolved.BaseURL == "" {
@@ -87,13 +82,13 @@ var rootCmd = &cobra.Command{
 				Message:   "base_url is not set; run `jr configure --base-url <url> --token <token>` or set JR_BASE_URL",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 
 		c := &client.Client{
 			BaseURL:    resolved.BaseURL,
 			Auth:       resolved.Auth,
-			HTTPClient: http.DefaultClient,
+			HTTPClient: &http.Client{Timeout: timeout},
 			Stdout:     os.Stdout,
 			Stderr:     os.Stderr,
 			JQFilter:   jqFilter,
@@ -124,6 +119,7 @@ func init() {
 	pf.Bool("dry-run", false, "print the request as JSON without executing it")
 	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
 	pf.Duration("cache", 0, "cache GET responses for this duration (e.g. 5m, 1h)")
+	pf.Duration("timeout", 30*time.Second, "HTTP request timeout (e.g. 10s, 1m)")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
@@ -143,10 +139,6 @@ func init() {
 // Execute runs the root command and returns an exit code.
 func Execute() int {
 	if err := rootCmd.Execute(); err != nil {
-		// If error was already written to stderr, don't write again.
-		if aw, ok := err.(*errAlreadyWritten); ok {
-			return aw.code
-		}
 		if aw, ok := err.(*jrerrors.AlreadyWrittenError); ok {
 			return aw.Code
 		}
@@ -195,7 +187,7 @@ func init() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd == rootCmd {
-			// Bug #6: Output a helpful JSON hint and exit 0 for explicit --help / help.
+			// Output a helpful JSON hint and exit 0 for explicit --help / help.
 			var buf bytes.Buffer
 			enc := json.NewEncoder(&buf)
 			enc.SetEscapeHTML(false)
@@ -204,7 +196,6 @@ func init() {
 				"version": Version,
 			})
 			fmt.Fprintf(os.Stdout, "%s", buf.String())
-			os.Exit(jrerrors.ExitOK)
 			return
 		}
 		// Write help text to stderr so stdout stays JSON-only.

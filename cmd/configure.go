@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -47,7 +48,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 				Message:   "--profile is required when using --delete (to prevent accidental deletion of the default profile)",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		return deleteProfileByName(cmd, profileName)
 	}
@@ -59,7 +60,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "--profile must not be empty or whitespace-only",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Test-only mode: when --test is set but no --base-url/--token are provided,
@@ -76,7 +77,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "--base-url must not be empty",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 	if strings.TrimSpace(token) == "" {
 		apiErr := &jrerrors.APIError{
@@ -84,18 +85,17 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "--token must not be empty",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Validate auth-type before saving or testing.
-	validAuthTypes := map[string]bool{"basic": true, "bearer": true, "oauth2": true}
-	if !validAuthTypes[strings.ToLower(authType)] {
+	if !config.ValidAuthType(authType) {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
 			Message:   fmt.Sprintf("invalid --auth-type %q; must be one of: basic, bearer, oauth2", authType),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 	authType = strings.ToLower(authType)
 
@@ -108,7 +108,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "--auth-type oauth2 is not supported by the configure command; oauth2 profiles require client_id, client_secret, and token_url which must be set manually in the config file (" + config.DefaultPath() + ")",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Normalize base URL: strip trailing slashes to avoid double-slash issues.
@@ -122,7 +122,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 				Message:   "connection test failed: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 	}
 
@@ -135,7 +135,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "failed to load config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	cfg.Profiles[profileName] = config.Profile{
@@ -158,7 +158,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			Message:   "failed to save config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -181,7 +181,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 			Message:   "failed to load config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	// Resolve profile name: use default_profile only if --profile was not
@@ -205,7 +205,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 			Message:   fmt.Sprintf("profile %q not found; available profiles: %s", name, strings.Join(availableNames, ", ")),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 	}
 
 	if strings.TrimSpace(profile.BaseURL) == "" {
@@ -214,7 +214,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 			Message:   fmt.Sprintf("profile %q has no base_url configured", name),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	if err := testConnection(profile.BaseURL, profile.Auth.Type, profile.Auth.Username, profile.Auth.Token); err != nil {
@@ -224,7 +224,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 			Message:   "connection test failed: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -244,7 +244,7 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 			Message:   "failed to load config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	if _, ok := cfg.Profiles[name]; !ok {
@@ -258,7 +258,7 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 			Message:   fmt.Sprintf("profile %q not found; available profiles: %s", name, strings.Join(availableNames, ", ")),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 	}
 
 	delete(cfg.Profiles, name)
@@ -272,7 +272,7 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 			Message:   "failed to save config: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -300,7 +300,8 @@ func testConnection(baseURL, authType, username, token string) error {
 		req.SetBasicAuth(username, token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

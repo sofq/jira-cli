@@ -212,12 +212,12 @@ func TestConfigureDelete_RequiresExplicitProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when --delete used without --profile")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -232,13 +232,13 @@ func TestFetchJSONWithBody_SingleOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	body, code := fetchJSONWithBody(c, t.Context(), "POST", "/test", strings.NewReader(`{}`))
+	body, code := c.Fetch(t.Context(), "POST", "/test", strings.NewReader(`{}`))
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
-	// fetchJSONWithBody should NOT write anything to stdout.
+	// c.Fetch should NOT write anything to stdout.
 	if stdout.String() != "" {
-		t.Errorf("fetchJSONWithBody should not write to stdout, got: %s", stdout.String())
+		t.Errorf("c.Fetch should not write to stdout, got: %s", stdout.String())
 	}
 	// Body should be empty for 204.
 	if len(body) != 0 {
@@ -275,9 +275,9 @@ func TestConfigureTest_SingleError(t *testing.T) {
 		t.Fatal("expected error for failed connection test")
 	}
 
-	// The error should be errAlreadyWritten, not a raw error (which causes duplicate output).
-	if _, ok := err.(*errAlreadyWritten); !ok {
-		t.Errorf("expected errAlreadyWritten to prevent duplicate errors, got %T: %v", err, err)
+	// The error should be AlreadyWrittenError, not a raw error (which causes duplicate output).
+	if _, ok := err.(*jrerrors.AlreadyWrittenError); !ok {
+		t.Errorf("expected AlreadyWrittenError to prevent duplicate errors, got %T: %v", err, err)
 	}
 }
 
@@ -374,7 +374,7 @@ func TestFetchJSON_VerboseLogging(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.Verbose = true
 
-	_, code := fetchJSON(c, t.Context(), "GET", "/test")
+	_, code := c.Fetch(t.Context(), "GET", "/test", nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -398,7 +398,7 @@ func TestFetchJSON_NoVerboseByDefault(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	_, code := fetchJSON(c, t.Context(), "GET", "/test")
+	_, code := c.Fetch(t.Context(), "GET", "/test", nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -599,7 +599,7 @@ func TestFetchJSONWithBody_Error(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	_, code := fetchJSONWithBody(c, t.Context(), "POST", "/test", strings.NewReader(`{}`))
+	_, code := c.Fetch(t.Context(), "POST", "/test", strings.NewReader(`{}`))
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit code for 403 response")
 	}
@@ -634,7 +634,7 @@ func TestRootHelp_NoHTMLEscaping(t *testing.T) {
 
 func TestRawCmd_FileOpenError_SingleOutput(t *testing.T) {
 	// Simulate the raw command's file open error path.
-	// After the fix, it should return errAlreadyWritten, not a raw error.
+	// After the fix, it should return AlreadyWrittenError, not a raw error.
 	cmd := &cobra.Command{Use: "raw"}
 	f := cmd.Flags()
 	f.String("body", "", "")
@@ -657,8 +657,8 @@ func TestRawCmd_FileOpenError_SingleOutput(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent body file")
 	}
-	if _, ok := err.(*errAlreadyWritten); !ok {
-		t.Errorf("expected errAlreadyWritten to prevent double error output, got %T: %v", err, err)
+	if _, ok := err.(*jrerrors.AlreadyWrittenError); !ok {
+		t.Errorf("expected AlreadyWrittenError to prevent double error output, got %T: %v", err, err)
 	}
 }
 
@@ -919,12 +919,12 @@ func TestConfigureRejectsEmptyProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for whitespace-only profile name")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -1398,12 +1398,12 @@ func TestConfigureRejectsInvalidAuthType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid auth-type, got nil")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -1644,12 +1644,12 @@ func TestRawCmd_MalformedQueryParam(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for malformed query param")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -2265,7 +2265,7 @@ func TestFetchJSONWithBody_ReadError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	body, exitCode := fetchJSONWithBody(c, t.Context(), "GET", "/test", nil)
+	body, exitCode := c.Fetch(t.Context(), "GET", "/test", nil)
 
 	// We expect either:
 	// 1. A connection_error (if the read fails), or

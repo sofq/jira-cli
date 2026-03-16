@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/sofq/jira-cli/internal/client"
@@ -48,33 +47,19 @@ func init() {
 	workflowCmd.AddCommand(assignCmd)
 }
 
-func runTransition(cmd *cobra.Command, args []string) error {
-	c, err := client.FromContext(cmd.Context())
-	if err != nil {
-		return err
-	}
+// transitionMatch holds a matched transition's ID and name.
+type transitionMatch struct {
+	ID   string
+	Name string
+}
 
-	issueKey, _ := cmd.Flags().GetString("issue")
-	toStatus, _ := cmd.Flags().GetString("to")
-
-	// Respect --dry-run: emit the request details without executing.
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
-		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
-		}
-		return nil
-	}
-
-	// 1. Fetch available transitions.
-	transitionsBody, exitCode := fetchJSON(c, cmd.Context(), "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
+// resolveTransition fetches available transitions for an issue and matches one by name.
+// Returns the matched transition or writes an error to c.Stderr and returns a non-zero exit code.
+func resolveTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) (*transitionMatch, int) {
+	transitionsBody, exitCode := c.Fetch(ctx, "GET",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey), nil)
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return nil, exitCode
 	}
 
 	var transResp struct {
@@ -92,59 +77,145 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			Message:   "failed to parse transitions: " + err.Error(),
 		}
 		apiErr.WriteJSON(c.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return nil, jrerrors.ExitError
 	}
 
-	// 2. Match target status (case-insensitive exact match first, then substring).
 	toLower := strings.ToLower(toStatus)
-	var matchedID, matchedName string
+	// Exact match first.
 	for _, tr := range transResp.Transitions {
 		if strings.ToLower(tr.Name) == toLower || strings.ToLower(tr.To.Name) == toLower {
-			matchedID = tr.ID
-			matchedName = tr.Name
-			break
+			return &transitionMatch{ID: tr.ID, Name: tr.Name}, jrerrors.ExitOK
 		}
 	}
-	if matchedID == "" {
-		for _, tr := range transResp.Transitions {
-			if strings.Contains(strings.ToLower(tr.Name), toLower) ||
-				strings.Contains(strings.ToLower(tr.To.Name), toLower) {
-				matchedID = tr.ID
-				matchedName = tr.Name
-				break
-			}
+	// Substring match.
+	for _, tr := range transResp.Transitions {
+		if strings.Contains(strings.ToLower(tr.Name), toLower) ||
+			strings.Contains(strings.ToLower(tr.To.Name), toLower) {
+			return &transitionMatch{ID: tr.ID, Name: tr.Name}, jrerrors.ExitOK
 		}
-	}
-	if matchedID == "" {
-		names := make([]string, len(transResp.Transitions))
-		for i, tr := range transResp.Transitions {
-			names[i] = tr.Name
-		}
-		apiErr := &jrerrors.APIError{
-			ErrorType: "validation_error",
-			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
-	// 3. Execute transition. Use fetchJSON to avoid c.Do() writing "{}" to stdout.
-	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": matchedID}})
-	body := string(transBody)
-	_, exitCode = fetchJSONWithBody(c, cmd.Context(), "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		strings.NewReader(body))
+	names := make([]string, len(transResp.Transitions))
+	for i, tr := range transResp.Transitions {
+		names[i] = tr.Name
+	}
+	apiErr := &jrerrors.APIError{
+		ErrorType: "validation_error",
+		Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
+	}
+	apiErr.WriteJSON(c.Stderr)
+	return nil, jrerrors.ExitValidation
+}
+
+// resolveAssignee resolves a "to" argument into an account ID.
+// Special values: "me" (current user), "none"/"unassign" (returns empty string meaning null assignment).
+// Returns (accountID, isUnassign, exitCode).
+func resolveAssignee(ctx context.Context, c *client.Client, to string) (string, bool, int) {
+	switch strings.ToLower(to) {
+	case "me":
+		body, code := c.Fetch(ctx, "GET", "/rest/api/3/myself", nil)
+		if code != jrerrors.ExitOK {
+			return "", false, code
+		}
+		var me struct {
+			AccountID string `json:"accountId"`
+		}
+		if err := json.Unmarshal(body, &me); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "failed to parse /myself response: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return "", false, jrerrors.ExitError
+		}
+		if me.AccountID == "" {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "could not determine your account ID from /myself",
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return "", false, jrerrors.ExitError
+		}
+		return me.AccountID, false, jrerrors.ExitOK
+
+	case "none", "unassign":
+		return "", true, jrerrors.ExitOK
+
+	default:
+		body, code := c.Fetch(ctx, "GET",
+			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)), nil)
+		if code != jrerrors.ExitOK {
+			return "", false, code
+		}
+		var users []struct {
+			AccountID   string `json:"accountId"`
+			DisplayName string `json:"displayName"`
+		}
+		if err := json.Unmarshal(body, &users); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "failed to parse user search response: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return "", false, jrerrors.ExitError
+		}
+		if len(users) == 0 {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "not_found",
+				Message:   fmt.Sprintf("no user found matching %q", to),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return "", false, jrerrors.ExitNotFound
+		}
+		return users[0].AccountID, false, jrerrors.ExitOK
+	}
+}
+
+func runTransition(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	issueKey, _ := cmd.Flags().GetString("issue")
+	toStatus, _ := cmd.Flags().GetString("to")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	match, exitCode := resolveTransition(cmd.Context(), c, issueKey, toStatus)
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	// Execute transition. Use c.Fetch to avoid c.Do() writing "{}" to stdout.
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
+	_, exitCode = c.Fetch(cmd.Context(), "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		strings.NewReader(string(transBody)))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
 		"status":     "transitioned",
 		"issue":      issueKey,
-		"transition": matchedName,
+		"transition": match.Name,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil
 }
@@ -152,7 +223,9 @@ func runTransition(cmd *cobra.Command, args []string) error {
 func runAssign(cmd *cobra.Command, args []string) error {
 	c, err := client.FromContext(cmd.Context())
 	if err != nil {
-		return err
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	issueKey, _ := cmd.Flags().GetString("issue")
@@ -166,93 +239,40 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	}
 
-	var accountID string
+	accountID, isUnassign, exitCode := resolveAssignee(cmd.Context(), c, to)
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
 
-	switch strings.ToLower(to) {
-	case "me":
-		body, code := fetchJSON(c, cmd.Context(), "GET", "/rest/api/3/myself")
-		if code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
-		}
-		var me struct {
-			AccountID string `json:"accountId"`
-		}
-		if err := json.Unmarshal(body, &me); err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Message:   "failed to parse /myself response: " + err.Error(),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
-		}
-		if me.AccountID == "" {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Message:   "could not determine your account ID from /myself",
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
-		}
-		accountID = me.AccountID
-
-	case "none", "unassign":
+	if isUnassign {
 		assignBody := `{"accountId":null}`
-		_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
+		_, exitCode := c.Fetch(cmd.Context(), "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			strings.NewReader(assignBody))
 		if exitCode != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: exitCode}
+			return &jrerrors.AlreadyWrittenError{Code: exitCode}
 		}
 		out, _ := marshalNoEscape(map[string]string{
 			"status": "unassigned",
 			"issue":  issueKey,
 		})
 		if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: exitCode}
+			return &jrerrors.AlreadyWrittenError{Code: exitCode}
 		}
 		return nil
-
-	default:
-		body, code := fetchJSON(c, cmd.Context(), "GET",
-			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
-		if code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
-		}
-		var users []struct {
-			AccountID   string `json:"accountId"`
-			DisplayName string `json:"displayName"`
-		}
-		if err := json.Unmarshal(body, &users); err != nil {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "connection_error",
-				Message:   "failed to parse user search response: " + err.Error(),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
-		}
-		if len(users) == 0 {
-			apiErr := &jrerrors.APIError{
-				ErrorType: "not_found",
-				Message:   fmt.Sprintf("no user found matching %q", to),
-			}
-			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitNotFound}
-		}
-		accountID = users[0].AccountID
 	}
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-	assignBody := string(marshaledAssign)
-	_, exitCode := fetchJSONWithBody(c, cmd.Context(), "PUT",
+	_, exitCode = c.Fetch(cmd.Context(), "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		strings.NewReader(assignBody))
+		strings.NewReader(string(marshaledAssign)))
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -261,68 +281,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"to":     to,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil
-}
-
-// fetchJSON performs an HTTP request and returns the raw response body.
-// It uses the client's verbose logging so --verbose works for all requests.
-func fetchJSON(c *client.Client, ctx context.Context, method, path string) ([]byte, int) {
-	return fetchJSONWithBody(c, ctx, method, path, nil)
-}
-
-// fetchJSONWithBody performs an HTTP request with an optional body and returns the raw response body.
-func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
-	fullURL := c.BaseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Message:   "failed to create request: " + err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if err := c.ApplyAuth(req); err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "auth_error",
-			Message:   err.Error(),
-			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitAuth
-	}
-
-	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	defer resp.Body.Close()
-
-	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Message:   "reading response body: " + err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return nil, jrerrors.ExitError
-	}
-	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
-		apiErr.WriteJSON(c.Stderr)
-		return nil, apiErr.ExitCode()
-	}
-	return respBody, jrerrors.ExitOK
 }

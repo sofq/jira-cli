@@ -19,6 +19,6 @@ func ExportTestConnection(baseURL, authType, username, token string) error {
 
 // Exported wrappers for testing internal functions.
 var FetchJSONWithBody = func(c *client.Client, ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
-	return fetchJSONWithBody(c, ctx, method, path, body)
+	return c.Fetch(ctx, method, path, body)
 }
 var MarshalNoEscape = marshalNoEscape

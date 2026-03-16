@@ -251,14 +251,16 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		return apiErr.ExitCode()
 	}
 
-	// Bug #4: HTTP 204 No Content — emit empty JSON object to maintain JSON-only contract.
+	// HTTP 204 No Content — emit empty JSON object to maintain JSON-only contract.
 	if len(respBody) == 0 || resp.StatusCode == http.StatusNoContent {
 		respBody = []byte("{}")
 	}
 
 	// Cache successful GET responses.
 	if cacheKey != "" {
-		_ = cache.Set(cacheKey, respBody)
+		if err := cache.Set(cacheKey, respBody); err != nil {
+			c.VerboseLog(map[string]any{"type": "warning", "message": "cache write failed: " + err.Error()})
+		}
 	}
 
 	return c.WriteOutput(respBody)
@@ -310,7 +312,7 @@ func detectPagination(body []byte) paginationType {
 // response envelope, and writes it to Stdout. Non-paginated responses are
 // passed through unchanged.
 func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path string, query url.Values) int {
-	// Bug #8: Check cache before fetching pages.
+	// Check cache before fetching pages.
 	var cacheKey string
 	if c.CacheTTL > 0 {
 		cacheKey = cache.Key(method, firstURL, c.cacheAuthContext())
@@ -329,7 +331,9 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	pagType := detectPagination(firstBody)
 	if pagType == paginationNone {
 		if cacheKey != "" {
-			_ = cache.Set(cacheKey, firstBody)
+			if err := cache.Set(cacheKey, firstBody); err != nil {
+				c.VerboseLog(map[string]any{"type": "warning", "message": "cache write failed: " + err.Error()})
+			}
 		}
 		return c.WriteOutput(firstBody)
 	}
@@ -476,7 +480,9 @@ func (c *Client) encodePaginatedResult(envelope map[string]json.RawMessage, cach
 	}
 
 	if cacheKey != "" {
-		_ = cache.Set(cacheKey, result)
+		if err := cache.Set(cacheKey, result); err != nil {
+			c.VerboseLog(map[string]any{"type": "warning", "message": "cache write failed: " + err.Error()})
+		}
 	}
 
 	return c.WriteOutput(result)
@@ -571,6 +577,63 @@ func (c *Client) VerboseLog(fields map[string]any) {
 	}
 	data, _ := json.Marshal(fields)
 	fmt.Fprintf(c.Stderr, "%s\n", data)
+}
+
+// Fetch performs an HTTP request and returns the raw response body and an exit code.
+// Unlike Do, it does not write to Stdout — callers handle the body themselves.
+// This is used by workflow commands and batch operations that need the raw response.
+func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader) ([]byte, int) {
+	fullURL := c.BaseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "failed to create request: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if err := c.ApplyAuth(req); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "auth_error",
+			Message:   err.Error(),
+			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitAuth
+	}
+
+	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": fullURL})
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	defer resp.Body.Close()
+
+	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "reading response body: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+	if resp.StatusCode >= 400 {
+		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
+		apiErr.WriteJSON(c.Stderr)
+		return nil, apiErr.ExitCode()
+	}
+	return respBody, jrerrors.ExitOK
 }
 
 // WriteOutput applies optional JQ filtering and pretty-printing, then writes

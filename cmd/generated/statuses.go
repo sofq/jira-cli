@@ -252,8 +252,8 @@ var statuses_search = &cobra.Command{
 	},
 }
 
-var statuses_get_project_issue_type_usages_for_status = &cobra.Command{
-	Use:   "get-project-issue-type-usages-for-status",
+var statuses_get_project_issue_type_usages_for = &cobra.Command{
+	Use:   "get-project-issue-type-usages-for",
 	Short: "Get issue type usages by status and project",
 	Long:  "Returns a page of issue types in a project using a given status.",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -291,8 +291,8 @@ var statuses_get_project_issue_type_usages_for_status = &cobra.Command{
 	},
 }
 
-var statuses_get_project_usages_for_status = &cobra.Command{
-	Use:   "get-project-usages-for-status",
+var statuses_get_project_usages_for = &cobra.Command{
+	Use:   "get-project-usages-for",
 	Short: "Get project usages by status",
 	Long:  "Returns a page of projects using a given status.",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -321,8 +321,8 @@ var statuses_get_project_usages_for_status = &cobra.Command{
 	},
 }
 
-var statuses_get_workflow_usages_for_status = &cobra.Command{
-	Use:   "get-workflow-usages-for-status",
+var statuses_get_workflow_usages_for = &cobra.Command{
+	Use:   "get-workflow-usages-for",
 	Short: "Get workflow usages by status",
 	Long:  "Returns a page of workflows using a given status.",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -376,24 +376,24 @@ func init() {
 	statuses_search.Flags().String("statusCategory", "", "Category of the status to filter by. The supported values are: `TODO`, `IN_PROGRESS`, and `DONE`.")
 	statusesCmd.AddCommand(statuses_search)
 
-	statuses_get_project_issue_type_usages_for_status.Flags().String("statusId", "", "The statusId to fetch issue type usages for")
-	statuses_get_project_issue_type_usages_for_status.MarkFlagRequired("statusId")
-	statuses_get_project_issue_type_usages_for_status.Flags().String("projectId", "", "The projectId to fetch issue type usages for")
-	statuses_get_project_issue_type_usages_for_status.MarkFlagRequired("projectId")
-	statuses_get_project_issue_type_usages_for_status.Flags().String("nextPageToken", "", "The cursor for pagination")
-	statuses_get_project_issue_type_usages_for_status.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
-	statusesCmd.AddCommand(statuses_get_project_issue_type_usages_for_status)
+	statuses_get_project_issue_type_usages_for.Flags().String("statusId", "", "The statusId to fetch issue type usages for")
+	statuses_get_project_issue_type_usages_for.MarkFlagRequired("statusId")
+	statuses_get_project_issue_type_usages_for.Flags().String("projectId", "", "The projectId to fetch issue type usages for")
+	statuses_get_project_issue_type_usages_for.MarkFlagRequired("projectId")
+	statuses_get_project_issue_type_usages_for.Flags().String("nextPageToken", "", "The cursor for pagination")
+	statuses_get_project_issue_type_usages_for.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
+	statusesCmd.AddCommand(statuses_get_project_issue_type_usages_for)
 
-	statuses_get_project_usages_for_status.Flags().String("statusId", "", "The statusId to fetch project usages for")
-	statuses_get_project_usages_for_status.MarkFlagRequired("statusId")
-	statuses_get_project_usages_for_status.Flags().String("nextPageToken", "", "The cursor for pagination")
-	statuses_get_project_usages_for_status.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
-	statusesCmd.AddCommand(statuses_get_project_usages_for_status)
+	statuses_get_project_usages_for.Flags().String("statusId", "", "The statusId to fetch project usages for")
+	statuses_get_project_usages_for.MarkFlagRequired("statusId")
+	statuses_get_project_usages_for.Flags().String("nextPageToken", "", "The cursor for pagination")
+	statuses_get_project_usages_for.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
+	statusesCmd.AddCommand(statuses_get_project_usages_for)
 
-	statuses_get_workflow_usages_for_status.Flags().String("statusId", "", "The statusId to fetch workflow usages for")
-	statuses_get_workflow_usages_for_status.MarkFlagRequired("statusId")
-	statuses_get_workflow_usages_for_status.Flags().String("nextPageToken", "", "The cursor for pagination")
-	statuses_get_workflow_usages_for_status.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
-	statusesCmd.AddCommand(statuses_get_workflow_usages_for_status)
+	statuses_get_workflow_usages_for.Flags().String("statusId", "", "The statusId to fetch workflow usages for")
+	statuses_get_workflow_usages_for.MarkFlagRequired("statusId")
+	statuses_get_workflow_usages_for.Flags().String("nextPageToken", "", "The cursor for pagination")
+	statuses_get_workflow_usages_for.Flags().String("maxResults", "", "The maximum number of results to return. Must be an integer between 1 and 200.")
+	statusesCmd.AddCommand(statuses_get_workflow_usages_for)
 
 }

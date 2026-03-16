@@ -964,3 +964,25 @@ func TestResolveNormalizesAuthTypeCase(t *testing.T) {
 	}
 }
 
+func TestValidAuthType(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"basic", true},
+		{"bearer", true},
+		{"oauth2", true},
+		{"Basic", true},
+		{"BEARER", true},
+		{"invalid", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := config.ValidAuthType(tt.input); got != tt.want {
+				t.Errorf("ValidAuthType(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+

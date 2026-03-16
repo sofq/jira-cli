@@ -119,6 +119,14 @@ func availableProfiles(cfg *Config) string {
 	return strings.Join(names, ", ")
 }
 
+// validAuthTypes is the set of accepted authentication types.
+var validAuthTypes = map[string]bool{"basic": true, "bearer": true, "oauth2": true}
+
+// ValidAuthType reports whether s is a recognized authentication type (case-insensitive).
+func ValidAuthType(s string) bool {
+	return validAuthTypes[strings.ToLower(s)]
+}
+
 // Resolve builds a ResolvedConfig by merging sources in priority order:
 // CLI flags > environment variables > config file profile.
 //
@@ -151,7 +159,7 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 		fileTokenURL = p.Auth.TokenURL
 		fileScopes = p.Auth.Scopes
 	} else if profileName != "" {
-		// Bug #10: Explicit --profile that doesn't exist should give a clear error.
+		// Explicit --profile that doesn't exist should give a clear error.
 		return nil, fmt.Errorf("profile %q not found; available profiles: %s", name, availableProfiles(cfg))
 	}
 
@@ -204,8 +212,7 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 	}
 
 	// 6. Validate auth type.
-	validAuthTypes := map[string]bool{"basic": true, "bearer": true, "oauth2": true}
-	if !validAuthTypes[strings.ToLower(authType)] {
+	if !ValidAuthType(authType) {
 		return nil, fmt.Errorf("invalid auth type %q; must be one of: basic, bearer, oauth2", authType)
 	}
 	authType = strings.ToLower(authType)
