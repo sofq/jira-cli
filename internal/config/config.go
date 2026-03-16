@@ -197,7 +197,14 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 		authType = "basic"
 	}
 
-	// 6. Trim trailing slash from BaseURL.
+	// 6. Validate auth type.
+	validAuthTypes := map[string]bool{"basic": true, "bearer": true, "oauth2": true}
+	if !validAuthTypes[strings.ToLower(authType)] {
+		return nil, fmt.Errorf("invalid auth type %q; must be one of: basic, bearer, oauth2", authType)
+	}
+	authType = strings.ToLower(authType)
+
+	// 7. Trim trailing slash from BaseURL.
 	baseURL = strings.TrimRight(baseURL, "/")
 
 	return &ResolvedConfig{

@@ -2565,3 +2565,209 @@ func TestE2E_Raw_ErrorReturnsExitCode(t *testing.T) {
 		t.Errorf("expected not_found error, got: %s", stderr)
 	}
 }
+
+// === Bug #41-43 regression tests ===
+
+// TestE2E_InvalidAuthType_RuntimeError verifies that --auth-type with an invalid
+// value produces a config_error instead of silently falling back to basic auth.
+func TestE2E_InvalidAuthType_RuntimeError(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	_, stderr, exitCode := runJR(t, binary, srv, "--auth-type", "invalidtype", "raw", "GET", "/rest/api/3/myself")
+
+	if exitCode == 0 {
+		t.Fatal("expected non-zero exit for invalid auth type, got 0")
+	}
+	if !strings.Contains(stderr, "invalid auth type") {
+		t.Errorf("expected 'invalid auth type' in stderr, got: %s", stderr)
+	}
+}
+
+// TestE2E_InvalidAuthType_EnvVar verifies that JR_AUTH_TYPE with an invalid
+// value produces an error instead of silently falling back to basic auth.
+func TestE2E_InvalidAuthType_EnvVar(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	cmd := exec.Command(binary, "raw", "GET", "/rest/api/3/myself")
+	cmd.Env = append(os.Environ(),
+		"JR_BASE_URL="+srv.URL,
+		"JR_AUTH_TYPE=invalidtype",
+		"JR_AUTH_TOKEN=test-token",
+		"JR_CONFIG_PATH="+filepath.Join(t.TempDir(), "config.json"),
+	)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+
+	if err == nil {
+		t.Fatal("expected error for invalid JR_AUTH_TYPE env var")
+	}
+	stderr := errBuf.String()
+	if !strings.Contains(stderr, "invalid auth type") {
+		t.Errorf("expected 'invalid auth type' in stderr, got: %s", stderr)
+	}
+}
+
+// TestE2E_ConfigureTestExplicitProfileDefault verifies that `jr configure --test --profile default`
+// tests the profile literally named "default", not the default_profile.
+func TestE2E_ConfigureTestExplicitProfileDefault(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	// Set up two mock servers: "default" profile returns 200, "staging" returns 401.
+	defaultSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"accountId":"abc123"}`))
+	}))
+	defer defaultSrv.Close()
+
+	stagingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errorMessages":["unauthorized"]}`))
+	}))
+	defer stagingSrv.Close()
+
+	// Create config: default_profile=staging, but profile "default" points to the 200 server.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	cfgData := fmt.Sprintf(`{
+		"profiles": {
+			"default": {"base_url": %q, "auth": {"type": "basic", "username": "u", "token": "t"}},
+			"staging": {"base_url": %q, "auth": {"type": "basic", "username": "u", "token": "t"}}
+		},
+		"default_profile": "staging"
+	}`, defaultSrv.URL, stagingSrv.URL)
+	if err := os.WriteFile(cfgPath, []byte(cfgData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run: jr configure --test --profile default
+	cmd := exec.Command(binary, "configure", "--test", "--profile", "default")
+	cmd.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+
+	stdout := strings.TrimSpace(outBuf.String())
+	stderr := strings.TrimSpace(errBuf.String())
+
+	// Should succeed (testing "default" profile → 200 OK server).
+	// Before the fix, it would test "staging" profile → 401 → error.
+	if err != nil {
+		t.Fatalf("expected success testing 'default' profile, got error: exit=%v stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, `"ok"`) {
+		t.Errorf("expected ok status in stdout, got: %s", stdout)
+	}
+}
+
+// TestE2E_ConfigureTestImplicitDefault_UsesDefaultProfile verifies that
+// `jr configure --test` (no explicit --profile) uses default_profile.
+func TestE2E_ConfigureTestImplicitDefault_UsesDefaultProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	// Set up: "staging" profile returns 200, "default" profile returns 401.
+	stagingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"accountId":"abc123"}`))
+	}))
+	defer stagingSrv.Close()
+
+	defaultSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errorMessages":["unauthorized"]}`))
+	}))
+	defer defaultSrv.Close()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	cfgData := fmt.Sprintf(`{
+		"profiles": {
+			"default": {"base_url": %q, "auth": {"type": "basic", "username": "u", "token": "t"}},
+			"staging": {"base_url": %q, "auth": {"type": "basic", "username": "u", "token": "t"}}
+		},
+		"default_profile": "staging"
+	}`, defaultSrv.URL, stagingSrv.URL)
+	if err := os.WriteFile(cfgPath, []byte(cfgData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run: jr configure --test (no --profile → should use default_profile=staging)
+	cmd := exec.Command(binary, "configure", "--test")
+	cmd.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+
+	stdout := strings.TrimSpace(outBuf.String())
+	stderr := strings.TrimSpace(errBuf.String())
+
+	// Should succeed (testing "staging" profile → 200 OK server).
+	if err != nil {
+		t.Fatalf("expected success testing default_profile='staging', got error: exit=%v stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, `"ok"`) {
+		t.Errorf("expected ok status in stdout, got: %s", stdout)
+	}
+}
+
+// TestE2E_Configure_ShortProfileFlag verifies that -p works with configure.
+func TestE2E_Configure_ShortProfileFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	binary := buildBinary(t)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	// Run: jr configure -p staging --base-url ... --token ...
+	cmd := exec.Command(binary, "configure", "-p", "staging", "--base-url", "https://staging.example.com", "--token", "test-token")
+	cmd.Env = append(os.Environ(), "JR_CONFIG_PATH="+cfgPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+
+	stdout := strings.TrimSpace(outBuf.String())
+	stderr := strings.TrimSpace(errBuf.String())
+
+	if err != nil {
+		t.Fatalf("expected success, got error: exit=%v stderr=%s", err, stderr)
+	}
+
+	// Verify the profile was saved as "staging" (not "default").
+	if !strings.Contains(stdout, `"staging"`) {
+		t.Errorf("expected profile name 'staging' in output, got: %s", stdout)
+	}
+
+	// Also verify the config file has the staging profile.
+	cfgData, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(cfgData, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	profiles := cfg["profiles"].(map[string]interface{})
+	if _, ok := profiles["staging"]; !ok {
+		t.Errorf("expected 'staging' profile in config, got profiles: %v", profiles)
+	}
+}

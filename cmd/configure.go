@@ -22,7 +22,7 @@ func init() {
 	f := configureCmd.Flags()
 	f.String("base-url", "", "Jira base URL (required unless --delete)")
 	f.String("token", "", "API token or bearer token (required unless --delete)")
-	f.String("profile", "default", "profile name to save settings under")
+	f.StringP("profile", "p", "default", "profile name to save settings under")
 	f.String("auth-type", "basic", "auth type: basic, bearer, or oauth2")
 	f.String("username", "", "username for basic auth")
 	f.Bool("test", false, "test connection via GET /rest/api/3/myself before saving")
@@ -66,7 +66,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	// load the existing profile and test its saved credentials.
 	testOnly := testConn && !cmd.Flags().Changed("base-url") && !cmd.Flags().Changed("token")
 	if testOnly {
-		return testExistingProfile(cmd, profileName)
+		return testExistingProfile(cmd, profileName, cmd.Flags().Changed("profile"))
 	}
 
 	// Validate required fields are not empty/whitespace.
@@ -158,7 +158,8 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 }
 
 // testExistingProfile loads a saved profile and tests its connection.
-func testExistingProfile(cmd *cobra.Command, profileName string) error {
+// profileExplicit indicates whether --profile was explicitly passed by the user.
+func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit bool) error {
 	configPath := config.DefaultPath()
 	cfg, err := config.LoadFrom(configPath)
 	if err != nil {
@@ -171,9 +172,10 @@ func testExistingProfile(cmd *cobra.Command, profileName string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
-	// Resolve profile name: use default if not explicitly set.
+	// Resolve profile name: use default_profile only if --profile was not
+	// explicitly set (i.e. we're using the flag's default value of "default").
 	name := profileName
-	if name == "default" {
+	if !profileExplicit && name == "default" {
 		if cfg.DefaultProfile != "" {
 			name = cfg.DefaultProfile
 		}

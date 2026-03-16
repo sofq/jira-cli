@@ -54,7 +54,7 @@ func TestResolveEnvOverridesConfig(t *testing.T) {
 
 	setEnv(t, map[string]string{
 		"JR_BASE_URL":   "https://env.example.com",
-		"JR_AUTH_TYPE":  "token",
+		"JR_AUTH_TYPE":  "bearer",
 		"JR_AUTH_USER":  "env-user",
 		"JR_AUTH_TOKEN": "env-token",
 	})
@@ -67,8 +67,8 @@ func TestResolveEnvOverridesConfig(t *testing.T) {
 	if resolved.BaseURL != "https://env.example.com" {
 		t.Errorf("BaseURL = %q, want %q", resolved.BaseURL, "https://env.example.com")
 	}
-	if resolved.Auth.Type != "token" {
-		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "token")
+	if resolved.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "bearer")
 	}
 	if resolved.Auth.Username != "env-user" {
 		t.Errorf("Auth.Username = %q, want %q", resolved.Auth.Username, "env-user")
@@ -133,7 +133,7 @@ func TestResolvePureEnvNoConfigFile(t *testing.T) {
 
 	setEnv(t, map[string]string{
 		"JR_BASE_URL":   "https://env-only.example.com",
-		"JR_AUTH_TYPE":  "token",
+		"JR_AUTH_TYPE":  "bearer",
 		"JR_AUTH_USER":  "only-env-user",
 		"JR_AUTH_TOKEN": "only-env-token",
 	})
@@ -146,8 +146,8 @@ func TestResolvePureEnvNoConfigFile(t *testing.T) {
 	if resolved.BaseURL != "https://env-only.example.com" {
 		t.Errorf("BaseURL = %q, want %q", resolved.BaseURL, "https://env-only.example.com")
 	}
-	if resolved.Auth.Type != "token" {
-		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "token")
+	if resolved.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "bearer")
 	}
 	if resolved.Auth.Username != "only-env-user" {
 		t.Errorf("Auth.Username = %q, want %q", resolved.Auth.Username, "only-env-user")
@@ -563,7 +563,7 @@ func TestResolveEnvOnlyNoFlags(t *testing.T) {
 
 	setEnv(t, map[string]string{
 		"JR_BASE_URL":   "https://env-only-no-flags.example.com",
-		"JR_AUTH_TYPE":  "token",
+		"JR_AUTH_TYPE":  "bearer",
 		"JR_AUTH_USER":  "env-user",
 		"JR_AUTH_TOKEN": "env-tok",
 	})
@@ -575,14 +575,106 @@ func TestResolveEnvOnlyNoFlags(t *testing.T) {
 	if resolved.BaseURL != "https://env-only-no-flags.example.com" {
 		t.Errorf("BaseURL = %q, want %q", resolved.BaseURL, "https://env-only-no-flags.example.com")
 	}
-	if resolved.Auth.Type != "token" {
-		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "token")
+	if resolved.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q, want %q", resolved.Auth.Type, "bearer")
 	}
 	if resolved.Auth.Username != "env-user" {
 		t.Errorf("Auth.Username = %q, want %q", resolved.Auth.Username, "env-user")
 	}
 	if resolved.Auth.Token != "env-tok" {
 		t.Errorf("Auth.Token = %q, want %q", resolved.Auth.Token, "env-tok")
+	}
+}
+
+// TestResolveRejectsInvalidAuthType verifies that Resolve returns an error
+// for invalid auth types from any source (config, env, flags).
+func TestResolveRejectsInvalidAuthType(t *testing.T) {
+	dir := t.TempDir()
+
+	// Case 1: Invalid auth type from config file.
+	cfgPath := filepath.Join(dir, "config1.json")
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "invalidtype", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	_, err := config.Resolve(cfgPath, "", nil)
+	if err == nil {
+		t.Error("case 1: expected error for invalid auth type in config file, got nil")
+	}
+
+	// Case 2: Invalid auth type from env var.
+	cfgPath2 := filepath.Join(dir, "config2.json")
+	cfg2 := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg2, cfgPath2); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	setEnv(t, map[string]string{"JR_AUTH_TYPE": "badtype"})
+	_, err = config.Resolve(cfgPath2, "", nil)
+	if err == nil {
+		t.Error("case 2: expected error for invalid auth type from env var, got nil")
+	}
+
+	// Case 3: Invalid auth type from flags.
+	setEnv(t, map[string]string{"JR_AUTH_TYPE": ""}) // clear env
+	cfgPath3 := filepath.Join(dir, "config3.json")
+	cfg3 := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg3, cfgPath3); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	flags := &config.FlagOverrides{AuthType: "notreal"}
+	_, err = config.Resolve(cfgPath3, "", flags)
+	if err == nil {
+		t.Error("case 3: expected error for invalid auth type from flags, got nil")
+	}
+}
+
+// TestResolveNormalizesAuthTypeCase verifies that auth type is lowercased.
+func TestResolveNormalizesAuthTypeCase(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "BEARER", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	resolved, err := config.Resolve(cfgPath, "", nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if resolved.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q, want %q (lowercased)", resolved.Auth.Type, "bearer")
 	}
 }
 
