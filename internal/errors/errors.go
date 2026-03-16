@@ -10,16 +10,19 @@ import (
 	"strings"
 )
 
+// ExitCode is a typed exit code for semantic process exit statuses.
+type ExitCode = int
+
 // Exit code constants for structured error handling.
 const (
-	ExitOK         = 0
-	ExitError      = 1
-	ExitAuth       = 2
-	ExitNotFound   = 3
-	ExitValidation = 4
-	ExitRateLimit  = 5
-	ExitConflict   = 6
-	ExitServer     = 7
+	ExitOK         ExitCode = 0
+	ExitError      ExitCode = 1
+	ExitAuth       ExitCode = 2
+	ExitNotFound   ExitCode = 3
+	ExitValidation ExitCode = 4
+	ExitRateLimit  ExitCode = 5
+	ExitConflict   ExitCode = 6
+	ExitServer     ExitCode = 7
 )
 
 // AlreadyWrittenError is a sentinel error indicating that the JSON error has
