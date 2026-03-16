@@ -65,8 +65,9 @@ var app_get_custom_fields_configurations = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -115,8 +116,9 @@ var app_update_multiple_custom_field_values = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -204,8 +206,9 @@ var app_update_custom_field_configuration = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -263,8 +266,9 @@ var app_update_custom_field_value = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}

@@ -86,8 +86,9 @@ var dashboard_create = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -136,8 +137,9 @@ var dashboard_bulk_edit = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -267,8 +269,9 @@ var dashboard_add_gadget = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -335,8 +338,9 @@ var dashboard_update_gadget = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -538,8 +542,9 @@ var dashboard_set_item_property = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -675,8 +680,9 @@ var dashboard_update = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -764,8 +770,9 @@ var dashboard_copy = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}

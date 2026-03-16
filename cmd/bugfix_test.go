@@ -1364,3 +1364,142 @@ func TestCacheFilePermissions(t *testing.T) {
 	// Clean up.
 	os.Remove(path)
 }
+
+// --- Bug #33: configure accepts invalid --auth-type, ApplyAuth silently skips auth ---
+
+func TestConfigureRejectsInvalidAuthType(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+	origPath := os.Getenv("JR_CONFIG_PATH")
+	os.Setenv("JR_CONFIG_PATH", configPath)
+	defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "default", "")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+	f.String("jq", "", "")
+	f.Bool("pretty", false, "")
+
+	_ = cmd.Flags().Set("base-url", "https://example.atlassian.net")
+	_ = cmd.Flags().Set("token", "test-token")
+	_ = cmd.Flags().Set("auth-type", "cloud")
+
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid auth-type, got nil")
+	}
+	aw, ok := err.(*errAlreadyWritten)
+	if !ok {
+		t.Fatalf("expected errAlreadyWritten, got %T: %v", err, err)
+	}
+	if aw.code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.code)
+	}
+}
+
+func TestConfigureAcceptsValidAuthTypes(t *testing.T) {
+	for _, authType := range []string{"basic", "bearer", "oauth2", "BASIC", "Bearer", "OAuth2"} {
+		t.Run(authType, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := tmpDir + "/config.json"
+			origPath := os.Getenv("JR_CONFIG_PATH")
+			os.Setenv("JR_CONFIG_PATH", configPath)
+			defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+			cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+			f := cmd.Flags()
+			f.String("base-url", "", "")
+			f.String("token", "", "")
+			f.String("profile", "default", "")
+			f.String("auth-type", "basic", "")
+			f.String("username", "", "")
+			f.Bool("test", false, "")
+			f.Bool("delete", false, "")
+			f.String("jq", "", "")
+			f.Bool("pretty", false, "")
+
+			_ = cmd.Flags().Set("base-url", "https://example.atlassian.net")
+			_ = cmd.Flags().Set("token", "test-token")
+			_ = cmd.Flags().Set("username", "user@example.com")
+			_ = cmd.Flags().Set("auth-type", authType)
+
+			captured := captureStdout(t, func() {
+				if err := runConfigure(cmd, nil); err != nil {
+					t.Fatalf("unexpected error for auth-type %q: %v", authType, err)
+				}
+			})
+
+			if !strings.Contains(captured, `"status":"saved"`) {
+				t.Errorf("expected saved status for auth-type %q, got: %s", authType, captured)
+			}
+
+			// Verify the saved auth type is lowercased.
+			cfg, err := config.LoadFrom(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := cfg.Profiles["default"].Auth.Type
+			if got != strings.ToLower(authType) {
+				t.Errorf("expected saved auth type %q, got %q", strings.ToLower(authType), got)
+			}
+		})
+	}
+}
+
+func TestApplyAuthDefaultsToBasicForUnknownType(t *testing.T) {
+	// Even if an unknown type slips through (e.g. manually edited config),
+	// ApplyAuth should default to basic auth rather than silently skipping.
+	c := &client.Client{
+		Auth: config.AuthConfig{Type: "unknown", Username: "user", Token: "tok"},
+	}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	c.ApplyAuth(req)
+
+	auth := req.Header.Get("Authorization")
+	if auth == "" {
+		t.Fatal("expected Authorization header for unknown auth type (should default to basic), got empty")
+	}
+	if !strings.HasPrefix(auth, "Basic ") {
+		t.Errorf("expected Basic auth header, got: %s", auth)
+	}
+}
+
+// --- Bug #34: generated POST commands hang in dry-run mode in non-terminal contexts ---
+
+func TestDryRunPostNilBodyDoesNotHang(t *testing.T) {
+	// Simulate what happens when a generated POST command runs in dry-run
+	// mode without a body (e.g. non-terminal context where stdin is not available).
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.atlassian.net",
+		Auth:       config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+	}
+
+	// Call Do with nil body — this is what generated commands do in dry-run
+	// when stdin is not available.
+	code := c.Do(t.Context(), "POST", "/rest/api/3/issue", nil, nil)
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d; stderr: %s", code, stderr.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON output: %v; raw: %s", err, stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method POST in dry-run, got %v", result["method"])
+	}
+}

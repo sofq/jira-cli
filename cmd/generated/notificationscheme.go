@@ -86,8 +86,9 @@ var notificationscheme_create_notification_scheme = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -196,8 +197,9 @@ var notificationscheme_update_notification_scheme = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -255,8 +257,9 @@ var notificationscheme_add_notifications = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}

@@ -86,8 +86,9 @@ var jql_get_auto_complete_post = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -178,8 +179,9 @@ var jql_update_precomputations = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -228,8 +230,9 @@ var jql_get_precomputations_by_id = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -278,8 +281,9 @@ var jql_match_issues = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -328,8 +332,9 @@ var jql_parse_queries = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -378,8 +383,9 @@ var jql_migrate_queries = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -428,8 +434,9 @@ var jql_sanitise_queries = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}

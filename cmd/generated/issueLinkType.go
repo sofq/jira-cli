@@ -86,8 +86,9 @@ var issueLinkType_create_issue_link_type = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}
@@ -175,8 +176,9 @@ var issueLinkType_update_issue_link_type = &cobra.Command{
 			} else {
 				bodyReader = strings.NewReader(bodyStr)
 			}
-		} else {
-			// Check if stdin has data (guard against Stat failure to avoid nil dereference)
+		} else if !c.DryRun {
+			// Check if stdin has data (guard against Stat failure to avoid nil dereference).
+			// Skip in dry-run mode to avoid hanging on empty stdin pipes in non-terminal contexts.
 			if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 				bodyReader = os.Stdin
 			}

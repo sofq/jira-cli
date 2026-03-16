@@ -23,7 +23,7 @@ func init() {
 	f.String("base-url", "", "Jira base URL (required unless --delete)")
 	f.String("token", "", "API token or bearer token (required unless --delete)")
 	f.String("profile", "default", "profile name to save settings under")
-	f.String("auth-type", "basic", "auth type: basic or bearer")
+	f.String("auth-type", "basic", "auth type: basic, bearer, or oauth2")
 	f.String("username", "", "username for basic auth")
 	f.Bool("test", false, "test connection via GET /rest/api/3/myself before saving")
 	f.Bool("delete", false, "delete the named profile")
@@ -86,6 +86,18 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
+
+	// Validate auth-type before saving or testing.
+	validAuthTypes := map[string]bool{"basic": true, "bearer": true, "oauth2": true}
+	if !validAuthTypes[strings.ToLower(authType)] {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("invalid --auth-type %q; must be one of: basic, bearer, oauth2", authType),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+	authType = strings.ToLower(authType)
 
 	if testConn {
 		if err := testConnection(baseURL, authType, username, token); err != nil {
