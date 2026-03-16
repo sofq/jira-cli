@@ -136,6 +136,8 @@ func TestSingularizeEdgeCases(t *testing.T) {
 		{"categories", "category"},
 		{"values", "value"},
 		{"project", "project"},
+		// sses suffix branch: strip last 2 chars (e.g. "dresses" → "dress")
+		{"dresses", "dress"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

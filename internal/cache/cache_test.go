@@ -174,6 +174,40 @@ func TestCacheKeyBackwardCompatible(t *testing.T) {
 	}
 }
 
+// TestGetReadFileError verifies that Get returns (nil, false) when the cache
+// file exists and is fresh but cannot be read (e.g. permissions set to 000).
+// This exercises the os.ReadFile error path in Get (lines 50-53 of cache.go).
+func TestGetReadFileError(t *testing.T) {
+	key := cache.Key("GET", "https://test.example.com/unreadable-"+t.Name())
+
+	// Write a valid cache entry.
+	if err := cache.Set(key, []byte(`{"ok":true}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+
+	// Locate the file and make it unreadable.
+	dir := cache.Dir()
+	path := dir + "/" + key
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("Chmod failed: %v", err)
+	}
+
+	// Restore permissions after the test so cleanup can delete the file.
+	t.Cleanup(func() {
+		_ = os.Chmod(path, 0o600)
+		_ = os.Remove(path)
+	})
+
+	// Get must report a miss because ReadFile fails.
+	data, ok := cache.Get(key, time.Minute)
+	if ok {
+		t.Error("expected cache miss when file is unreadable")
+	}
+	if data != nil {
+		t.Errorf("expected nil data, got %s", data)
+	}
+}
+
 // TestCacheKeyAuthContextIsolation verifies that cached data from one profile
 // is not returned for a different profile.
 func TestCacheKeyAuthContextIsolation(t *testing.T) {

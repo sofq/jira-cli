@@ -81,11 +81,9 @@ func DeriveVerb(operationID, method, path, resource string) string {
 	// Case 2: rest ENDS with resource name → strip it, keep verb + prefix
 	// e.g., "getAllProjects" → rest=["All","Projects"], resource="project"
 	// → strip "Projects" → prefix = ["All"] → "get-all"
-	if singularize(restSingular[len(rest)-1]) == resourceSingular || restSingular[len(rest)-1] == resourceSingular {
+	// len(rest)==1 is already handled by Case 1, so prefix is never empty here.
+	if len(rest) > 1 && (singularize(restSingular[len(rest)-1]) == resourceSingular || restSingular[len(rest)-1] == resourceSingular) {
 		prefix := restLower[:len(rest)-1]
-		if len(prefix) == 0 {
-			return verb
-		}
 		return verb + "-" + strings.Join(prefix, "-")
 	}
 
