@@ -1,6 +1,6 @@
 module github.com/sofq/jira-cli
 
-go 1.25.5
+go 1.25.8
 
 require (
 	github.com/itchyny/gojq v0.12.18
