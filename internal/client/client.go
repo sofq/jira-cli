@@ -490,6 +490,11 @@ func (c *Client) isLastPage(page paginatedPage, fetched int) bool {
 	if page.Total > 0 {
 		return fetched >= page.Total
 	}
+	// When total is 0 (or absent), stop if the page is empty OR if the server
+	// claimed total=0 despite returning values (avoids infinite loop).
+	if page.Total == 0 && fetched > 0 {
+		return true
+	}
 	return len(page.Values) == 0
 }
 
