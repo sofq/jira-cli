@@ -1070,6 +1070,72 @@ func TestBatchAssign_None_JQFilter(t *testing.T) {
 	}
 }
 
+// --- Bug #28: dry-run output ignores --jq and --pretty ---
+
+func TestBatchTransition_DryRun_JQ(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".method"
+
+	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := strings.TrimSpace(stdout.String())
+	if got != `"POST"` {
+		t.Errorf("expected jq-filtered dry-run output %q, got %q", `"POST"`, got)
+	}
+}
+
+func TestBatchTransition_DryRun_Pretty(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+	c.Pretty = true
+
+	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
+		t.Errorf("expected pretty-printed dry-run output, got: %s", got)
+	}
+}
+
+func TestBatchAssign_DryRun_JQ(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".method"
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := strings.TrimSpace(stdout.String())
+	if got != `"PUT"` {
+		t.Errorf("expected jq-filtered dry-run output %q, got %q", `"PUT"`, got)
+	}
+}
+
+func TestBatchAssign_DryRun_Pretty(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+	c.Pretty = true
+
+	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
+		t.Errorf("expected pretty-printed dry-run output, got: %s", got)
+	}
+}
+
 func TestBatchAssign_PrettyPrint(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/rest/api/3/myself" {
