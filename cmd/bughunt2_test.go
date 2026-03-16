@@ -99,12 +99,12 @@ func TestRawCmd_NonDryRunPostWithoutBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-dry-run POST without body")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 

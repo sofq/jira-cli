@@ -65,7 +65,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	}
@@ -74,7 +74,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	transitionsBody, exitCode := fetchJSON(c, cmd.Context(), "GET",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey))
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 
 	var transResp struct {
@@ -92,7 +92,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			Message:   "failed to parse transitions: " + err.Error(),
 		}
 		apiErr.WriteJSON(c.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	// 2. Match target status (case-insensitive exact match first, then substring).
@@ -125,7 +125,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 			Message:   fmt.Sprintf("no transition matching %q; available: %s", toStatus, strings.Join(names, ", ")),
 		}
 		apiErr.WriteJSON(c.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// 3. Execute transition. Use fetchJSON to avoid c.Do() writing "{}" to stdout.
@@ -135,7 +135,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 		strings.NewReader(body))
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -144,7 +144,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		"transition": matchedName,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil
 }
@@ -166,7 +166,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
 		return nil
 	}
@@ -177,7 +177,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	case "me":
 		body, code := fetchJSON(c, cmd.Context(), "GET", "/rest/api/3/myself")
 		if code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
 		var me struct {
 			AccountID string `json:"accountId"`
@@ -188,7 +188,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 				Message:   "failed to parse /myself response: " + err.Error(),
 			}
 			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 		if me.AccountID == "" {
 			apiErr := &jrerrors.APIError{
@@ -196,7 +196,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 				Message:   "could not determine your account ID from /myself",
 			}
 			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 		accountID = me.AccountID
 
@@ -206,14 +206,14 @@ func runAssign(cmd *cobra.Command, args []string) error {
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			strings.NewReader(assignBody))
 		if exitCode != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: exitCode}
+			return &jrerrors.AlreadyWrittenError{Code: exitCode}
 		}
 		out, _ := marshalNoEscape(map[string]string{
 			"status": "unassigned",
 			"issue":  issueKey,
 		})
 		if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: exitCode}
+			return &jrerrors.AlreadyWrittenError{Code: exitCode}
 		}
 		return nil
 
@@ -221,7 +221,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		body, code := fetchJSON(c, cmd.Context(), "GET",
 			fmt.Sprintf("/rest/api/3/user/search?query=%s", url.QueryEscape(to)))
 		if code != jrerrors.ExitOK {
-			return &errAlreadyWritten{code: code}
+			return &jrerrors.AlreadyWrittenError{Code: code}
 		}
 		var users []struct {
 			AccountID   string `json:"accountId"`
@@ -233,7 +233,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 				Message:   "failed to parse user search response: " + err.Error(),
 			}
 			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 		if len(users) == 0 {
 			apiErr := &jrerrors.APIError{
@@ -241,7 +241,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 				Message:   fmt.Sprintf("no user found matching %q", to),
 			}
 			apiErr.WriteJSON(c.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 		}
 		accountID = users[0].AccountID
 	}
@@ -252,7 +252,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 		strings.NewReader(assignBody))
 	if exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -261,7 +261,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"to":     to,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: exitCode}
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil
 }

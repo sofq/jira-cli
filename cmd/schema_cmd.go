@@ -81,7 +81,7 @@ var schemaCmd = &cobra.Command{
 					Message:   fmt.Sprintf("resource %q not found", resource),
 				}
 				apiErr.WriteJSON(os.Stderr)
-				return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+				return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 			}
 			data, _ := marshalNoEscape(matching)
 			return schemaOutput(cmd, data)
@@ -99,7 +99,7 @@ var schemaCmd = &cobra.Command{
 			Message:   fmt.Sprintf("operation %s %s not found", resource, verb),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}
 	},
 }
 
@@ -127,7 +127,7 @@ func schemaOutput(cmd *cobra.Command, data []byte) error {
 				Message:   "jq: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		data = filtered
 	}

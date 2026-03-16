@@ -23,13 +23,6 @@ var skipClientCommands = map[string]bool{
 	"schema":     true,
 }
 
-// errAlreadyWritten is a sentinel error indicating that the JSON error has
-// already been written to stderr by PersistentPreRunE, so Execute() should
-// not write a second one.
-type errAlreadyWritten struct{ code int }
-
-func (e *errAlreadyWritten) Error() string { return "error already written" }
-
 var rootCmd = &cobra.Command{
 	Use:           "jr",
 	Short:         "Agent-friendly Jira CLI",
@@ -77,7 +70,7 @@ var rootCmd = &cobra.Command{
 				Message:   "failed to resolve config: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 
 		if resolved.BaseURL == "" {
@@ -87,7 +80,7 @@ var rootCmd = &cobra.Command{
 				Message:   "base_url is not set; run `jr configure --base-url <url> --token <token>` or set JR_BASE_URL",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 
 		c := &client.Client{
@@ -143,10 +136,6 @@ func init() {
 // Execute runs the root command and returns an exit code.
 func Execute() int {
 	if err := rootCmd.Execute(); err != nil {
-		// If error was already written to stderr, don't write again.
-		if aw, ok := err.(*errAlreadyWritten); ok {
-			return aw.code
-		}
 		if aw, ok := err.(*jrerrors.AlreadyWrittenError); ok {
 			return aw.Code
 		}

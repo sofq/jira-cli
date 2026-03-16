@@ -69,7 +69,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	// Read input.
@@ -85,7 +85,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "cannot read input file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 	} else {
 		// Read from stdin.
@@ -97,7 +97,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "no input provided: use --input <file> or pipe JSON to stdin",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		inputData, err = io.ReadAll(os.Stdin)
 		if err != nil {
@@ -107,7 +107,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "failed to read stdin: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 		}
 	}
 
@@ -120,7 +120,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "invalid JSON input: expected a JSON array of operations; " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Bug #17: Reject null/empty input explicitly.
@@ -131,7 +131,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "invalid JSON input: expected a JSON array of operations, got null",
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	// Load all schema ops for lookup (generated + hand-written).
@@ -164,7 +164,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			Message:   "failed to encode results: " + err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	output := bytes.TrimRight(resultBuf.Bytes(), "\n")
@@ -179,7 +179,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "jq: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		output = filtered
 	}
@@ -199,7 +199,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if maxExit != 0 {
-		return &errAlreadyWritten{code: maxExit}
+		return &jrerrors.AlreadyWrittenError{Code: maxExit}
 	}
 
 	return nil

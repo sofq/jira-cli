@@ -48,7 +48,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 			Message:   fmt.Sprintf("invalid HTTP method %q; must be one of GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS", method),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	c, err := client.FromContext(cmd.Context())
@@ -58,7 +58,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 			Message:   err.Error(),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitError}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
 	// Build query values.
@@ -72,7 +72,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 				Message:   fmt.Sprintf("invalid --query %q: expected key=value format", pair),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		q.Add(parts[0], parts[1])
 	}
@@ -93,7 +93,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 				Message:   "--body @<filename> requires a filename after @",
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		f, err := os.Open(filename)
 		if err != nil {
@@ -102,7 +102,7 @@ func runRaw(cmd *cobra.Command, args []string) error {
 				Message:   "cannot open body file: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &errAlreadyWritten{code: jrerrors.ExitValidation}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 		defer f.Close()
 		bodyReader = f
@@ -132,12 +132,12 @@ func runRaw(cmd *cobra.Command, args []string) error {
 			Message:   fmt.Sprintf("%s request requires a body; use --body '{...}' or pipe JSON to stdin", method),
 		}
 		apiErr.WriteJSON(os.Stderr)
-		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 	}
 
 	code := c.Do(cmd.Context(), method, path, q, bodyReader)
 	if code != jrerrors.ExitOK {
-		return &errAlreadyWritten{code: code}
+		return &jrerrors.AlreadyWrittenError{Code: code}
 	}
 	return nil
 }

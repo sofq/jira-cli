@@ -74,12 +74,12 @@ func TestDeleteProfile_ListsAvailableProfiles(t *testing.T) {
 		t.Fatal("expected error deleting nonexistent profile")
 	}
 
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitNotFound {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.code)
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.Code)
 	}
 }
 
@@ -497,12 +497,12 @@ func TestBatch_InputFileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent input file")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -541,12 +541,12 @@ func TestBatch_NonZeroExitPropagation(t *testing.T) {
 	if capturedErr == nil {
 		t.Fatal("expected error for batch with failed ops")
 	}
-	aw, ok := capturedErr.(*errAlreadyWritten)
+	aw, ok := capturedErr.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", capturedErr)
+		t.Fatalf("expected AlreadyWrittenError, got %T", capturedErr)
 	}
-	if aw.code != jrerrors.ExitNotFound {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.code)
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.Code)
 	}
 }
 
@@ -1012,12 +1012,12 @@ func TestConfigure_TestExistingProfile_EmptyBaseURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty base_url profile")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -1051,12 +1051,12 @@ func TestConfigure_TestExistingProfile_ProfileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent profile")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitNotFound {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.code)
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.Code)
 	}
 }
 
@@ -1112,12 +1112,12 @@ func TestRawCmd_PostWithoutBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for POST without body")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -1136,12 +1136,12 @@ func TestRawCmd_InvalidMethod(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid method")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
@@ -1161,12 +1161,12 @@ func TestRawCmd_EmptyAtBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for --body @")
 	}
-	aw, ok := err.(*errAlreadyWritten)
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
 	if !ok {
-		t.Fatalf("expected errAlreadyWritten, got %T", err)
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
 	}
-	if aw.code != jrerrors.ExitValidation {
-		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.code)
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
 
