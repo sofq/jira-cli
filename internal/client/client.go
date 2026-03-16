@@ -185,7 +185,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	// Cache check for GET requests.
 	var cacheKey string
 	if c.CacheTTL > 0 && method == "GET" {
-		cacheKey = cache.Key(method, rawURL)
+		cacheKey = cache.Key(method, rawURL, c.cacheAuthContext())
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
 			return c.WriteOutput(data)
 		}
@@ -313,7 +313,7 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	// Bug #8: Check cache before fetching pages.
 	var cacheKey string
 	if c.CacheTTL > 0 {
-		cacheKey = cache.Key(method, firstURL)
+		cacheKey = cache.Key(method, firstURL, c.cacheAuthContext())
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
 			return c.WriteOutput(data)
 		}
@@ -551,6 +551,12 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 	}
 
 	return body, jrerrors.ExitOK
+}
+
+// cacheAuthContext returns a string that uniquely identifies the auth configuration,
+// so that different profiles/credentials produce different cache keys for the same URL.
+func (c *Client) cacheAuthContext() string {
+	return c.BaseURL + "\x00" + c.Auth.Type + "\x00" + c.Auth.Username + "\x00" + c.Auth.Token
 }
 
 // VerboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.

@@ -277,6 +277,11 @@ func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path strin
 	fullURL := c.BaseURL + path
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
 	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "failed to create request: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
 		return nil, jrerrors.ExitError
 	}
 	req.Header.Set("Accept", "application/json")

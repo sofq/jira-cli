@@ -143,3 +143,61 @@ func TestCacheKeyConsistent(t *testing.T) {
 		t.Errorf("Key() is not deterministic: got %q, %q, %q", k1, k2, k3)
 	}
 }
+
+// --- Bug #50: Cache key must include auth context ---
+
+// TestCacheKeyDifferentAuthContext verifies that the same URL with different
+// auth contexts produces different cache keys, preventing cross-profile cache leaks.
+func TestCacheKeyDifferentAuthContext(t *testing.T) {
+	url := "https://example.com/rest/api/3/issue/PROJ-1"
+	k1 := cache.Key("GET", url, "profile1")
+	k2 := cache.Key("GET", url, "profile2")
+
+	if k1 == k2 {
+		t.Error("Bug #50: same URL with different auth contexts should produce different cache keys")
+	}
+
+	// Without auth context should differ from with auth context
+	k3 := cache.Key("GET", url)
+	if k1 == k3 {
+		t.Error("Bug #50: key with auth context should differ from key without")
+	}
+}
+
+// TestCacheKeyBackwardCompatible verifies that Key with no auth context
+// still works correctly.
+func TestCacheKeyBackwardCompatible(t *testing.T) {
+	k1 := cache.Key("GET", "https://a.com/path")
+	k2 := cache.Key("GET", "https://a.com/path")
+	if k1 != k2 {
+		t.Error("Key without auth context should be deterministic")
+	}
+}
+
+// TestCacheKeyAuthContextIsolation verifies that cached data from one profile
+// is not returned for a different profile.
+func TestCacheKeyAuthContextIsolation(t *testing.T) {
+	url := "https://test.example.com/isolation-" + t.Name()
+	key1 := cache.Key("GET", url, "user1@example.com")
+	key2 := cache.Key("GET", url, "user2@example.com")
+
+	// Store data under key1
+	if err := cache.Set(key1, []byte(`{"user":"user1"}`)); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+
+	// key2 should miss (different auth context)
+	_, ok := cache.Get(key2, time.Minute)
+	if ok {
+		t.Error("Bug #50: cache should not return data from a different auth context")
+	}
+
+	// key1 should hit
+	data, ok := cache.Get(key1, time.Minute)
+	if !ok {
+		t.Fatal("expected cache hit for same auth context")
+	}
+	if string(data) != `{"user":"user1"}` {
+		t.Errorf("unexpected data: %s", data)
+	}
+}

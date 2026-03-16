@@ -287,7 +287,7 @@ func testConnection(baseURL, authType, username, token string) error {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	switch authType {
+	switch strings.ToLower(authType) {
 	case "bearer":
 		req.Header.Set("Authorization", "Bearer "+token)
 	case "oauth2":

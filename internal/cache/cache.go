@@ -16,9 +16,15 @@ func Dir() string {
 	return p
 }
 
-// Key generates a cache key from method + URL.
-func Key(method, url string) string {
-	h := sha256.Sum256([]byte(method + " " + url))
+// Key generates a cache key from method + URL + auth context.
+// The authContext should include enough information to distinguish requests
+// made with different credentials (e.g. profile name or base-url + username).
+func Key(method, url string, authContext ...string) string {
+	input := method + " " + url
+	for _, ctx := range authContext {
+		input += "\x00" + ctx
+	}
+	h := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(h[:])
 }
 

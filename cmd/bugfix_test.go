@@ -1951,6 +1951,83 @@ func TestConfigureRejectsOAuth2(t *testing.T) {
 // when OAuth2 token fetch fails, instead of the old behavior where the request
 // continued without auth and produced a second 401 error.
 
+// --- Bug #49: fetchJSONWithBody must write error to stderr when request creation fails ---
+
+func TestFetchJSONWithBody_BadURL_WritesError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "://invalid-url", // will cause http.NewRequestWithContext to fail
+		Auth:       config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetContext(client.NewContext(context.Background(), c))
+
+	// Use runTransition which calls fetchJSONWithBody internally.
+	// With a malformed base URL, request creation should fail.
+	cmd.Flags().String("issue", "TEST-1", "")
+	cmd.Flags().String("to", "Done", "")
+	cmd.Flags().Bool("dry-run", false, "")
+
+	// Call batchTransition which uses fetchJSON -> fetchJSONWithBody
+	code := BatchTransitionForTest(context.Background(), c, "TEST-1", "Done")
+
+	if code == 0 {
+		t.Error("expected non-zero exit code for invalid URL")
+	}
+
+	errOutput := stderr.String()
+	if errOutput == "" {
+		t.Error("Bug #49: expected error JSON on stderr when request creation fails, got empty stderr")
+	}
+	if !strings.Contains(errOutput, "connection_error") && !strings.Contains(errOutput, "failed to create request") {
+		t.Errorf("expected structured error on stderr, got: %s", errOutput)
+	}
+}
+
+// --- Bug #51: testConnection must normalize auth type (case-insensitive) ---
+
+func TestTestConnection_NormalizesAuthType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			t.Errorf("expected Bearer auth header, got: %q", auth)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{"accountId":"test"}`)
+	}))
+	defer server.Close()
+
+	// Test with uppercase "Bearer" - should still use bearer auth, not basic
+	err := ExportTestConnection(server.URL, "Bearer", "", "mytoken")
+	if err != nil {
+		t.Errorf("Bug #51: testConnection with 'Bearer' (uppercase) should work, got: %v", err)
+	}
+
+	// Also test "BASIC"
+	basicServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, _, ok := r.BasicAuth()
+		if !ok || user != "testuser" {
+			t.Errorf("expected basic auth with user 'testuser', got ok=%v user=%q", ok, user)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{"accountId":"test"}`)
+	}))
+	defer basicServer.Close()
+
+	err = ExportTestConnection(basicServer.URL, "BASIC", "testuser", "mytoken")
+	if err != nil {
+		t.Errorf("Bug #51: testConnection with 'BASIC' (uppercase) should work, got: %v", err)
+	}
+}
+
 func TestOAuth2Failure_SingleError_ExitAuth(t *testing.T) {
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
