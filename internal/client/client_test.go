@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
 	"github.com/spf13/cobra"
@@ -1586,3 +1589,782 @@ func TestFetch(t *testing.T) {
 		})
 	}
 }
+
+// --- New coverage tests ---
+
+// TestOAuth2_EmptyToken covers line 84-85: token endpoint returns empty access_token.
+func TestOAuth2_EmptyToken(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"","token_type":"Bearer"}`)
+	}))
+	defer tokenServer.Close()
+
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+	te.Client.Auth = config.AuthConfig{
+		Type: "oauth2", ClientID: "id", ClientSecret: "secret",
+		TokenURL: tokenServer.URL,
+	}
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 2 {
+		t.Errorf("expected exit 2 (auth_error), got %d", code)
+	}
+}
+
+// TestOAuth2_WithScopes covers line 101-103: scope is sent to token endpoint.
+func TestOAuth2_WithScopes(t *testing.T) {
+	var gotScope string
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotScope = r.FormValue("scope")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"tok"}`)
+	}))
+	defer tokenServer.Close()
+
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+	te.Client.Auth = config.AuthConfig{
+		Type: "oauth2", ClientID: "id", ClientSecret: "secret",
+		TokenURL: tokenServer.URL, Scopes: "read write",
+	}
+
+	te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if gotScope != "read write" {
+		t.Errorf("expected scope 'read write', got %q", gotScope)
+	}
+}
+
+// TestOAuth2_InvalidJSON covers line 119-121: token endpoint returns invalid JSON.
+func TestOAuth2_InvalidJSON(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintln(w, `not json`)
+	}))
+	defer tokenServer.Close()
+
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+	te.Client.Auth = config.AuthConfig{
+		Type: "oauth2", ClientID: "id", ClientSecret: "secret",
+		TokenURL: tokenServer.URL,
+	}
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 2 {
+		t.Errorf("expected exit 2 (auth_error), got %d", code)
+	}
+}
+
+// TestDo_PathWithoutLeadingSlash covers line 138-139: path without "/" gets it prepended.
+func TestDo_PathWithoutLeadingSlash(t *testing.T) {
+	var gotPath string
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	})
+	defer te.Close()
+
+	code := te.Client.Do(context.Background(), "GET", "rest/api/3/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	if gotPath != "/rest/api/3/test" {
+		t.Errorf("expected path /rest/api/3/test, got %q", gotPath)
+	}
+}
+
+// TestDo_URLWithExistingQuery covers line 143-144: BaseURL already has "?" so query is appended with "&".
+func TestDo_URLWithExistingQuery(t *testing.T) {
+	var gotQuery string
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	})
+	defer te.Close()
+	te.Client.BaseURL = te.Server.URL + "/base?existing=1"
+
+	q := map[string][]string{"newparam": {"2"}}
+	te.Client.Do(context.Background(), "GET", "", q, nil)
+	if !strings.Contains(gotQuery, "existing=1") || !strings.Contains(gotQuery, "newparam=2") {
+		t.Errorf("expected both query params, got %q", gotQuery)
+	}
+}
+
+// TestDo_DryRunNonJSONBody covers line 162-163: DryRun with a body that is not valid JSON.
+func TestDo_DryRunNonJSONBody(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "https://example.com",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		DryRun:     true,
+	}
+
+	body := strings.NewReader("plain text body")
+	code := c.Do(context.Background(), "POST", "/test", nil, body)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &obj); err != nil {
+		t.Fatalf("stdout not valid JSON: %v; got %s", err, stdout.String())
+	}
+	if obj["body"] != "plain text body" {
+		t.Errorf("expected body as string 'plain text body', got %v", obj["body"])
+	}
+}
+
+// TestDoOnce_InvalidURL covers line 194-203: http.NewRequestWithContext fails on invalid URL.
+func TestDoOnce_InvalidURL(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "://invalid-url",
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error), got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr, got %s", stderr.String())
+	}
+}
+
+// TestDetectPagination_InvalidJSON covers line 298-300: non-JSON body returns paginationNone.
+func TestDetectPagination_InvalidJSON(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `not valid json`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	// Non-JSON response with pagination enabled: detectPagination returns None, so it passes through.
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Errorf("expected 0 (pass-through), got %d", code)
+	}
+}
+
+// TestPagination_FirstPageError covers line 325-328: server returns error on first paginated page.
+func TestPagination_FirstPageError(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(500)
+		fmt.Fprintln(w, `{"error":"boom"}`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code == 0 {
+		t.Errorf("expected non-zero exit code on first page error, got 0")
+	}
+}
+
+// TestBuildURL_WithExistingQuery covers line 356-357: buildURL when path already contains "?".
+func TestBuildURL_WithExistingQuery(t *testing.T) {
+	var gotQuery string
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		// Return a response that triggers pagination with 2 pages so buildURL is called for page 2.
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":1,"total":2,"values":[{"id":1}]}`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	// Set BaseURL to include existing query — this causes buildURL to use "&" for subsequent pages.
+	te.Client.BaseURL = te.Server.URL
+
+	page := 0
+	te.Server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		gotQuery = r.URL.RawQuery
+		if page == 1 {
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":1,"total":2,"values":[{"id":1}]}`)
+		} else {
+			fmt.Fprintln(w, `{"startAt":1,"maxResults":1,"total":2,"values":[{"id":2}],"isLast":true}`)
+		}
+	})
+
+	q := map[string][]string{"filter": {"active"}}
+	code := te.Client.Do(context.Background(), "GET", "/test?base=1", q, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// On the second page request, the URL should contain both base=1 and startAt.
+	if page >= 2 && !strings.Contains(gotQuery, "startAt") {
+		t.Errorf("expected startAt in second page query, got %q", gotQuery)
+	}
+}
+
+// TestDoStartAtPagination_UnmarshalError covers line 365-367: first body is valid JSON but
+// not a paginatedPage (has "values" key with wrong type), so falls back to WriteOutput.
+func TestDoStartAtPagination_UnmarshalError(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Has "values" key (triggers paginationValue), but values is a string not array.
+		fmt.Fprintln(w, `{"values":"not-an-array","startAt":0,"total":1}`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Errorf("expected 0 (fallback WriteOutput), got %d", code)
+	}
+}
+
+// TestDoStartAtPagination_NextPageUnmarshalError covers line 387-389: second page returns invalid JSON
+// causing unmarshal to fail, which breaks the pagination loop gracefully.
+func TestDoStartAtPagination_NextPageUnmarshalError(t *testing.T) {
+	page := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			// Valid first page with more to fetch (total > fetched).
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":2,"total":4,"values":[{"id":1},{"id":2}]}`)
+		} else {
+			// Second page: invalid JSON — causes json.Unmarshal to return error → break.
+			fmt.Fprintln(w, `not valid json at all`)
+		}
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	// Should succeed: unmarshal error on second page causes break, then output first page values.
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+}
+
+// TestDoTokenPagination_UnmarshalError covers line 416-418: first body has "issues" key but wrong type.
+func TestDoTokenPagination_UnmarshalError(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Has "issues" key (triggers paginationToken), but issues is a string not array.
+		fmt.Fprintln(w, `{"issues":"not-an-array"}`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Errorf("expected 0 (fallback WriteOutput), got %d", code)
+	}
+}
+
+// TestDoTokenPagination_WithQueryParams covers line 428-430: query params are copied to next token page.
+func TestDoTokenPagination_WithQueryParams(t *testing.T) {
+	page := 0
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			if r.URL.Query().Get("jql") == "" {
+				fmt.Fprintf(w, `{"issues":[],"isLast":true}`)
+				return
+			}
+			fmt.Fprintln(w, `{"issues":[{"key":"A-1"}],"nextPageToken":"tok1"}`)
+		} else {
+			if r.URL.Query().Get("jql") == "" {
+				fmt.Fprintf(w, `{"issues":[],"isLast":true}`)
+				return
+			}
+			fmt.Fprintln(w, `{"issues":[{"key":"A-2"}],"isLast":true}`)
+		}
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	q := map[string][]string{"jql": {"project=TEST"}}
+	code := te.Client.Do(context.Background(), "GET", "/rest/api/3/search/jql", q, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	out := strings.TrimSpace(te.Stdout.String())
+	if !strings.Contains(out, "A-1") || !strings.Contains(out, "A-2") {
+		t.Errorf("expected both issues in output, got %s", out)
+	}
+}
+
+// TestDoTokenPagination_NextPageUnmarshalError covers line 438-440: second token page returns garbage.
+func TestDoTokenPagination_NextPageUnmarshalError(t *testing.T) {
+	page := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			fmt.Fprintln(w, `{"issues":[{"key":"A-1"}],"nextPageToken":"tok1"}`)
+		} else {
+			// Valid JSON but not a tokenPaginatedPage structure that would break unmarshal.
+			// Use a type mismatch: issues is a number not array.
+			fmt.Fprintln(w, `{"issues":42,"nextPageToken":"tok2"}`)
+		}
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	// Should succeed: unmarshal error on second page causes break, outputs first page issues.
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+}
+
+// TestIsLastPage_TotalZeroWithFetched covers line 501-503: total=0 but items were fetched.
+func TestIsLastPage_TotalZeroWithFetched(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// total=0 but values exist — should stop after first page (avoid infinite loop).
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":50,"total":0,"values":[{"id":1}]}`)
+	})
+	defer te.Close()
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	out := strings.TrimSpace(te.Stdout.String())
+	if !strings.Contains(out, `"id":1`) {
+		t.Errorf("expected id:1 in output, got %s", out)
+	}
+}
+
+// TestFetchPage_ConnectionError_Pagination covers line 533-541: HTTP Do fails in fetchPage
+// because the server is closed between page 1 (which succeeds) and page 2.
+func TestFetchPage_ConnectionError_Pagination(t *testing.T) {
+	// Use a channel to synchronise: close the server only after the first page is dispatched.
+	firstPageDone := make(chan struct{}, 1)
+	page := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			fmt.Fprintln(w, `{"startAt":0,"maxResults":1,"total":2,"values":[{"id":1}]}`)
+			firstPageDone <- struct{}{}
+		} else {
+			// Should never reach here — server will be closed.
+			fmt.Fprintln(w, `{"startAt":1,"maxResults":1,"total":2,"values":[{"id":2}],"isLast":true}`)
+		}
+	}))
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	done := make(chan int, 1)
+	go func() {
+		done <- c.Do(context.Background(), "GET", "/test", nil, nil)
+	}()
+
+	// Wait for first page, then close the server to cause connection error on page 2.
+	<-firstPageDone
+	ts.Close()
+
+	code := <-done
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error on page 2), got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestFetchPage_AuthError covers line 520-529: auth fails on a pagination page fetch.
+func TestFetchPage_AuthError(t *testing.T) {
+	callCount := 0
+	var tokenCallCount int
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		tokenCallCount++
+		w.Header().Set("Content-Type", "application/json")
+		if tokenCallCount == 1 {
+			// First call succeeds (for the first page).
+			fmt.Fprintln(w, `{"access_token":"tok1"}`)
+		} else {
+			// Second call returns empty token to trigger auth error.
+			fmt.Fprintln(w, `{"access_token":""}`)
+		}
+	}))
+	defer tokenServer.Close()
+
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		// Always return a response needing a second page.
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":1,"total":2,"values":[{"id":1}]}`)
+	})
+	defer te.Close()
+	te.Client.Auth = config.AuthConfig{
+		Type: "oauth2", ClientID: "id", ClientSecret: "secret",
+		TokenURL: tokenServer.URL,
+	}
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 2 {
+		t.Errorf("expected exit 2 (auth_error on page 2), got %d", code)
+	}
+}
+
+// TestFetchPage_ConnectionError covers line 533-541: server unreachable via doStartAtPagination
+// on a first-page request directed at an unreachable address.
+func TestFetchPage_ConnectionError(t *testing.T) {
+	// Point pagination at a server that is already closed.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	ts.Close() // close immediately — all requests will fail with connection refused.
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error), got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestFetch_WithBody covers line 597-599: Fetch with a non-nil body sets Content-Type.
+func TestFetch_WithBody(t *testing.T) {
+	var gotCT string
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		gotCT = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{}`)
+	})
+	defer te.Close()
+
+	body := strings.NewReader(`{"test":true}`)
+	_, code := te.Client.Fetch(context.Background(), "POST", "/test", body)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	if gotCT != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", gotCT)
+	}
+}
+
+// TestFetch_AuthError covers line 600-607: OAuth2 fails in Fetch.
+func TestFetch_AuthError(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+	// oauth2 with no token URL fails immediately.
+	te.Client.Auth = config.AuthConfig{Type: "oauth2", ClientID: "id", ClientSecret: "secret", TokenURL: ""}
+
+	_, code := te.Client.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 2 {
+		t.Errorf("expected exit 2 (auth_error), got %d", code)
+	}
+}
+
+// TestFetch_ConnectionError covers line 612-615: unreachable server in Fetch.
+func TestFetch_ConnectionError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "http://127.0.0.1:0",
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+	_, code := c.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error), got %d", code)
+	}
+}
+
+// TestFetch_InvalidURL covers line 587-595: Fetch with an unparseable URL.
+func TestFetch_InvalidURL(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "://invalid",
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+	_, code := c.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error), got %d", code)
+	}
+}
+
+// TestFetch_Verbose covers the verbose logging path in Fetch.
+func TestFetch_Verbose(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{"ok":true}`))
+	defer te.Close()
+	te.Client.Verbose = true
+
+	_, code := te.Client.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	stderrOut := te.Stderr.String()
+	if !strings.Contains(stderrOut, "request") {
+		t.Errorf("expected verbose request log in stderr, got %s", stderrOut)
+	}
+}
+
+// hijackBodyDropServer creates a test server that sends HTTP headers with a Content-Length
+// larger than the body it actually sends, then closes the connection. This causes
+// io.ReadAll on the response body to return an "unexpected EOF" error.
+func hijackBodyDropServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("server does not support hijacking")
+			http.Error(w, "no hijack", 500)
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Error("hijack failed:", err)
+			return
+		}
+		// Write headers claiming 1000 bytes, then send only partial body and close.
+		fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{\"partial\":")
+		_ = conn.Close()
+	}))
+}
+
+// TestDoOnce_BodyReadError covers line 237-245: io.ReadAll fails when connection drops mid-body.
+func TestDoOnce_BodyReadError(t *testing.T) {
+	ts := hijackBodyDropServer(t)
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error on body read), got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr, got: %s", stderr.String())
+	}
+}
+
+// TestFetch_BodyReadError covers line 623-630: io.ReadAll fails in Fetch when connection drops.
+func TestFetch_BodyReadError(t *testing.T) {
+	ts := hijackBodyDropServer(t)
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	_, code := c.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error on body read), got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestFetchPage_BodyReadError covers line 548-556: io.ReadAll fails in fetchPage during pagination.
+func TestFetchPage_BodyReadError(t *testing.T) {
+	ts := hijackBodyDropServer(t)
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (connection_error on body read in fetchPage), got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestDoOnce_CacheWriteWarning covers line 261-263: cache.Set fails during a successful GET
+// while verbose mode is on. We make the cache directory read-only to trigger the failure.
+func TestDoOnce_CacheWriteWarning(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, chmod restriction will not apply")
+	}
+	cacheDir := cache.Dir()
+	if err := os.Chmod(cacheDir, 0o555); err != nil {
+		t.Skipf("cannot chmod cache dir %s: %v", cacheDir, err)
+	}
+	defer func() { _ = os.Chmod(cacheDir, 0o755) }()
+
+	te := newTestEnv(jsonHandler(`{"ok":true}`))
+	defer te.Close()
+	te.Client.CacheTTL = time.Minute
+	te.Client.Verbose = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	if !strings.Contains(te.Stderr.String(), "cache write failed") {
+		t.Errorf("expected cache write failed warning in stderr, got: %s", te.Stderr.String())
+	}
+}
+
+// TestDoWithPagination_NonPaginatedCacheWriteWarning covers line 334-336: cache.Set fails
+// when a non-paginated response is cached during pagination mode with verbose.
+func TestDoWithPagination_NonPaginatedCacheWriteWarning(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, chmod restriction will not apply")
+	}
+	cacheDir := cache.Dir()
+	if err := os.Chmod(cacheDir, 0o555); err != nil {
+		t.Skipf("cannot chmod cache dir %s: %v", cacheDir, err)
+	}
+	defer func() { _ = os.Chmod(cacheDir, 0o755) }()
+
+	te := newTestEnv(jsonHandler(`{"not_paginated":true}`))
+	defer te.Close()
+	te.Client.CacheTTL = time.Minute
+	te.Client.Verbose = true
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	if !strings.Contains(te.Stderr.String(), "cache write failed") {
+		t.Errorf("expected cache write failed warning in stderr, got: %s", te.Stderr.String())
+	}
+}
+
+// TestEncodePaginatedResult_CacheWriteWarning covers line 483-485: cache.Set fails after
+// successful pagination merging. The cache dir is made read-only to trigger failure.
+func TestEncodePaginatedResult_CacheWriteWarning(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, chmod restriction will not apply")
+	}
+	cacheDir := cache.Dir()
+	if err := os.Chmod(cacheDir, 0o555); err != nil {
+		t.Skipf("cannot chmod cache dir %s: %v", cacheDir, err)
+	}
+	defer func() { _ = os.Chmod(cacheDir, 0o755) }()
+
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Single page: all results on first page (isLast=true).
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":10,"total":1,"values":[{"id":1}],"isLast":true}`)
+	})
+	defer te.Close()
+	te.Client.CacheTTL = time.Minute
+	te.Client.Verbose = true
+	te.Client.Paginate = true
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d", code)
+	}
+	if !strings.Contains(te.Stderr.String(), "cache write failed") {
+		t.Errorf("expected cache write failed warning in stderr, got: %s", te.Stderr.String())
+	}
+}
+
+// TestFetchPage_InvalidURLInPagination covers line 510-518: http.NewRequestWithContext fails
+// in fetchPage when the URL contains an invalid control character. This is triggered by
+// passing a path with a null byte to Do() with Paginate=true: the null byte propagates
+// into firstURL and then into the fetchPage call for the first paginated page.
+func TestFetchPage_InvalidURLInPagination(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    "http://127.0.0.1:0",
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+	// A path with a null byte causes http.NewRequestWithContext to fail with "invalid control
+	// character in URL" — this exercises the error branch in fetchPage at line 510-518.
+	code := c.Do(context.Background(), "GET", "/test\x00path", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (request creation error in fetchPage), got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr, got: %s", stderr.String())
+	}
+}
+
+// errRoundTripper is an http.RoundTripper that returns an error on every request.
+// It is used to simulate a request creation/transport failure in fetchPage tests.
+type errRoundTripper struct {
+	callCount int
+	realRT    http.RoundTripper
+}
+
+func (e *errRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	e.callCount++
+	if e.callCount == 1 {
+		return e.realRT.RoundTrip(req)
+	}
+	return nil, fmt.Errorf("injected transport error on request %d", e.callCount)
+}
+
+// TestFetchPage_TransportError covers line 533-542: HTTPClient.Do fails in fetchPage.
+// We use a custom transport that allows the first request through but fails the second.
+func TestFetchPage_TransportError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"startAt":0,"maxResults":1,"total":2,"values":[{"id":1}]}`)
+	}))
+	defer ts.Close()
+
+	rt := &errRoundTripper{realRT: http.DefaultTransport}
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    ts.URL,
+		Auth:       config.AuthConfig{},
+		HTTPClient: &http.Client{Transport: rt},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		Paginate:   true,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 1 {
+		t.Errorf("expected exit 1 (transport error on page 2 fetchPage), got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr, got: %s", stderr.String())
+	}
+}
+
+// Ensure net package is used (via hijackBodyDropServer using http.Hijacker interface).
+var _ net.Conn
