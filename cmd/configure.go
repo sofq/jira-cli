@@ -62,6 +62,13 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitValidation}
 	}
 
+	// Test-only mode: when --test is set but no --base-url/--token are provided,
+	// load the existing profile and test its saved credentials.
+	testOnly := testConn && !cmd.Flags().Changed("base-url") && !cmd.Flags().Changed("token")
+	if testOnly {
+		return testExistingProfile(profileName)
+	}
+
 	// Validate required fields are not empty/whitespace.
 	if strings.TrimSpace(baseURL) == "" {
 		apiErr := &jrerrors.APIError{
@@ -131,6 +138,69 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		"status":  "saved",
 		"profile": profileName,
 		"path":    configPath,
+	})
+	fmt.Fprintf(os.Stdout, "%s\n", out)
+	return nil
+}
+
+// testExistingProfile loads a saved profile and tests its connection.
+func testExistingProfile(profileName string) error {
+	configPath := config.DefaultPath()
+	cfg, err := config.LoadFrom(configPath)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "config_error",
+			Status:    0,
+			Message:   "failed to load config: " + err.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitError}
+	}
+
+	// Resolve profile name: use default if not explicitly set.
+	name := profileName
+	if name == "default" {
+		if cfg.DefaultProfile != "" {
+			name = cfg.DefaultProfile
+		}
+	}
+
+	profile, ok := cfg.Profiles[name]
+	if !ok {
+		availableNames := make([]string, 0, len(cfg.Profiles))
+		for k := range cfg.Profiles {
+			availableNames = append(availableNames, k)
+		}
+		apiErr := &jrerrors.APIError{
+			ErrorType: "not_found",
+			Message:   fmt.Sprintf("profile %q not found; available profiles: %s", name, strings.Join(availableNames, ", ")),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
+	}
+
+	if strings.TrimSpace(profile.BaseURL) == "" {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("profile %q has no base_url configured", name),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitValidation}
+	}
+
+	if err := testConnection(profile.BaseURL, profile.Auth.Type, profile.Auth.Username, profile.Auth.Token); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Status:    0,
+			Message:   "connection test failed: " + err.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &errAlreadyWritten{code: jrerrors.ExitError}
+	}
+
+	out, _ := json.Marshal(map[string]string{
+		"status":  "ok",
+		"profile": name,
 	})
 	fmt.Fprintf(os.Stdout, "%s\n", out)
 	return nil
