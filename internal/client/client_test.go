@@ -2105,6 +2105,69 @@ func TestOAuth2_HTMLErrorResponse(t *testing.T) {
 	}
 }
 
+// Bug #45: OAuth2 token fetch errors must be reported to stderr, not silently swallowed.
+func TestOAuth2_ErrorReportedToStderr(t *testing.T) {
+	// OAuth2 token endpoint returns an error.
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"error":"invalid_client"}`)
+	}))
+	defer tokenServer.Close()
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(apiServer.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type:         "oauth2",
+		TokenURL:     tokenServer.URL,
+		ClientID:     "bad-id",
+		ClientSecret: "bad-secret",
+	}
+
+	_ = c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+
+	// Before the fix, stderr would be empty (error silently swallowed).
+	// After the fix, stderr should contain the auth error.
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "auth_error") {
+		t.Errorf("expected auth_error in stderr, got: %q", stderrStr)
+	}
+	if !strings.Contains(stderrStr, "oauth2") {
+		t.Errorf("expected 'oauth2' mention in stderr error, got: %q", stderrStr)
+	}
+}
+
+// Bug #45: OAuth2 with empty TokenURL must report a clear error.
+func TestOAuth2_EmptyTokenURLReportsError(t *testing.T) {
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(apiServer.URL, &stdout, &stderr)
+	c.Auth = config.AuthConfig{
+		Type: "oauth2",
+		// Deliberately empty ClientID, ClientSecret, TokenURL
+	}
+
+	_ = c.Do(context.Background(), "GET", "/rest/api/3/test", nil, nil)
+
+	stderrStr := stderr.String()
+	if stderrStr == "" {
+		t.Error("expected stderr output for oauth2 with empty config, got empty string")
+	}
+	if !strings.Contains(stderrStr, "auth_error") {
+		t.Errorf("expected auth_error type in stderr, got: %q", stderrStr)
+	}
+}
+
 // Test: DryRun respects --jq filter.
 func TestDo_DryRunRespectsJQ(t *testing.T) {
 	var stdout, stderr bytes.Buffer

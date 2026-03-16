@@ -77,7 +77,16 @@ func (c *Client) ApplyAuth(req *http.Request) {
 		req.Header.Set("Authorization", "Bearer "+c.Auth.Token)
 	case "oauth2":
 		token, err := c.fetchOAuth2Token()
-		if err == nil && token != "" {
+		if err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "auth_error",
+				Message:   err.Error(),
+				Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return
+		}
+		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	default: // "basic" and any unrecognized type default to basic auth
