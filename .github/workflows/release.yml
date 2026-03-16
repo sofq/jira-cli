@@ -85,8 +85,10 @@ jobs:
           npm version "$VERSION" --no-git-tag-version
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --access public
         working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   pypi-publish:
     runs-on: ubuntu-latest
