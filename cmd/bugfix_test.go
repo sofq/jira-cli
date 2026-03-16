@@ -193,12 +193,12 @@ func TestBatchWorkflow_MissingArgs(t *testing.T) {
 func TestConfigureDelete_RequiresExplicitProfile(t *testing.T) {
 	// Simulate running "jr configure --delete" without --profile.
 	// The flag "profile" should not be marked as Changed.
-	cmd := configureCmd
-	cmd.ResetFlags()
+	// Use a fresh command to avoid mutating global configureCmd state.
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
 	f := cmd.Flags()
 	f.String("base-url", "", "")
 	f.String("token", "", "")
-	f.String("profile", "default", "profile name")
+	f.StringP("profile", "p", "default", "profile name")
 	f.String("auth-type", "basic", "")
 	f.String("username", "", "")
 	f.Bool("test", false, "")
@@ -254,12 +254,12 @@ func TestConfigureTest_SingleError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cmd := configureCmd
-	cmd.ResetFlags()
+	// Use a fresh command to avoid mutating global configureCmd state.
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
 	f := cmd.Flags()
 	f.String("base-url", "", "")
 	f.String("token", "", "")
-	f.String("profile", "default", "")
+	f.StringP("profile", "p", "default", "")
 	f.String("auth-type", "basic", "")
 	f.String("username", "", "")
 	f.Bool("test", false, "")
@@ -898,12 +898,12 @@ func TestClientDo_PathWithQueryParams(t *testing.T) {
 // --- Bug #24: configure validates empty profile name ---
 
 func TestConfigureRejectsEmptyProfile(t *testing.T) {
-	cmd := configureCmd
-	cmd.ResetFlags()
+	// Use a fresh cobra.Command to avoid mutating global configureCmd state.
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
 	f := cmd.Flags()
 	f.String("base-url", "", "")
 	f.String("token", "", "")
-	f.String("profile", "", "profile name")
+	f.StringP("profile", "p", "default", "profile name")
 	f.String("auth-type", "basic", "")
 	f.String("username", "", "")
 	f.Bool("test", false, "")
@@ -1682,6 +1682,84 @@ func TestRawCmd_ValidQueryParam(t *testing.T) {
 // The template fix is verified by the conformance test (gen/conformance_test.go)
 // which ensures generated files match the template. Here we verify the template
 // itself contains the structured error pattern.
+
+// --- Bug #41: Invalid --auth-type at runtime should error, not silently default to basic ---
+
+func TestResolveRejectsInvalidAuthType(t *testing.T) {
+	// Create a config file with a valid profile.
+	dir := t.TempDir()
+	cfgPath := dir + "/config.json"
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	// Resolve with invalid auth-type flag override should fail.
+	flags := &config.FlagOverrides{AuthType: "invalidtype"}
+	_, err := config.Resolve(cfgPath, "", flags)
+	if err == nil {
+		t.Fatal("expected error for invalid auth type, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid auth type") {
+		t.Errorf("error message = %q, want it to contain 'invalid auth type'", err.Error())
+	}
+}
+
+func TestResolveAcceptsValidAuthTypes(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := dir + "/config.json"
+	cfg := &config.Config{
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+		DefaultProfile: "default",
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	for _, validType := range []string{"basic", "bearer", "oauth2", "Basic", "BEARER", "OAuth2"} {
+		flags := &config.FlagOverrides{AuthType: validType}
+		resolved, err := config.Resolve(cfgPath, "", flags)
+		if err != nil {
+			t.Errorf("Resolve(%q): unexpected error: %v", validType, err)
+			continue
+		}
+		if resolved.Auth.Type != strings.ToLower(validType) {
+			t.Errorf("Resolve(%q): Auth.Type = %q, want %q", validType, resolved.Auth.Type, strings.ToLower(validType))
+		}
+	}
+}
+
+// --- Bug #42: configure --test --profile default should test literal "default" profile ---
+// This bug is tested in the E2E test file (TestE2E_ConfigureTestExplicitProfileDefault)
+// because the configure command goes through cobra which triggers os.Exit in the
+// help handler. The fix is in testExistingProfile which now checks profileExplicit.
+
+// --- Bug #43: configure -p short flag should work ---
+
+func TestConfigureShortProfileFlag(t *testing.T) {
+	// Verify that configure command's local flag set has -p shorthand for --profile.
+	// Use LocalFlags() to avoid merged persistent flag set interference.
+	f := configureCmd.LocalFlags().Lookup("profile")
+	if f == nil {
+		t.Fatal("configure command does not have a local 'profile' flag")
+	}
+	if f.Shorthand != "p" {
+		t.Errorf("configure local 'profile' flag shorthand = %q, want %q", f.Shorthand, "p")
+	}
+}
 
 func TestGeneratedTemplate_FileOpenError_HasStructuredError(t *testing.T) {
 	// Read the template file and verify it uses AlreadyWrittenError for @file failures.
