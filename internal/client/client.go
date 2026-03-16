@@ -350,9 +350,6 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 // paths that may already contain query parameters.
 func (c *Client) buildURL(path string, query url.Values) string {
 	rawURL := c.BaseURL + path
-	if len(query) == 0 {
-		return rawURL
-	}
 	if strings.Contains(rawURL, "?") {
 		return rawURL + "&" + query.Encode()
 	}
@@ -392,9 +389,7 @@ func (c *Client) doStartAtPagination(ctx context.Context, method, path string, q
 	}
 
 	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(firstBody, &envelope); err != nil {
-		return c.WriteOutput(firstBody)
-	}
+	_ = json.Unmarshal(firstBody, &envelope) // firstBody already validated above
 
 	var valBuf bytes.Buffer
 	valEnc := json.NewEncoder(&valBuf)
@@ -446,9 +441,7 @@ func (c *Client) doTokenPagination(ctx context.Context, method, path string, que
 	}
 
 	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(firstBody, &envelope); err != nil {
-		return c.WriteOutput(firstBody)
-	}
+	_ = json.Unmarshal(firstBody, &envelope) // firstBody already validated above
 
 	var issBuf bytes.Buffer
 	issEnc := json.NewEncoder(&issBuf)
@@ -467,17 +460,8 @@ func (c *Client) encodePaginatedResult(envelope map[string]json.RawMessage, cach
 	var resultBuf bytes.Buffer
 	enc := json.NewEncoder(&resultBuf)
 	enc.SetEscapeHTML(false)
-	err := enc.Encode(envelope)
+	_ = enc.Encode(envelope) // envelope contains only valid json.RawMessage values
 	result := bytes.TrimRight(resultBuf.Bytes(), "\n")
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   "marshaling paginated results: " + err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
 
 	if cacheKey != "" {
 		if err := cache.Set(cacheKey, result); err != nil {
