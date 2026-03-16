@@ -56,6 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     needs: release
     if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
     continue-on-error: true
@@ -75,10 +76,8 @@ jobs:
           npm version "$VERSION" --no-git-tag-version
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --provenance --access public
         working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   pypi-publish:
     runs-on: ubuntu-latest
