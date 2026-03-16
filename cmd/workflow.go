@@ -120,7 +120,15 @@ func resolveAssignee(ctx context.Context, c *client.Client, to string) (string, 
 		var me struct {
 			AccountID string `json:"accountId"`
 		}
-		if err := json.Unmarshal(body, &me); err != nil || me.AccountID == "" {
+		if err := json.Unmarshal(body, &me); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Message:   "failed to parse /myself response: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return "", false, jrerrors.ExitError
+		}
+		if me.AccountID == "" {
 			apiErr := &jrerrors.APIError{
 				ErrorType: "connection_error",
 				Message:   "could not determine your account ID from /myself",
