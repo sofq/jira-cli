@@ -23,7 +23,7 @@ jobs:
 
       - name: Download latest Jira OpenAPI spec
         run: |
-          curl -sL "https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json" -o spec/jira-v3-latest.json
+          curl -sfSL "https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json" -o spec/jira-v3-latest.json
 
       - name: Check for spec changes
         id: diff

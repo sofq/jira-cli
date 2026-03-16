@@ -113,7 +113,7 @@ jobs:
 
       - name: Build package
         run: |
-          pip install build==1.4.0
+          pip install --require-hashes -r "$GITHUB_WORKSPACE/python/requirements-build.txt"
           cd python && python -m build
 
       - name: Publish to PyPI
