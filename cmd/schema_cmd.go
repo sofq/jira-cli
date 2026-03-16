@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,7 +36,7 @@ var schemaCmd = &cobra.Command{
 			for _, op := range allOps {
 				compact[op.Resource] = append(compact[op.Resource], op.Verb)
 			}
-			data, _ := json.Marshal(compact)
+			data, _ := marshalNoEscape(compact)
 			return schemaOutput(cmd, data)
 		}
 
@@ -44,7 +45,7 @@ var schemaCmd = &cobra.Command{
 			for _, op := range allOps {
 				compact[op.Resource] = append(compact[op.Resource], op.Verb)
 			}
-			data, _ := json.Marshal(compact)
+			data, _ := marshalNoEscape(compact)
 			return schemaOutput(cmd, data)
 		}
 
@@ -61,7 +62,7 @@ var schemaCmd = &cobra.Command{
 					seen[op.Resource] = true
 				}
 			}
-			data, _ := json.Marshal(resources)
+			data, _ := marshalNoEscape(resources)
 			return schemaOutput(cmd, data)
 		}
 
@@ -82,14 +83,14 @@ var schemaCmd = &cobra.Command{
 				apiErr.WriteJSON(os.Stderr)
 				return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 			}
-			data, _ := json.Marshal(matching)
+			data, _ := marshalNoEscape(matching)
 			return schemaOutput(cmd, data)
 		}
 
 		verb := args[1]
 		for _, op := range allOps {
 			if op.Resource == resource && op.Verb == verb {
-				data, _ := json.Marshal(op)
+				data, _ := marshalNoEscape(op)
 				return schemaOutput(cmd, data)
 			}
 		}
@@ -100,6 +101,17 @@ var schemaCmd = &cobra.Command{
 		apiErr.WriteJSON(os.Stderr)
 		return &errAlreadyWritten{code: jrerrors.ExitNotFound}
 	},
+}
+
+// marshalNoEscape serializes v to JSON without HTML escaping.
+func marshalNoEscape(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
 // schemaOutput applies --jq and --pretty flags to schema JSON output.

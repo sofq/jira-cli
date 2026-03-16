@@ -59,7 +59,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 
 	// Respect --dry-run: emit the request details without executing.
 	if c.DryRun {
-		out, _ := json.Marshal(map[string]string{
+		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
@@ -138,7 +138,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: exitCode}
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status":     "transitioned",
 		"issue":      issueKey,
 		"transition": matchedName,
@@ -160,7 +160,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	// Respect --dry-run: emit the request details without executing.
 	if c.DryRun {
-		out, _ := json.Marshal(map[string]string{
+		out, _ := marshalNoEscape(map[string]string{
 			"method": "PUT",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
@@ -208,7 +208,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		if exitCode != jrerrors.ExitOK {
 			return &errAlreadyWritten{code: exitCode}
 		}
-		out, _ := json.Marshal(map[string]string{
+		out, _ := marshalNoEscape(map[string]string{
 			"status": "unassigned",
 			"issue":  issueKey,
 		})
@@ -255,7 +255,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: exitCode}
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status": "assigned",
 		"issue":  issueKey,
 		"to":     to,
@@ -310,7 +310,15 @@ func fetchJSONWithBody(c *client.Client, ctx context.Context, method, path strin
 
 	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "reading response body: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
 	if resp.StatusCode >= 400 {
 		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, string(respBody), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)

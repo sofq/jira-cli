@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/sofq/jira-cli/internal/config"
@@ -161,7 +161,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status":  "saved",
 		"profile": profileName,
 		"path":    configPath,
@@ -199,6 +199,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 		for k := range cfg.Profiles {
 			availableNames = append(availableNames, k)
 		}
+		sort.Strings(availableNames)
 		apiErr := &jrerrors.APIError{
 			ErrorType: "not_found",
 			Message:   fmt.Sprintf("profile %q not found; available profiles: %s", name, strings.Join(availableNames, ", ")),
@@ -226,7 +227,7 @@ func testExistingProfile(cmd *cobra.Command, profileName string, profileExplicit
 		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status":  "ok",
 		"profile": name,
 	})
@@ -269,7 +270,7 @@ func deleteProfileByName(cmd *cobra.Command, name string) error {
 		return &errAlreadyWritten{code: jrerrors.ExitError}
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status":  "deleted",
 		"profile": name,
 		"path":    configPath,

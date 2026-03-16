@@ -308,7 +308,7 @@ func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) in
 // batchTransition executes a workflow transition within a batch operation.
 func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) int {
 	if c.DryRun {
-		out, _ := json.Marshal(map[string]string{
+		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
@@ -378,7 +378,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		return code
 	}
 
-	out, _ := json.Marshal(map[string]string{
+	out, _ := marshalNoEscape(map[string]string{
 		"status":     "transitioned",
 		"issue":      issueKey,
 		"transition": matchedName,
@@ -389,7 +389,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 // batchAssign executes a workflow assign within a batch operation.
 func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int {
 	if c.DryRun {
-		out, _ := json.Marshal(map[string]string{
+		out, _ := marshalNoEscape(map[string]string{
 			"method": "PUT",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
@@ -423,7 +423,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		if code != jrerrors.ExitOK {
 			return code
 		}
-		out, _ := json.Marshal(map[string]string{"status": "unassigned", "issue": issueKey})
+		out, _ := marshalNoEscape(map[string]string{"status": "unassigned", "issue": issueKey})
 		return c.WriteOutput(out)
 
 	default:
@@ -458,7 +458,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 		return code
 	}
 
-	out, _ := json.Marshal(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
+	out, _ := marshalNoEscape(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
 	return c.WriteOutput(out)
 }
 

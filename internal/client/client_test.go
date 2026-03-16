@@ -2252,14 +2252,14 @@ func TestPagination_StartAtOffset_NonZeroFirstPage(t *testing.T) {
 		switch startAt {
 		case "", "0":
 			// Should not be requested when first page starts at 2.
-			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"A"},{"id":"B"}]}`))
+			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"A"},{"id":"B"}]}`))
 		case "2":
-			w.Write([]byte(`{"startAt":2,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"C"},{"id":"D"}]}`))
+			_, _ = w.Write([]byte(`{"startAt":2,"maxResults":2,"total":6,"isLast":false,"values":[{"id":"C"},{"id":"D"}]}`))
 		case "4":
-			w.Write([]byte(`{"startAt":4,"maxResults":2,"total":6,"isLast":true,"values":[{"id":"E"},{"id":"F"}]}`))
+			_, _ = w.Write([]byte(`{"startAt":4,"maxResults":2,"total":6,"isLast":true,"values":[{"id":"E"},{"id":"F"}]}`))
 		default:
 			t.Errorf("unexpected startAt=%q", startAt)
-			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":true,"values":[]}`))
+			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":2,"total":6,"isLast":true,"values":[]}`))
 		}
 	}))
 	defer ts.Close()
@@ -2322,9 +2322,9 @@ func TestPagination_StartAtZero_StillWorks(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		startAt := r.URL.Query().Get("startAt")
 		if startAt == "" || startAt == "0" {
-			w.Write([]byte(`{"startAt":0,"maxResults":2,"total":3,"isLast":false,"values":[{"id":"1"},{"id":"2"}]}`))
+			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":2,"total":3,"isLast":false,"values":[{"id":"1"},{"id":"2"}]}`))
 		} else {
-			w.Write([]byte(`{"startAt":2,"maxResults":2,"total":3,"isLast":true,"values":[{"id":"3"}]}`))
+			_, _ = w.Write([]byte(`{"startAt":2,"maxResults":2,"total":3,"isLast":true,"values":[{"id":"3"}]}`))
 		}
 	}))
 	defer ts.Close()

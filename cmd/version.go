@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
-
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +12,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print version as JSON",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		out, err := json.Marshal(map[string]string{"version": Version})
+		out, err := marshalNoEscape(map[string]string{"version": Version})
 		if err != nil {
 			return err
 		}

@@ -2838,3 +2838,172 @@ func TestE2E_OAuth2MissingFieldsError(t *testing.T) {
 		t.Errorf("error should mention oauth2 required fields, got: %s", msg)
 	}
 }
+
+// --- Bug #58: Raw --query rejects empty key ---
+
+func TestE2E_Raw_QueryEmptyKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	stdout, stderr, exitCode := runJR(t, binary, srv, "raw", "GET", "/rest/api/3/myself", "--query", "=value", "--dry-run")
+	if exitCode != 4 {
+		t.Errorf("expected exit code 4 (validation), got %d; stdout=%s", exitCode, stdout)
+	}
+
+	var errObj map[string]interface{}
+	if err := json.Unmarshal([]byte(stderr), &errObj); err != nil {
+		t.Fatalf("stderr not valid JSON: %s", stderr)
+	}
+	if errObj["error_type"] != "validation_error" {
+		t.Errorf("expected error_type=validation_error, got %v", errObj["error_type"])
+	}
+	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "key=value") {
+		t.Errorf("error message should mention key=value format, got: %s", msg)
+	}
+}
+
+// --- Bug #59: fetchJSONWithBody handles body read errors ---
+
+func TestE2E_Workflow_TransitionSuccess(t *testing.T) {
+	// This verifies fetchJSONWithBody works correctly for successful transitions.
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	stdout, stderr, exitCode := runJR(t, binary, srv, "workflow", "transition", "--issue", "TEST-1", "--to", "Done")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", exitCode, stderr)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout)
+	}
+	if result["status"] != "transitioned" {
+		t.Errorf("expected status=transitioned, got %s", result["status"])
+	}
+}
+
+// --- Bug #60: Schema output preserves literal & < > characters ---
+
+func TestE2E_Schema_NoHTMLEscape(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	stdout, _, exitCode := runJR(t, binary, srv, "schema", "workflow", "get-paginated")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d", exitCode)
+	}
+
+	// The workflow get-paginated schema has descriptions containing "&" characters.
+	// Before the fix, json.Marshal would escape them to \u0026.
+	if strings.Contains(stdout, `\u0026`) {
+		t.Error("schema output should not HTML-escape '&' to \\u0026")
+	}
+	if !strings.Contains(stdout, `&`) {
+		t.Error("schema output should contain literal '&' characters")
+	}
+}
+
+// --- Bug #61: Configure --test lists profiles sorted ---
+
+func TestE2E_Configure_TestProfilesSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	binary := buildBinary(t)
+	srv := mockJira(t)
+
+	// Create a temp config with multiple profiles.
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.json")
+	configJSON := fmt.Sprintf(`{
+		"profiles": {
+			"zebra": {"base_url": "%s", "auth": {"type": "basic", "username": "u", "token": "t"}},
+			"alpha": {"base_url": "%s", "auth": {"type": "basic", "username": "u", "token": "t"}},
+			"middle": {"base_url": "%s", "auth": {"type": "basic", "username": "u", "token": "t"}}
+		},
+		"default_profile": "alpha"
+	}`, srv.URL, srv.URL, srv.URL)
+	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Request a non-existent profile to see the available profiles list.
+	cmd := exec.Command(binary, "configure", "--test", "--profile", "nonexistent")
+	cmd.Env = append(os.Environ(), "JR_CONFIG_PATH="+configPath)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	_ = cmd.Run()
+
+	stderr := errBuf.String()
+	var errObj map[string]interface{}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr)), &errObj); err != nil {
+		t.Fatalf("stderr not valid JSON: %s", stderr)
+	}
+	msg, _ := errObj["message"].(string)
+	// The profile list should be sorted alphabetically: alpha, middle, zebra
+	if !strings.Contains(msg, "alpha, middle, zebra") {
+		t.Errorf("expected sorted profile list 'alpha, middle, zebra', got: %s", msg)
+	}
+}
+
+// --- Bug #62: Workflow output preserves literal special characters ---
+
+func TestE2E_Workflow_OutputNoHTMLEscape(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	// Set up a mock server where transition name contains "&"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/issue/TEST-1/transitions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case "GET":
+			_, _ = w.Write([]byte(`{"transitions":[{"id":"21","name":"Review & Approve","to":{"name":"Review & Approve"}}]}`))
+		case "POST":
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errorMessages":["not found"]}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	binary := buildBinary(t)
+	cmd := exec.Command(binary, "workflow", "transition", "--issue", "TEST-1", "--to", "Review & Approve")
+	cmd.Env = append(os.Environ(),
+		"JR_BASE_URL="+srv.URL,
+		"JR_AUTH_USER=test@example.com",
+		"JR_AUTH_TOKEN=test-token",
+		"JR_AUTH_TYPE=basic",
+		"JR_CONFIG_PATH="+filepath.Join(t.TempDir(), "config.json"),
+	)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("command failed: %v; stderr=%s", err, errBuf.String())
+	}
+
+	stdout := outBuf.String()
+	// The transition name "Review & Approve" should appear literally, not as "Review \u0026 Approve".
+	if strings.Contains(stdout, `\u0026`) {
+		t.Error("workflow output should not HTML-escape '&' to \\u0026")
+	}
+	if !strings.Contains(stdout, `Review & Approve`) {
+		t.Errorf("expected 'Review & Approve' in output, got: %s", stdout)
+	}
+}
