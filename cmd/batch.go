@@ -250,8 +250,11 @@ func executeBatchOp(
 	for _, flag := range schemaOp.Flags {
 		if flag.In == "path" {
 			placeholder := "{" + flag.Name + "}"
-			if val, exists := bop.Args[flag.Name]; exists {
+			if val, exists := bop.Args[flag.Name]; exists && val != "" {
 				path = strings.ReplaceAll(path, placeholder, url.PathEscape(val))
+			} else if flag.Required && strings.Contains(path, placeholder) {
+				errMsg := fmt.Sprintf("missing required path parameter %q", flag.Name)
+				return errorResult(index, jrerrors.ExitValidation, "validation_error", errMsg)
 			}
 		}
 	}

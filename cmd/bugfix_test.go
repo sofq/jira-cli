@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sofq/jira-cli/cmd/generated"
+	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -1164,4 +1165,202 @@ func TestBatchAssign_PrettyPrint(t *testing.T) {
 	if !strings.Contains(got, "\n") || !strings.Contains(got, "  ") {
 		t.Errorf("expected pretty-printed output, got: %s", got)
 	}
+}
+
+// --- Bug #30: configure output ignores --jq and --pretty ---
+
+func TestConfigureTest_JQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"accountId":"abc123"}`)
+	}))
+	defer ts.Close()
+
+	// Write a temporary config file with the test server's URL.
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+	cfg := &config.Config{
+		DefaultProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: ts.URL,
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Override config path for the test.
+	origPath := os.Getenv("JR_CONFIG_PATH")
+	os.Setenv("JR_CONFIG_PATH", configPath)
+	defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "default", "")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+	f.String("jq", "", "")
+	f.Bool("pretty", false, "")
+
+	_ = cmd.Flags().Set("test", "true")
+	_ = cmd.Flags().Set("jq", ".status")
+
+	captured := captureStdout(t, func() {
+		err := runConfigure(cmd, nil)
+		if err != nil {
+			t.Fatalf("runConfigure error: %v", err)
+		}
+	})
+
+	got := strings.TrimSpace(captured)
+	if got != `"ok"` {
+		t.Errorf("expected jq-filtered output %q, got %q", `"ok"`, got)
+	}
+}
+
+func TestConfigureTest_PrettyPrint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"accountId":"abc123"}`)
+	}))
+	defer ts.Close()
+
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+	cfg := &config.Config{
+		DefaultProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL: ts.URL,
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	origPath := os.Getenv("JR_CONFIG_PATH")
+	os.Setenv("JR_CONFIG_PATH", configPath)
+	defer os.Setenv("JR_CONFIG_PATH", origPath)
+
+	cmd := &cobra.Command{Use: "configure", RunE: runConfigure}
+	f := cmd.Flags()
+	f.String("base-url", "", "")
+	f.String("token", "", "")
+	f.String("profile", "default", "")
+	f.String("auth-type", "basic", "")
+	f.String("username", "", "")
+	f.Bool("test", false, "")
+	f.Bool("delete", false, "")
+	f.String("jq", "", "")
+	f.Bool("pretty", false, "")
+
+	_ = cmd.Flags().Set("test", "true")
+	_ = cmd.Flags().Set("pretty", "true")
+
+	captured := captureStdout(t, func() {
+		err := runConfigure(cmd, nil)
+		if err != nil {
+			t.Fatalf("runConfigure error: %v", err)
+		}
+	})
+
+	if !strings.Contains(captured, "\n") || !strings.Contains(captured, "  ") {
+		t.Errorf("expected pretty-printed output, got: %s", captured)
+	}
+}
+
+// --- Bug #31: batch missing required path params sends literal placeholder ---
+
+func TestBatchMissingRequiredPathParam(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp)
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.Flags().String("input", "", "")
+	cmd.SetContext(ctx)
+
+	// issue get requires issueIdOrKey but we don't provide it
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "issue get",
+		Args:    map[string]string{},
+	}, opMap)
+
+	if result.ExitCode != jrerrors.ExitValidation {
+		t.Fatalf("expected exit code %d (validation), got %d", jrerrors.ExitValidation, result.ExitCode)
+	}
+
+	// Verify the error message mentions the missing parameter.
+	if !strings.Contains(string(result.Error), "issueIdOrKey") {
+		t.Errorf("expected error mentioning issueIdOrKey, got: %s", string(result.Error))
+	}
+}
+
+func TestBatchEmptyPathParamValue(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp)
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.Flags().String("input", "", "")
+	cmd.SetContext(ctx)
+
+	// issue get with empty issueIdOrKey
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "issue get",
+		Args:    map[string]string{"issueIdOrKey": ""},
+	}, opMap)
+
+	if result.ExitCode != jrerrors.ExitValidation {
+		t.Fatalf("expected exit code %d (validation), got %d", jrerrors.ExitValidation, result.ExitCode)
+	}
+}
+
+// --- Bug #32: cache files should be owner-readable only ---
+
+func TestCacheFilePermissions(t *testing.T) {
+	key := "test-perms-key"
+	data := []byte(`{"test":"data"}`)
+
+	if err := cache.Set(key, data); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read back the file permissions.
+	dir := cache.Dir()
+	path := dir + "/" + key
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should be 0600 (owner read/write only), not 0644.
+	perm := info.Mode().Perm()
+	if perm != 0o600 {
+		t.Errorf("expected cache file permission 0600, got %04o", perm)
+	}
+
+	// Clean up.
+	os.Remove(path)
 }

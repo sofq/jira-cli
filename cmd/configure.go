@@ -49,7 +49,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			apiErr.WriteJSON(os.Stderr)
 			return &errAlreadyWritten{code: jrerrors.ExitValidation}
 		}
-		return deleteProfileByName(profileName)
+		return deleteProfileByName(cmd, profileName)
 	}
 
 	// Validate profile name is not empty/whitespace.
@@ -66,7 +66,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	// load the existing profile and test its saved credentials.
 	testOnly := testConn && !cmd.Flags().Changed("base-url") && !cmd.Flags().Changed("token")
 	if testOnly {
-		return testExistingProfile(profileName)
+		return testExistingProfile(cmd, profileName)
 	}
 
 	// Validate required fields are not empty/whitespace.
@@ -139,12 +139,11 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		"profile": profileName,
 		"path":    configPath,
 	})
-	fmt.Fprintf(os.Stdout, "%s\n", out)
-	return nil
+	return schemaOutput(cmd, out)
 }
 
 // testExistingProfile loads a saved profile and tests its connection.
-func testExistingProfile(profileName string) error {
+func testExistingProfile(cmd *cobra.Command, profileName string) error {
 	configPath := config.DefaultPath()
 	cfg, err := config.LoadFrom(configPath)
 	if err != nil {
@@ -202,12 +201,11 @@ func testExistingProfile(profileName string) error {
 		"status":  "ok",
 		"profile": name,
 	})
-	fmt.Fprintf(os.Stdout, "%s\n", out)
-	return nil
+	return schemaOutput(cmd, out)
 }
 
 // deleteProfileByName removes a profile from the config file.
-func deleteProfileByName(name string) error {
+func deleteProfileByName(cmd *cobra.Command, name string) error {
 	configPath := config.DefaultPath()
 	cfg, err := config.LoadFrom(configPath)
 	if err != nil {
@@ -247,8 +245,7 @@ func deleteProfileByName(name string) error {
 		"profile": name,
 		"path":    configPath,
 	})
-	fmt.Fprintf(os.Stdout, "%s\n", out)
-	return nil
+	return schemaOutput(cmd, out)
 }
 
 // testConnection performs a GET /rest/api/3/myself against baseURL to verify credentials.

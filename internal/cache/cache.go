@@ -43,5 +43,5 @@ func Get(key string, ttl time.Duration) ([]byte, bool) {
 // Set writes data to the cache. Returns an error if the write fails.
 func Set(key string, data []byte) error {
 	path := filepath.Join(Dir(), key)
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o600)
 }
