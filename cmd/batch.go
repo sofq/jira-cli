@@ -269,6 +269,13 @@ func executeBatchOp(
 		}
 	}
 
+	// Bug #73: If the batch op explicitly specifies "fields" in its args,
+	// clear the per-op client's Fields so that client.Do() does not overwrite
+	// the per-op value with the global --fields flag.
+	if _, hasFields := bop.Args["fields"]; hasFields {
+		opClient.Fields = ""
+	}
+
 	// Handle body.
 	var bodyReaderPtr *strings.Reader
 	if bodyStr, exists := bop.Args["body"]; exists && bodyStr != "" {
