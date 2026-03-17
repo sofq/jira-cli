@@ -180,7 +180,7 @@ func loadTemplateDefault(name string) (string, error) {
 
 // renderTemplate parses and executes a named template with the given data,
 // then runs gofmt on the result.
-func renderTemplate(name string, data interface{}) ([]byte, error) {
+func renderTemplate(name string, data any) ([]byte, error) {
 	src, err := loadTemplate(name)
 	if err != nil {
 		return nil, err

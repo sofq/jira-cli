@@ -149,14 +149,14 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 
 	// DryRun: emit the request as JSON and return immediately.
 	if c.DryRun {
-		dryOut := map[string]interface{}{
+		dryOut := map[string]any{
 			"method": method,
 			"url":    rawURL,
 		}
 		if body != nil {
 			bodyBytes, err := io.ReadAll(body)
 			if err == nil && len(bodyBytes) > 0 {
-				var parsed interface{}
+				var parsed any
 				if json.Unmarshal(bodyBytes, &parsed) == nil {
 					dryOut["body"] = parsed
 				} else {

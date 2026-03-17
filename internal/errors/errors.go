@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// ExitCode is a typed exit code for semantic process exit statuses.
+// ExitCode is an alias for int representing semantic process exit statuses.
 type ExitCode = int
 
 // Exit code constants for structured error handling.
