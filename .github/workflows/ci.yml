@@ -85,6 +85,25 @@ jobs:
           # Verify the module imports cleanly (no missing dependencies)
           python -c "from jira_jr import _get_binary_path; print('import ok')"
 
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+
+      - name: Install website dependencies
+        run: cd website && npm ci
+
+      - name: Build docs
+        run: make docs-build
+
   integration:
     runs-on: ubuntu-latest
     needs: [test, lint]

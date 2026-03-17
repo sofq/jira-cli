@@ -1,0 +1,173 @@
+:root {
+  --vp-c-brand-1: #FF8800;
+  --vp-c-brand-2: #FFA940;
+  --vp-c-brand-3: #CC6D00;
+  --vp-c-brand-soft: rgba(255, 136, 0, 0.14);
+
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular,
+    'SF Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+.dark {
+  --vp-c-bg: #0a0a0a;
+  --vp-c-bg-alt: #161616;
+  --vp-c-bg-elv: #161616;
+  --vp-c-bg-soft: #161616;
+  --vp-c-border: #2a2a2a;
+  --vp-c-divider: #2a2a2a;
+  --vp-c-text-1: #e5e5e5;
+  --vp-c-text-2: #888888;
+  --vp-c-text-3: #666666;
+  --vp-c-brand-1: #FF8800;
+  --vp-c-brand-2: #FFA940;
+  --vp-c-brand-3: #CC6D00;
+  --vp-c-brand-soft: rgba(255, 136, 0, 0.14);
+}
+
+/* ---- Hero ---- */
+
+.VPHero .name {
+  font-family: var(--vp-font-family-mono) !important;
+  font-size: 4rem !important;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #FF8800 0%, #FFA940 50%, #FFD080 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.VPHero .VPImage {
+  display: none !important;
+}
+
+.VPHero .text {
+  font-size: 2.25rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+
+.VPHero .tagline {
+  font-size: 1.05rem !important;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+/* ---- Feature cards ---- */
+
+.VPFeatures .VPFeature {
+  border: 1px solid var(--vp-c-border) !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease;
+}
+
+.VPFeatures .VPFeature:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 136, 0, 0.08);
+}
+
+.dark .VPFeatures .VPFeature:hover {
+  box-shadow: 0 8px 24px rgba(255, 136, 0, 0.12);
+}
+
+/* Feature title styling — monospace accent */
+.VPFeature .title {
+  font-family: var(--vp-font-family-mono);
+  font-weight: 600;
+}
+
+/* ---- Terminal window component ---- */
+
+.terminal-section {
+  max-width: 688px;
+  margin: 1rem auto 3rem;
+  padding: 0 24px;
+}
+
+.terminal-window {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-border);
+  margin-bottom: 16px;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--vp-c-bg-soft);
+  border-bottom: 1px solid var(--vp-c-border);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.terminal-dots .dot.red { background: #ff5f57; }
+.terminal-dots .dot.yellow { background: #febc2e; }
+.terminal-dots .dot.green { background: #28c840; }
+
+.terminal-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.75rem;
+  color: var(--vp-c-text-3);
+  flex: 1;
+  text-align: center;
+  margin-right: 46px; /* offset for dots to center the title */
+}
+
+.terminal-body {
+  margin: 0;
+}
+
+.terminal-body div[class*='language-'] {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.output-window .terminal-title {
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+
+/* ---- Terminal-style code blocks (global) ---- */
+
+.dark div[class*='language-'] {
+  background-color: #111111;
+  border: 1px solid #2a2a2a;
+}
+
+/* ---- Badge styles for HTTP methods ---- */
+
+.method-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--vp-font-family-mono);
+  margin-right: 8px;
+}
+
+.method-get { background: rgba(0, 200, 150, 0.15); color: #00c896; }
+.method-post { background: rgba(255, 136, 0, 0.15); color: #FF8800; }
+.method-put { background: rgba(0, 120, 255, 0.15); color: #0078ff; }
+.method-delete { background: rgba(255, 60, 60, 0.15); color: #ff3c3c; }
+.method-patch { background: rgba(180, 100, 255, 0.15); color: #b464ff; }
+
+.api-path {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+}

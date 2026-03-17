@@ -158,6 +158,11 @@ func init() {
 	})
 }
 
+// RootCommand returns the root cobra.Command for documentation generation.
+func RootCommand() *cobra.Command {
+	return rootCmd
+}
+
 // Execute runs the root command and returns an exit code.
 func Execute() int {
 	if err := rootCmd.Execute(); err != nil {
