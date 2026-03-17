@@ -698,3 +698,22 @@ func TestTestConnection_NoOAuth2Branch(t *testing.T) {
 		t.Errorf("expected testConnection to succeed with oauth2 falling through to basic, got: %v", err)
 	}
 }
+
+func TestTestConnection_HTTPErrorIncludesBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"message":"Invalid credentials"}`)
+	}))
+	defer ts.Close()
+
+	err := ExportTestConnection(ts.URL, "basic", "bad-user", "bad-token")
+	if err == nil {
+		t.Fatal("expected error for HTTP 401, got nil")
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("error should contain status code, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Invalid credentials") {
+		t.Errorf("error should contain response body, got: %v", err)
+	}
+}
