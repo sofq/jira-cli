@@ -131,7 +131,7 @@ When you need multiple Jira calls, use `jr batch` to run them in a single proces
 echo '[
   {"command": "issue get", "args": {"issueIdOrKey": "PROJ-1"}, "jq": ".key"},
   {"command": "issue get", "args": {"issueIdOrKey": "PROJ-2"}, "jq": ".fields.summary"},
-  {"command": "project list", "args": {}, "jq": "[.values[].key]"}
+  {"command": "project search", "args": {}, "jq": "[.values[].key]"}
 ]' | jr batch
 ```
 
@@ -144,13 +144,13 @@ Errors are structured JSON on stderr. Branch on `exit_code` and `error_type`:
 | Exit code | error_type | Meaning | What to do |
 |-----------|-----------|---------|------------|
 | 0 | — | Success | Parse stdout as JSON |
-| 1 | `error` | General error | Log and report to user |
-| 2 | `auth` | Auth failed | Check token/credentials |
-| 3 | `not_found` | Resource not found | Verify issue key / resource ID |
-| 4 | `validation` | Bad request body | Fix the request payload |
-| 5 | `rate_limited` | Rate limited | Wait `retry_after` seconds, then retry |
+| 1 | `connection_error` | General error | Log and report to user |
+| 2 | `auth_failed` | Auth failed (401/403) | Check token/credentials |
+| 3 | `not_found` | Resource not found (404/410) | Verify issue key / resource ID |
+| 4 | `validation_error` | Bad request (400/422/4xx) | Fix the request payload |
+| 5 | `rate_limited` | Rate limited (429) | Wait `retry_after` seconds, then retry |
 | 6 | `conflict` | Conflict (409) | Retry or resolve conflict |
-| 7 | `server` | Server error (5xx) | Retry with backoff |
+| 7 | `server_error` | Server error (5xx) | Retry with backoff |
 
 Example error output:
 ```json
@@ -158,7 +158,6 @@ Example error output:
   "error_type": "not_found",
   "status": 404,
   "message": "Issue Does Not Exist",
-  "hint": "Check that the issue key or ID is correct.",
   "request": {"method": "GET", "path": "/rest/api/3/issue/BAD-999"}
 }
 ```

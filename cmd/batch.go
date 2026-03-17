@@ -41,7 +41,7 @@ var batchCmd = &cobra.Command{
 Input JSON array format:
   [
     {"command": "issue get", "args": {"issueIdOrKey": "FOO-1"}, "jq": ".key"},
-    {"command": "project list", "args": {}}
+    {"command": "project search", "args": {}}
   ]
 
 Output JSON array format:

@@ -131,7 +131,7 @@ Agents can combine multiple operations to reduce subprocess overhead:
 echo '[
   {"command": "issue get", "args": {"issueIdOrKey": "PROJ-1"}, "jq": ".key"},
   {"command": "issue get", "args": {"issueIdOrKey": "PROJ-2"}, "jq": ".key"},
-  {"command": "project list", "args": {}, "jq": "[.values[].key]"}
+  {"command": "project search", "args": {}, "jq": "[.values[].key]"}
 ]' | jr batch
 # → [{"index":0,"exit_code":0,"data":"PROJ-1"}, ...]
 ```
