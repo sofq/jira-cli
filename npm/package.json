@@ -2,12 +2,12 @@
   "name": "jira-jr",
   "version": "0.5.2",
   "description": "Agent-friendly Jira CLI with structured JSON output and jq filtering",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sofq/jira-cli"
   },
-  "homepage": "https://github.com/sofq/jira-cli",
+  "homepage": "https://sofq.github.io/jira-cli/",
   "keywords": [
     "jira",
     "cli",

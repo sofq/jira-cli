@@ -7,7 +7,7 @@ name = "jira-jr"
 version = "0.0.0"
 description = "Agent-friendly Jira CLI with structured JSON output and jq filtering"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.8"
 keywords = ["jira", "cli", "ai", "agent", "json"]
 classifiers = [
@@ -19,7 +19,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sofq/jira-cli"
+Homepage = "https://sofq.github.io/jira-cli/"
+Documentation = "https://sofq.github.io/jira-cli/"
 Repository = "https://github.com/sofq/jira-cli"
 Issues = "https://github.com/sofq/jira-cli/issues"
 
