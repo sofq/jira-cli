@@ -259,4 +259,4 @@ jr is built on these excellent libraries:
 
 ## License
 
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)
