@@ -284,10 +284,11 @@ func renderTemplate(name, tmplStr string, data any) ([]byte, error) {
 // ---- file I/O helpers ----
 
 func writeFile(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	clean := filepath.Clean(path)
+	if err := os.MkdirAll(filepath.Dir(clean), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(clean, data, 0o644) // #nosec G703 -- paths are constructed internally, not from user input
 }
 
 // ---- exit code table construction ----
