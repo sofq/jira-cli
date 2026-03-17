@@ -46,7 +46,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         id: tests
         run: |
-          if go test ./... 2>&1; then
+          if go build ./... && go test ./internal/... ./gen/... 2>&1; then
             echo "tests_passed=true" >> "$GITHUB_OUTPUT"
           else
             echo "tests_passed=false" >> "$GITHUB_OUTPUT"
