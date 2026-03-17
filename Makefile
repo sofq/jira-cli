@@ -1,4 +1,4 @@
-.PHONY: generate build install test spec-update clean lint
+.PHONY: generate build install test spec-update clean lint docs-generate docs-dev docs-build docs
 
 VERSION ?= dev
 LDFLAGS := -s -w -X github.com/sofq/jira-cli/cmd.Version=$(VERSION)
@@ -25,3 +25,14 @@ spec-update:
 clean:
 	rm -f jr
 	rm -f cmd/generated/*.go
+
+docs-generate:
+	go run ./cmd/gendocs/... website
+
+docs-dev: docs-generate
+	cd website && npx vitepress dev
+
+docs-build: docs-generate
+	cd website && npx vitepress build
+
+docs: docs-build

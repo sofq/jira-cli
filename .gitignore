@@ -16,8 +16,15 @@ Thumbs.db
 .env
 .env.*
 
-# Docs (internal)
+# Docs (internal plans/specs — not tracked)
 docs/
+
+# Website (VitePress doc site)
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+website/commands/
+website/guide/error-codes.md
 
 # Claude Code
 .claude/

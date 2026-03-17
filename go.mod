@@ -6,6 +6,7 @@ require (
 	github.com/itchyny/gojq v0.12.18
 	github.com/pb33f/libopenapi v0.34.3
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	github.com/tidwall/pretty v1.2.1
 )
 
@@ -16,7 +17,6 @@ require (
 	github.com/itchyny/timefmt-go v0.1.7 // indirect
 	github.com/pb33f/jsonpath v0.8.1 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.0 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 )
