@@ -574,6 +574,30 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "atlassian-connect",
+			Verb:     "connect-to-forge-migration-task-submission-resource.submit-task_post",
+			Method:   "POST",
+			Path:     "/rest/atlassian-connect/1/migration/{connectKey}/{jiraIssueFieldsKey}/task",
+			Summary:  "Submit Connect issue field migration task",
+			HasBody:  false,
+			Flags: []SchemaFlag{
+				{
+					Name:        "connectKey",
+					Required:    true,
+					Type:        "string",
+					Description: "The key of the Connect app that contains the Jira issue field being migrated.",
+					In:          "path",
+				},
+				{
+					Name:        "jiraIssueFieldsKey",
+					Required:    true,
+					Type:        "string",
+					Description: "The module key of the Connect issue field being migrated.",
+					In:          "path",
+				},
+			},
+		},
+		{
+			Resource: "atlassian-connect",
 			Verb:     "service-registry-resource.services_get",
 			Method:   "GET",
 			Path:     "/rest/atlassian-connect/1/service-registry",
