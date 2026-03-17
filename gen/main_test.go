@@ -131,19 +131,49 @@ func TestRunGenerateInitError(t *testing.T) {
 }
 
 func TestMainSuccess(t *testing.T) {
-	// Run main() from the repo root where spec/jira-v3.json exists.
+	// Use run() with a temp output dir to avoid mutating the real cmd/generated
+	// directory, which would race with parallel test packages (e.g. e2e tests).
+	outDir := t.TempDir()
+	err := run("../spec/jira-v3.json", outDir)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// Verify output files exist.
+	for _, name := range []string{"init.go", "schema_data.go", "issue.go"} {
+		if _, err := os.Stat(filepath.Join(outDir, name)); err != nil {
+			t.Errorf("expected %s to exist: %v", name, err)
+		}
+	}
+}
+
+func TestMainExitSuccess(t *testing.T) {
+	// Test the main() function's exit path with a temp working directory
+	// that has the expected layout.
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)
 	}
-	if err := os.Chdir(".."); err != nil {
+
+	// Create a temp workspace with spec and output dirs.
+	tmpDir := t.TempDir()
+	specDir := filepath.Join(tmpDir, "spec")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	// Copy the spec file.
+	specData, err := os.ReadFile("../spec/jira-v3.json")
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(specDir, "jira-v3.json"), specData, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Chdir: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(origDir)
-		// Clean up generated files.
-		_ = os.RemoveAll(filepath.Join("cmd", "generated"))
-	})
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
 
 	// Override exitFn so os.Exit isn't called.
 	exitCalled := false
