@@ -189,7 +189,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		output = pretty.Pretty(output)
 	}
 
-	fmt.Fprintf(os.Stdout, "%s\n", strings.TrimRight(string(output), "\n"))
+	fmt.Fprintf(os.Stdout, "%s\n", output)
 
 	// Exit with highest-severity exit code from batch operations.
 	maxExit := 0
@@ -277,17 +277,12 @@ func executeBatchOp(
 	}
 
 	// Handle body.
-	var bodyReaderPtr *strings.Reader
+	var body io.Reader
 	if bodyStr, exists := bop.Args["body"]; exists && bodyStr != "" {
-		bodyReaderPtr = strings.NewReader(bodyStr)
+		body = strings.NewReader(bodyStr)
 	}
 
-	var exitCode int
-	if bodyReaderPtr != nil {
-		exitCode = opClient.Do(cmd.Context(), schemaOp.Method, path, query, bodyReaderPtr)
-	} else {
-		exitCode = opClient.Do(cmd.Context(), schemaOp.Method, path, query, nil)
-	}
+	exitCode := opClient.Do(cmd.Context(), schemaOp.Method, path, query, body)
 
 	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 }
@@ -331,7 +326,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		strings.NewReader(string(transBody)))
+		bytes.NewReader(transBody))
 	if code != jrerrors.ExitOK {
 		return code
 	}
@@ -375,7 +370,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	_, code = c.Fetch(ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		strings.NewReader(string(marshaledAssign)))
+		bytes.NewReader(marshaledAssign))
 	if code != jrerrors.ExitOK {
 		return code
 	}

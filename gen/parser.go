@@ -91,7 +91,7 @@ func ParseSpec(path string) ([]Operation, error) {
 			}
 
 			// Merge path-level and operation-level params
-			allParams := make([]*v3.Parameter, 0)
+			var allParams []*v3.Parameter
 			allParams = append(allParams, pathLevelParams...)
 			if mo.op.Parameters != nil {
 				allParams = append(allParams, mo.op.Parameters...)

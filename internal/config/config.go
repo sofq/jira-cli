@@ -96,13 +96,15 @@ func LoadFrom(path string) (*Config, error) {
 
 // SaveTo serialises cfg as indented JSON and writes it to path with 0o600
 // permissions, creating any missing parent directories.
-// Config contains only strings and maps, so json.MarshalIndent cannot fail.
 func SaveTo(cfg *Config, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	data, _ := json.MarshalIndent(cfg, "", "  ")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
 	return os.WriteFile(path, data, 0o600)
 }
 

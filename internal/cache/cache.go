@@ -19,7 +19,7 @@ func Dir() string {
 	cacheDirOnce.Do(func() {
 		dir, _ := os.UserCacheDir()
 		cacheDir = filepath.Join(dir, "jr")
-		_ = os.MkdirAll(cacheDir, 0o755)
+		_ = os.MkdirAll(cacheDir, 0o700)
 	})
 	return cacheDir
 }

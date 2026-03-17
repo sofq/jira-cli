@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -204,7 +205,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, exitCode = c.Fetch(cmd.Context(), "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
-		strings.NewReader(string(transBody)))
+		bytes.NewReader(transBody))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
@@ -270,7 +271,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	_, exitCode = c.Fetch(cmd.Context(), "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
-		strings.NewReader(string(marshaledAssign)))
+		bytes.NewReader(marshaledAssign))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}

@@ -134,6 +134,28 @@ func init() {
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)
+
+	// Override cobra's default help output so that "jr" with no args and
+	// "jr help <resource>" emit JSON errors to stderr instead of plain text
+	// to stdout. This preserves the JSON-only stdout contract.
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd == rootCmd {
+			// Output a helpful JSON hint and exit 0 for explicit --help / help.
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.SetEscapeHTML(false)
+			_ = enc.Encode(map[string]string{
+				"hint":    "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource",
+				"version": Version,
+			})
+			fmt.Fprintf(os.Stdout, "%s", buf.String())
+			return
+		}
+		// Write help text to stderr so stdout stays JSON-only.
+		cmd.SetOut(os.Stderr)
+		defaultHelp(cmd, args)
+	})
 }
 
 // Execute runs the root command and returns an exit code.
@@ -176,30 +198,4 @@ func mergeCommand(root *cobra.Command, handWritten *cobra.Command) {
 		}
 	}
 	root.AddCommand(handWritten)
-}
-
-func init() {
-	// Override cobra's default help output so that "jr" with no args and
-	// "jr help <resource>" emit JSON errors to stderr instead of plain text
-	// to stdout. This preserves the JSON-only stdout contract.
-	// Override help to write to stderr (preserving JSON-only stdout contract).
-	// For the root command with no args, emit a JSON hint instead.
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		if cmd == rootCmd {
-			// Output a helpful JSON hint and exit 0 for explicit --help / help.
-			var buf bytes.Buffer
-			enc := json.NewEncoder(&buf)
-			enc.SetEscapeHTML(false)
-			_ = enc.Encode(map[string]string{
-				"hint":    "use `jr schema` to discover commands, or `jr schema <resource>` for operations on a resource",
-				"version": Version,
-			})
-			fmt.Fprintf(os.Stdout, "%s", buf.String())
-			return
-		}
-		// Write help text to stderr so stdout stays JSON-only.
-		cmd.SetOut(os.Stderr)
-		defaultHelp(cmd, args)
-	})
 }
