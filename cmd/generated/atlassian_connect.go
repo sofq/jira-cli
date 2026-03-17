@@ -579,6 +579,45 @@ var atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migra
 	},
 }
 
+var atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post = &cobra.Command{
+	Use:   "connect-to-forge-migration-task-submission-resource.submit-task_post",
+	Short: "Submit Connect issue field migration task",
+	Long:  "Submits a request to trigger migration of connect issue field to its Forge custom field counterpart.\n\nWhen migrating a Connect app to Forge, [Issue Field](https://developer.atlassian.com/cloud/jira/software/modules/issue-field/) modules\nmust be converted to [Custom field](https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-custom-field/) modules.\nThis endpoint triggers the background migration of field data. Use the GET endpoint to retrieve\nthe status and progress of the task.\n\nFor more details, see\n[Jira modules > Jira Custom Fields](https://developer.atlassian.com/platform/adopting-forge-from-connect/migrate-jira-custom-fields/).\n\n**[Permissions](#permissions) required:** Only Connect and Forge apps can make this request.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.FromContext(cmd.Context())
+		if err != nil {
+			return err
+		}
+		connectKey, _ := cmd.Flags().GetString("connectKey")
+		if strings.TrimSpace(connectKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--connectKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
+		jiraIssueFieldsKey, _ := cmd.Flags().GetString("jiraIssueFieldsKey")
+		if strings.TrimSpace(jiraIssueFieldsKey) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--jiraIssueFieldsKey must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
+		path := fmt.Sprintf("/rest/atlassian-connect/1/migration/%s/%s/task", url.PathEscape(connectKey), url.PathEscape(jiraIssueFieldsKey))
+		query := client.QueryFromFlags(cmd)
+
+		code := c.Do(cmd.Context(), "POST", path, query, nil)
+
+		if code != 0 {
+			return &jerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	},
+}
+
 var atlassian_connect_service_registry_resource_services_get = &cobra.Command{
 	Use:   "service-registry-resource.services_get",
 	Short: "Retrieve the attributes of service registries",
@@ -649,6 +688,12 @@ func init() {
 	atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migration_task_get.Flags().String("jiraIssueFieldsKey", "", "The module key of the Connect issue field being migrated.")
 	atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migration_task_get.MarkFlagRequired("jiraIssueFieldsKey")
 	atlassian_connectCmd.AddCommand(atlassian_connect_connect_to_forge_migration_fetch_task_resource_fetch_migration_task_get)
+
+	atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post.Flags().String("connectKey", "", "The key of the Connect app that contains the Jira issue field being migrated.")
+	atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post.MarkFlagRequired("connectKey")
+	atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post.Flags().String("jiraIssueFieldsKey", "", "The module key of the Connect issue field being migrated.")
+	atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post.MarkFlagRequired("jiraIssueFieldsKey")
+	atlassian_connectCmd.AddCommand(atlassian_connect_connect_to_forge_migration_task_submission_resource_submit_task_post)
 
 	atlassian_connect_service_registry_resource_services_get.Flags().String("serviceIds", "", "The ID of the services (the strings starting with \"b:\" need to be decoded in Base64).")
 	atlassian_connectCmd.AddCommand(atlassian_connect_service_registry_resource_services_get)
