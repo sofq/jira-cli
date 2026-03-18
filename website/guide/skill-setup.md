@@ -149,7 +149,7 @@ The `SKILL.md` teaches agents to:
 | **Workflow commands** | `jr workflow` for transitions, assignments, comments, issue creation — no raw JSON |
 | **Minimize tokens** | `--preset` for common field sets, `--fields` + `--jq` for custom filtering |
 | **Batch calls** | `jr batch` for multiple operations in one process |
-| **Handle errors** | Branch on exit codes: 0=ok, 2=auth, 3=not_found, 5=rate_limited |
+| **Handle errors** | Branch on exit codes: 0=ok, 1=error, 2=auth, 3=not_found, 4=validation, 5=rate_limited, 6=conflict, 7=server |
 | **Configure auth** | Setup with `jr configure`, profiles, env vars |
 | **Troubleshoot** | Common issues: auth failures, unknown commands, large responses |
 

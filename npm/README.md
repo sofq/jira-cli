@@ -1,8 +1,8 @@
 # jira-jr
 
-**Jira CLI built for AI agents** — pure JSON output, semantic exit codes, 600+ auto-generated commands, and built-in jq filtering.
+**The Jira CLI that speaks JSON — built for AI agents**
 
-Give your AI agent (Claude Code, Cursor, Copilot, or custom bots) reliable, token-efficient access to Jira Cloud.
+Pure JSON stdout. Structured errors on stderr. Semantic exit codes. 600+ auto-generated commands from the Jira OpenAPI spec. Zero prompts, zero interactivity.
 
 ## Install
 
@@ -10,48 +10,82 @@ Give your AI agent (Claude Code, Cursor, Copilot, or custom bots) reliable, toke
 npm install -g jira-jr
 ```
 
-## Why jr?
-
-```bash
-# Full Jira response: ~10,000 tokens
-jr issue get --issueIdOrKey PROJ-123
-
-# With jr's filtering: ~50 tokens
-jr issue get --issueIdOrKey PROJ-123 --fields key,summary --jq '{key: .key, summary: .fields.summary}'
-```
-
-- **All output is JSON** — stdout for data, stderr for errors, always
-- **Semantic exit codes** — 0=ok, 2=auth, 3=not_found, 5=rate_limited — agents can branch without parsing
-- **600+ commands** from the official Jira OpenAPI spec, synced daily
-- **Batch operations** — N API calls in one process via `jr batch`
-- **Self-describing** — `jr schema --compact` lets agents discover commands at runtime
-- **Workflow helpers** — `jr workflow transition --to "Done"` resolves IDs automatically
-
 ## Quick start
 
 ```bash
-# Configure
-jr configure --base-url https://yoursite.atlassian.net --token YOUR_API_TOKEN
+jr configure --base-url https://yourorg.atlassian.net --token YOUR_API_TOKEN
+jr issue get --issueIdOrKey PROJ-123 --preset agent
+```
 
-# Search issues
-jr search search-and-reconsile-issues-using-jql \
-  --jql "project = PROJ AND status = 'In Progress'" \
-  --jq '[.issues[] | {key, summary: .fields.summary}]'
+## Why agents use jr
 
-# Transition + assign in one call
+### Self-describing commands
+
+```bash
+jr schema
+jr schema issue get
+```
+
+### Token-efficient output
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 \
+  --fields key,summary --jq '{key: .key, summary: .fields.summary}'
+```
+
+### Workflow helpers
+
+```bash
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+jr workflow comment --issue PROJ-123 --text "Fixed in latest deploy"
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+```
+
+### Batch operations
+
+```bash
 echo '[
-  {"command":"workflow transition","args":{"issue":"PROJ-123","to":"Done"}},
-  {"command":"workflow assign","args":{"issue":"PROJ-123","to":"me"}}
+  {"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},
+  {"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}
 ]' | jr batch
+```
+
+### Watch mode
+
+```bash
+jr watch --jql "project = PROJ" --interval 30s --max-events 10
+```
+
+### Error contract
+
+```json
+{"error_type":"rate_limited","status":429,"retry_after":30}
+```
+
+| Exit | Meaning | Agent action |
+|------|---------|--------------|
+| 0 | OK | Parse stdout |
+| 1 | General error | Log and report |
+| 2 | Auth failed | Re-authenticate |
+| 3 | Not found | Check issue key |
+| 4 | Validation error | Fix request payload |
+| 5 | Rate limited | Wait `retry_after` |
+| 6 | Conflict | Fetch latest and retry |
+| 7 | Server error | Retry with backoff |
+
+### Raw escape hatch
+
+```bash
+jr raw GET /rest/api/3/myself
 ```
 
 ## Also available via
 
 - **Homebrew**: `brew install sofq/tap/jr`
 - **Scoop**: `scoop bucket add sofq https://github.com/sofq/scoop-bucket && scoop install jr`
-- **Docker**: `docker run --rm ghcr.io/sofq/jr version`
+- **Python / uv**: `pip install jira-jr` or `uv tool install jira-jr`
 - **Go**: `go install github.com/sofq/jira-cli@latest`
 
 ## Documentation
 
-Full docs, Claude Code skill, and source at [github.com/sofq/jira-cli](https://github.com/sofq/jira-cli).
+Full docs, skill setup, and source: [github.com/sofq/jira-cli](https://github.com/sofq/jira-cli).
