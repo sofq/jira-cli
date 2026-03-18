@@ -73,6 +73,10 @@ func DefaultPath() string {
 		return filepath.Join(home, "Library", "Application Support", "jr", "config.json")
 	case "windows":
 		appdata := os.Getenv("APPDATA")
+		if appdata == "" {
+			home, _ := os.UserHomeDir()
+			return filepath.Join(home, "AppData", "Roaming", "jr", "config.json")
+		}
 		return filepath.Join(appdata, "jr", "config.json")
 	default: // linux and others
 		home, _ := os.UserHomeDir()

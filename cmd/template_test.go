@@ -586,6 +586,46 @@ func TestTemplateFromIssue_WithParent(t *testing.T) {
 	}
 }
 
+// TestTemplateFromIssue_LabelsParameterized verifies that labels from an issue
+// are stored as a parameterized template variable, not as hard-coded values.
+func TestTemplateFromIssue_LabelsParameterized(t *testing.T) {
+	issueJSON := `{
+		"key": "PROJ-1",
+		"fields": {
+			"summary": "Test issue",
+			"issuetype": {"name": "Bug"},
+			"description": null,
+			"priority": {"name": "High"},
+			"labels": ["bug", "critical"],
+			"parent": {"key": ""}
+		}
+	}`
+
+	tmpl, err := templateFromIssue("labels-test", []byte(issueJSON))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Labels field should use a template expression, not hard-coded values.
+	if tmpl.Fields["labels"] != "{{.labels}}" {
+		t.Errorf("expected labels field to be parameterized as '{{.labels}}', got %q", tmpl.Fields["labels"])
+	}
+
+	// Should have a labels variable with default set to the original values.
+	hasLabels := false
+	for _, v := range tmpl.Variables {
+		if v.Name == "labels" {
+			hasLabels = true
+			if v.Default != "bug,critical" {
+				t.Errorf("expected labels default 'bug,critical', got %q", v.Default)
+			}
+		}
+	}
+	if !hasLabels {
+		t.Error("expected 'labels' variable to be defined in template")
+	}
+}
+
 func TestTemplateFromIssue_InvalidJSON(t *testing.T) {
 	_, err := templateFromIssue("bad", []byte("not json"))
 	if err == nil {

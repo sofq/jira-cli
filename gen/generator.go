@@ -59,7 +59,8 @@ func buildPathTemplate(path string) (tmpl, args string) {
 	for i < len(path) {
 		if path[i] == '{' {
 			end := strings.Index(path[i:], "}")
-			if end == -1 {
+			if end == -1 || end <= 1 {
+				// Unclosed brace or empty parameter name "{}": treat as literal.
 				result.WriteByte(path[i])
 				i++
 				continue

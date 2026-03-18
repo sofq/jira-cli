@@ -446,7 +446,12 @@ func templateFromIssue(name string, issueJSON []byte) (*tmpl.Template, error) {
 	}
 
 	if len(issue.Fields.Labels) > 0 {
-		t.Fields["labels"] = strings.Join(issue.Fields.Labels, ",")
+		t.Variables = append(t.Variables, tmpl.Variable{
+			Name:        "labels",
+			Default:     strings.Join(issue.Fields.Labels, ","),
+			Description: "Comma-separated labels",
+		})
+		t.Fields["labels"] = "{{.labels}}"
 	}
 
 	if issue.Fields.Parent.Key != "" {

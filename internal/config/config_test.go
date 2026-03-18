@@ -749,6 +749,30 @@ func TestDefaultPathPerOS(t *testing.T) {
 	}
 }
 
+// TestDefaultPathWindowsEmptyAPPDATA verifies that when APPDATA is unset on Windows,
+// DefaultPath falls back to UserHomeDir rather than producing a relative path.
+func TestDefaultPathWindowsEmptyAPPDATA(t *testing.T) {
+	setEnv(t, map[string]string{
+		"JR_CONFIG_PATH": "",
+		"APPDATA":        "",
+	})
+	config.SetGOOS("windows")
+	t.Cleanup(func() { config.ResetGOOS() })
+
+	got := config.DefaultPath()
+	if got == "" {
+		t.Error("DefaultPath() returned empty string with APPDATA unset on Windows")
+	}
+	// Must not be a relative path.
+	if !strings.Contains(got, "config.json") {
+		t.Errorf("DefaultPath() = %q, expected path containing config.json", got)
+	}
+	// Should not start with just "jr/" (relative).
+	if strings.HasPrefix(got, "jr") {
+		t.Errorf("DefaultPath() = %q, should not be a relative path", got)
+	}
+}
+
 // TestLoadFromReadError verifies that LoadFrom returns an error (not a
 // fallback empty config) when the file exists but cannot be read.
 func TestLoadFromReadError(t *testing.T) {

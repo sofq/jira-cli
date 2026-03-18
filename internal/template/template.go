@@ -196,10 +196,15 @@ func RenderFields(tmpl *Template, vars map[string]string) (map[string]string, er
 	var missing []string
 	for _, v := range tmpl.Variables {
 		val, ok := vars[v.Name]
-		if v.Required && (!ok || val == "") {
-			if v.Default == "" {
+		if v.Required {
+			if !ok && v.Default == "" {
+				// Not provided and no default: missing.
+				missing = append(missing, v.Name)
+			} else if ok && val == "" && v.Default == "" {
+				// Explicitly set to empty string with no default: missing.
 				missing = append(missing, v.Name)
 			}
+			// If ok && val == "" && v.Default != "": keep the default (don't override with empty).
 		}
 	}
 	if len(missing) > 0 {
@@ -207,6 +212,8 @@ func RenderFields(tmpl *Template, vars map[string]string) (map[string]string, er
 	}
 
 	// Build template data: merge defaults, then overrides.
+	// Empty-string overrides on required variables with defaults are ignored
+	// (the default is kept) to prevent silently omitting required fields.
 	data := make(map[string]string)
 	for _, v := range tmpl.Variables {
 		if v.Default != "" {
@@ -214,6 +221,12 @@ func RenderFields(tmpl *Template, vars map[string]string) (map[string]string, er
 		}
 	}
 	for k, v := range vars {
+		if v == "" {
+			// Skip empty overrides for required variables with defaults.
+			if def, hasDef := data[k]; hasDef && def != "" {
+				continue
+			}
+		}
 		data[k] = v
 	}
 

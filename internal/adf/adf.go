@@ -32,6 +32,17 @@ func FromText(text string) Doc {
 		}
 	}
 
+	// Trim trailing newlines to avoid creating empty paragraph nodes
+	// with empty text (which is invalid ADF).
+	text = strings.TrimRight(text, "\n")
+	if text == "" {
+		return Doc{
+			Type:    "doc",
+			Version: 1,
+			Content: []Block{{Type: "paragraph"}},
+		}
+	}
+
 	lines := strings.Split(text, "\n")
 	blocks := make([]Block, len(lines))
 	for i, line := range lines {
