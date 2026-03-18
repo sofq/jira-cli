@@ -10,6 +10,7 @@ jr configure --profile myprofile --delete   # remove a profile
 
 - **All output is JSON** on stdout. Errors are JSON on stderr.
 - **Exit codes are semantic**: 0=ok, 1=error, 2=auth, 3=not_found, 4=validation, 5=rate_limited, 6=conflict, 7=server
+- **Use `--preset`** for common field sets: `jr issue get --issueIdOrKey PROJ-1 --preset agent` (presets: agent, detail, triage, board)
 - **Use `--jq`** to reduce output tokens: `jr issue get --issueIdOrKey PROJ-1 --jq '{key: .key, summary: .fields.summary}'`
 - **Use `--fields`** to limit Jira response fields: `jr issue get --issueIdOrKey PROJ-1 --fields key,summary,status`
 - **Use `jr batch`** to run multiple operations in one call
@@ -83,12 +84,14 @@ jr schema --list              # all resource names only
 jr schema --compact           # same as default (resource → verbs)
 jr schema issue               # all operations for 'issue'
 jr schema issue get           # full schema with flags for one operation
+jr preset list                # list available output presets
 ```
 
 ## Global Flags
 
 | Flag | Description |
 |------|-------------|
+| `--preset <name>` | named output preset (agent, detail, triage, board) |
 | `--jq <expr>` | jq filter on response |
 | `--fields <list>` | comma-separated fields to return (GET only) |
 | `--cache <duration>` | cache GET responses (e.g. 5m, 1h) |

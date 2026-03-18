@@ -12,6 +12,7 @@ import (
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/preset"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,7 @@ var skipClientCommands = map[string]bool{
 	"completion": true,
 	"help":       true,
 	"schema":     true,
+	"preset":     true,
 }
 
 var rootCmd = &cobra.Command{
@@ -56,6 +58,35 @@ var rootCmd = &cobra.Command{
 		fields, _ := cmd.Flags().GetString("fields")
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
+
+		// Expand --preset into --fields and --jq defaults.
+		// Explicit --fields or --jq flags take precedence over preset values.
+		presetName, _ := cmd.Flags().GetString("preset")
+		if presetName != "" {
+			p, ok, presetErr := preset.Lookup(presetName)
+			if presetErr != nil {
+				apiErr := &jrerrors.APIError{
+					ErrorType: "config_error",
+					Message:   "failed to load user presets: " + presetErr.Error(),
+				}
+				apiErr.WriteJSON(os.Stderr)
+				return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+			}
+			if !ok {
+				apiErr := &jrerrors.APIError{
+					ErrorType: "validation_error",
+					Message:   fmt.Sprintf("unknown preset %q; use `jr preset list` to see available presets", presetName),
+				}
+				apiErr.WriteJSON(os.Stderr)
+				return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
+			}
+			if !cmd.Flags().Lookup("fields").Changed && p.Fields != "" {
+				fields = p.Fields
+			}
+			if !cmd.Flags().Lookup("jq").Changed && p.JQ != "" {
+				jqFilter = p.JQ
+			}
+		}
 
 		flags := &config.FlagOverrides{
 			BaseURL:  baseURL,
@@ -109,7 +140,7 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringP("profile", "p", "", "config profile to use")
 	pf.String("base-url", "", "Jira base URL (overrides config)")
-	pf.String("auth-type", "", "auth type: basic or bearer (overrides config)")
+	pf.String("auth-type", "", "auth type: basic, bearer, or oauth2 (overrides config)")
 	pf.String("auth-user", "", "username for basic auth (overrides config)")
 	pf.String("auth-token", "", "API token or bearer token (overrides config)")
 	pf.String("jq", "", "jq filter expression to apply to the response")
@@ -120,6 +151,7 @@ func init() {
 	pf.String("fields", "", "comma-separated list of fields to return (GET only)")
 	pf.Duration("cache", 0, "cache GET responses for this duration (e.g. 5m, 1h)")
 	pf.Duration("timeout", 30*time.Second, "HTTP request timeout (e.g. 10s, 1m)")
+	pf.String("preset", "", "named output preset (expands to --fields and --jq defaults)")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
