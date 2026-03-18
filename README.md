@@ -183,6 +183,27 @@ jr watch --jql "assignee = currentUser()" --max-events 10 --preset triage
 
 Events: `initial` (first poll), `created`, `updated`, `removed`. Graceful shutdown on Ctrl-C.
 
+### Issue templates (standardized creation)
+
+Pre-built and user-defined templates for common issue creation patterns — agents don't need to construct field JSON:
+
+```bash
+# List available templates
+jr template list
+
+# Show a template's variables and fields
+jr template show bug-report
+
+# Create an issue from a template
+jr template apply bug-report --project PROJ \
+  --var summary="Login broken" --var severity=High --var steps="1. Click login"
+
+# Create a template from an existing issue
+jr template create my-template --from PROJ-123
+```
+
+Built-in templates: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`. User-defined templates are stored in `~/.config/jr/templates/`.
+
 ### Error handling for agents
 
 Every error is a JSON object on stderr with a typed `error_type` agents can branch on:

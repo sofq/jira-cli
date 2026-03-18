@@ -138,6 +138,26 @@ jr watch --jql "project = PROJ" --max-events 10
 
 Events: `initial` (first poll), `created`, `updated`, `removed`. Use Ctrl-C to stop.
 
+### Create issues from templates
+```bash
+# List available templates (bug-report, story, task, epic, subtask, spike)
+jr template list
+
+# Show a template's variables and fields
+jr template show bug-report
+
+# Create issue from a template (no raw JSON needed)
+jr template apply bug-report --project PROJ --var summary="Login broken" --var severity=High
+
+# Create a sub-task from template
+jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=PROJ-100
+
+# Create a user-defined template from an existing issue
+jr template create my-template --from PROJ-123
+```
+
+User-defined templates are stored in `~/.config/jr/templates/` as YAML files.
+
 ### List projects
 ```bash
 jr project search --jq '[.values[] | {key, name}]'
@@ -168,6 +188,9 @@ jr issue get --issueIdOrKey PROJ-123 --preset board    # key, summary, status, a
 
 # List all available presets
 jr preset list
+
+# List all available issue creation templates
+jr template list
 
 # --fields: tell Jira to return only these fields (server-side filtering)
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
