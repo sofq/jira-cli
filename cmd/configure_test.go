@@ -1058,3 +1058,39 @@ func TestConfigure_TestExistingProfile_MalformedConfig(t *testing.T) {
 		t.Errorf("expected ExitError, got %d", aw.Code)
 	}
 }
+
+// TestConfigure_TestExistingProfile_DefaultProfileMissing verifies that when
+// default_profile points to a non-existent profile and --profile is not
+// explicitly set, testExistingProfile returns a not_found error.
+func TestConfigure_TestExistingProfile_DefaultProfileMissing(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	cfg := &config.Config{
+		DefaultProfile: "gone",
+		Profiles: map[string]config.Profile{
+			"other": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("test", "true")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when default_profile points to missing profile")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected ExitNotFound, got %d", aw.Code)
+	}
+}

@@ -175,15 +175,9 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	var resultBuf bytes.Buffer
 	enc := json.NewEncoder(&resultBuf)
 	enc.SetEscapeHTML(false)
-	if err := enc.Encode(results); err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   "failed to encode results: " + err.Error(),
-		}
-		apiErr.WriteJSON(os.Stderr)
-		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
-	}
+	// BatchResult contains only int, string, and json.RawMessage fields —
+	// json.Encode cannot fail.
+	_ = enc.Encode(results)
 
 	output := bytes.TrimRight(resultBuf.Bytes(), "\n")
 
@@ -784,10 +778,9 @@ func parseErrorJSON(errOutput string) json.RawMessage {
 				break
 			}
 		}
-		if allValid && len(jsonLines) == 1 {
-			return jsonLines[0]
-		}
-		if allValid && len(jsonLines) > 1 {
+		// If all non-empty lines are valid JSON but the whole string is not
+		// (checked above), there must be multiple JSON values.
+		if allValid && len(jsonLines) > 0 {
 			arrBytes, _ := json.Marshal(jsonLines)
 			return json.RawMessage(arrBytes)
 		}

@@ -2,6 +2,7 @@ package changelog
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -238,6 +239,44 @@ func TestParse(t *testing.T) {
 		_, err := Parse("PROJ-1", []byte(raw), Options{Since: "not-a-date-or-duration"})
 		if err == nil {
 			t.Error("expected error for invalid --since value")
+		}
+	})
+
+	t.Run("NullToWhenToStringEmpty", func(t *testing.T) {
+		raw := `{
+			"values": [
+				{
+					"created": "2026-01-15T10:30:00Z",
+					"author": {"emailAddress": "john@example.com"},
+					"items": [
+						{"field": "assignee", "fromString": "Alice", "toString": ""}
+					]
+				}
+			]
+		}`
+
+		result, err := Parse("PROJ-1", []byte(raw), Options{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Changes) != 1 {
+			t.Fatalf("expected 1 change, got %d", len(result.Changes))
+		}
+		c := result.Changes[0]
+		if c.From != "Alice" {
+			t.Errorf("expected from 'Alice', got %v", c.From)
+		}
+		if c.To != nil {
+			t.Errorf("expected nil to (toString was empty), got %v", c.To)
+		}
+
+		// Verify JSON output has "to": null.
+		data, err := json.Marshal(result)
+		if err != nil {
+			t.Fatalf("failed to marshal: %v", err)
+		}
+		if !strings.Contains(string(data), `"to":null`) {
+			t.Errorf("expected JSON to contain '\"to\":null', got %s", data)
 		}
 	})
 }

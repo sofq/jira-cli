@@ -2868,6 +2868,32 @@ func TestParseErrorJSON_MixedLines(t *testing.T) {
 	}
 }
 
+// TestParseErrorJSON_EmptyLinesBetween exercises the empty-line-skipping
+// path (batch.go line 777-778) with multiple JSON objects separated by blank lines.
+func TestParseErrorJSON_EmptyLinesBetween(t *testing.T) {
+	// Two JSON objects separated by an empty line. json.Valid returns false
+	// for the whole string (two objects). After split, the empty line is
+	// skipped and two valid JSON lines remain.
+	input := `{"error":"first"}` + "\n\n" + `{"error":"second"}`
+	result := parseErrorJSON(input)
+	if !strings.HasPrefix(string(result), "[") {
+		t.Errorf("expected JSON array, got: %s", string(result))
+	}
+	if !strings.Contains(string(result), "first") || !strings.Contains(string(result), "second") {
+		t.Errorf("expected both objects in array, got: %s", string(result))
+	}
+}
+
+// TestParseErrorJSON_WhitespaceOnlyLines exercises the empty-line-skipping
+// path with lines that contain only whitespace between valid JSON objects.
+func TestParseErrorJSON_WhitespaceOnlyLines(t *testing.T) {
+	input := `{"a":1}` + "\n  \t  \n" + `{"b":2}`
+	result := parseErrorJSON(input)
+	if !strings.HasPrefix(string(result), "[") {
+		t.Errorf("expected JSON array, got: %s", string(result))
+	}
+}
+
 // --- stripVerboseLogs: additional coverage ---
 
 func TestStripVerboseLogs_OnlyErrorLines(t *testing.T) {
@@ -3992,5 +4018,35 @@ func TestRunBatch_MaxExitPropagated(t *testing.T) {
 	// Output should still be written even on partial failure.
 	if !strings.Contains(captured, "[") {
 		t.Errorf("expected JSON array output, got: %s", captured)
+	}
+}
+
+// TestBatchTemplateApply_LookupError exercises the template Lookup error path
+// in batchTemplateApply (batch.go line 855-858) by making the user templates
+// directory unreadable (a regular file where a directory is expected).
+func TestBatchTemplateApply_LookupError(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	// On macOS, os.UserConfigDir() returns $HOME/Library/Application Support.
+	// Create a regular file where the templates directory should be, so
+	// os.ReadDir fails with "not a directory".
+	templatesPath := filepath.Join(tmpHome, "Library", "Application Support", "jr", "templates")
+	if err := os.MkdirAll(filepath.Dir(templatesPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(templatesPath, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+	})
+	if code != jrerrors.ExitError {
+		t.Errorf("expected ExitError for lookup failure, got %d", code)
 	}
 }

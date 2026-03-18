@@ -505,3 +505,29 @@ func TestRawCmd_PolicyDenied(t *testing.T) {
 		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }
+
+// TestRawCmd_BodyAtWithoutFilename exercises the --body @ validation path
+// where no filename is provided after the @ prefix (raw.go line 106-113).
+func TestRawCmd_BodyAtWithoutFilename(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://localhost", &stdout, &stderr)
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	_ = cmd.Flags().Set("body", "@")
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"POST", "/test"})
+	if err == nil {
+		t.Fatal("expected error for --body @ without filename")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
+	}
+}

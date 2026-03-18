@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/sofq/jira-cli/internal/client"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -1266,5 +1267,101 @@ func TestRunTemplateApply_AssignResolveError(t *testing.T) {
 	err := runTemplateApply(cmd, []string{"bug-report"})
 	if err == nil {
 		t.Fatal("expected error when resolveAssignee fails (server 500)")
+	}
+}
+
+// TestRunTemplateApply_WriteOutputError exercises the WriteOutput failure path
+// after a successful Fetch (template.go line 276-278).
+func TestRunTemplateApply_WriteOutputError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/rest/api/3/issue") {
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-1"}`)
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "apply"}
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().StringArray("var", nil, "")
+	cmd.Flags().String("assign", "", "")
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("var", "summary=Test")
+	cmd.SetContext(ctx)
+
+	err := runTemplateApply(cmd, []string{"bug-report"})
+	if err == nil {
+		t.Fatal("expected error when WriteOutput fails with invalid JQ filter")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
+	}
+}
+
+// TestRunTemplateApply_DryRunWriteOutputError exercises the WriteOutput failure
+// in the dry-run path of runTemplateApply (template.go line 248-250).
+func TestRunTemplateApply_DryRunWriteOutputError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("https://example.atlassian.net", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "apply"}
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().StringArray("var", nil, "")
+	cmd.Flags().String("assign", "", "")
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("var", "summary=Test")
+	cmd.SetContext(ctx)
+
+	err := runTemplateApply(cmd, []string{"bug-report"})
+	if err == nil {
+		t.Fatal("expected error when dry-run WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
+	}
+}
+
+// TestRunTemplateCreate_DryRunWriteOutputError exercises the WriteOutput failure
+// in the dry-run path of runTemplateCreate (template.go line 349-351).
+func TestRunTemplateCreate_DryRunWriteOutputError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("https://example.atlassian.net", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "create"}
+	cmd.Flags().String("from", "", "")
+	cmd.Flags().Bool("overwrite", false, "")
+	_ = cmd.Flags().Set("from", "PROJ-123")
+	cmd.SetContext(ctx)
+
+	err := runTemplateCreate(cmd, []string{"test-dry-err"})
+	if err == nil {
+		t.Fatal("expected error when dry-run WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
 	}
 }

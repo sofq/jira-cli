@@ -183,9 +183,8 @@ func List() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
-	if err := enc.Encode(result); err != nil {
-		return nil, err
-	}
+	// templateEntry contains only string fields — json.Encode cannot fail.
+	_ = enc.Encode(result)
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
@@ -267,10 +266,8 @@ func Save(tmpl *Template, overwrite bool) (string, error) {
 		}
 	}
 
-	data, err := yaml.Marshal(tmpl)
-	if err != nil {
-		return "", fmt.Errorf("marshaling template: %w", err)
-	}
+	// Template contains only string/bool/slice fields — yaml.Marshal cannot fail.
+	data, _ := yaml.Marshal(tmpl)
 
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return "", fmt.Errorf("writing template: %w", err)

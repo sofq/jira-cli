@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -701,5 +702,106 @@ func TestList_BuiltinFSError(t *testing.T) {
 	_, err := List()
 	if err == nil {
 		t.Fatal("expected error when builtinFS fails, got nil")
+	}
+}
+
+// TestLoadUserTemplates_UnreadableFile verifies that loadUserTemplates returns
+// an error when a .yaml file in the templates directory cannot be read.
+func TestLoadUserTemplates_UnreadableFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	// Create a .yaml file with no read permissions.
+	filePath := filepath.Join(tmpDir, "noperm.yaml")
+	if err := os.WriteFile(filePath, []byte("name: test"), 0o644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
+	if err := os.Chmod(filePath, 0o000); err != nil {
+		t.Fatalf("setup Chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filePath, 0o644) })
+
+	_, err := loadUserTemplates()
+	if err == nil {
+		t.Fatal("expected error reading unreadable .yaml file")
+	}
+	if !strings.Contains(err.Error(), "reading noperm.yaml") {
+		t.Errorf("expected 'reading noperm.yaml' in error, got: %v", err)
+	}
+}
+
+// readDirButFailReadFS is a filesystem that successfully lists directory entries
+// via ReadDir but fails when attempting to read (Open) specific files.
+type readDirButFailReadFS struct {
+	entries []string
+}
+
+func (f readDirButFailReadFS) Open(name string) (fs.File, error) {
+	// Allow opening the directory itself for ReadDir to work.
+	if name == "builtin" {
+		return &fakeDirFile{entries: f.entries, pos: 0}, nil
+	}
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+}
+
+// fakeDirFile implements fs.File and fs.ReadDirFile for a synthetic directory.
+type fakeDirFile struct {
+	entries []string
+	pos     int
+}
+
+func (d *fakeDirFile) Stat() (fs.FileInfo, error) {
+	return &fakeDirInfo{}, nil
+}
+
+func (d *fakeDirFile) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: "builtin", Err: fs.ErrInvalid}
+}
+
+func (d *fakeDirFile) Close() error { return nil }
+
+func (d *fakeDirFile) ReadDir(n int) ([]fs.DirEntry, error) {
+	var result []fs.DirEntry
+	for _, name := range d.entries[d.pos:] {
+		result = append(result, &fakeDirEntry{name: name})
+	}
+	d.pos = len(d.entries)
+	return result, nil
+}
+
+type fakeDirInfo struct{}
+
+func (fakeDirInfo) Name() string      { return "builtin" }
+func (fakeDirInfo) Size() int64       { return 0 }
+func (fakeDirInfo) Mode() fs.FileMode { return fs.ModeDir | 0o755 }
+func (fakeDirInfo) IsDir() bool       { return true }
+func (fakeDirInfo) Sys() any          { return nil }
+func (fakeDirInfo) ModTime() (t time.Time) { return t }
+
+type fakeDirEntry struct {
+	name string
+}
+
+func (e *fakeDirEntry) Name() string               { return e.name }
+func (e *fakeDirEntry) IsDir() bool                { return false }
+func (e *fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (e *fakeDirEntry) Info() (fs.FileInfo, error)  { return nil, nil }
+
+// TestLoadBuiltinTemplates_ReadFileErrorFromFS verifies that loadBuiltinTemplates
+// returns an error when a builtin .yaml file is listed in the directory but
+// cannot be read (fs.ReadFile fails).
+func TestLoadBuiltinTemplates_ReadFileErrorFromFS(t *testing.T) {
+	origFS := builtinFS
+	builtinFS = readDirButFailReadFS{entries: []string{"broken.yaml"}}
+	defer func() { builtinFS = origFS }()
+
+	_, err := loadBuiltinTemplates()
+	if err == nil {
+		t.Fatal("expected error when ReadFile fails for builtin template, got nil")
+	}
+	if !strings.Contains(err.Error(), "reading builtin/broken.yaml") {
+		t.Errorf("expected 'reading builtin/broken.yaml' in error, got: %v", err)
 	}
 }
