@@ -25,7 +25,7 @@ Most CLIs are built for humans — they print tables, prompt for input, and bury
 | Parseable output | Pure JSON on stdout, always |
 | Machine-readable errors | Structured JSON on stderr with `error_type`, `status`, `retry_after` |
 | Predictable exit codes | 0-7, each mapped to a specific failure class |
-| Token efficiency | `--jq` and `--fields` to minimize response size |
+| Token efficiency | `--preset`, `--jq`, and `--fields` to minimize response size |
 | No interactivity | Flag-driven, zero prompts, stdin/stdout clean |
 | Batch operations | `jr batch` executes N operations in one process |
 | Self-description | `jr schema` lets agents discover commands at runtime |
@@ -138,7 +138,7 @@ echo '[
 
 ### Workflow commands (agents don't need to know Jira internals)
 
-High-level commands that resolve IDs automatically — agents don't need to look up transition IDs or account IDs:
+High-level commands that resolve IDs automatically — agents don't need to look up transition IDs, account IDs, sprint IDs, or link type IDs:
 
 ```bash
 # Transition by status name (resolves transition ID automatically)
@@ -146,7 +146,24 @@ jr workflow transition --issue PROJ-123 --to "Done"
 
 # Assign by name or "me" (resolves account ID automatically)
 jr workflow assign --issue PROJ-123 --to "me"
-jr workflow assign --issue PROJ-123 --to "john.doe@company.com"
+
+# Transition + assign in one step
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+
+# Add a plain-text comment (auto-converted to ADF)
+jr workflow comment --issue PROJ-123 --text "Fixed in latest deploy"
+
+# Create issue from flags (no raw JSON needed)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+
+# Link issues by type name
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+
+# Log work with human-friendly duration
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+
+# Move issue to sprint by name
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 ```
 
 ### Error handling for agents
@@ -182,6 +199,9 @@ Jira responses can be 10K+ tokens for a single issue. jr helps agents stay withi
 ```bash
 # Full response: ~10,000 tokens
 jr issue get --issueIdOrKey PROJ-123
+
+# With --preset: agent-friendly field set
+jr issue get --issueIdOrKey PROJ-123 --preset agent
 
 # With --fields: ~500 tokens
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
@@ -229,6 +249,7 @@ jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token
 
 | Flag | Description |
 |------|-------------|
+| `--preset <name>` | Named output preset (`agent`, `detail`, `triage`, `board`) |
 | `--jq <expr>` | jq filter applied to response |
 | `--fields <list>` | Comma-separated fields to return (GET only) |
 | `--cache <duration>` | Cache GET responses (e.g. `5m`, `1h`) |
@@ -236,6 +257,7 @@ jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token
 | `--no-paginate` | Disable automatic pagination |
 | `--dry-run` | Print request as JSON without executing |
 | `--verbose` | Log HTTP details to stderr as JSON |
+| `--timeout <duration>` | HTTP request timeout (default `30s`) |
 | `--profile <name>` | Use a named config profile |
 
 ## Development

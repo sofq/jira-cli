@@ -68,6 +68,10 @@ jr search search-and-reconsile-issues-using-jql \
 
 ### Create an issue
 ```bash
+# From flags (preferred — no raw JSON needed)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High --labels bug,urgent
+
+# From raw JSON (for advanced fields)
 jr issue create-issue --body '{"fields":{"project":{"key":"PROJ"},"summary":"Bug title","issuetype":{"name":"Bug"}}}'
 ```
 
@@ -78,12 +82,43 @@ jr workflow transition --issue PROJ-123 --to "Done"
 jr workflow transition --issue PROJ-123 --to "In Progress"
 ```
 
+### Transition + assign in one step
+```bash
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+```
+
 ### Assign an issue
 ```bash
 # "me" resolves to the authenticated user's account ID
 jr workflow assign --issue PROJ-123 --to "me"
 # Also accepts email or display name
 jr workflow assign --issue PROJ-123 --to "john@company.com"
+# Unassign
+jr workflow assign --issue PROJ-123 --to "none"
+```
+
+### Add a comment
+```bash
+# Plain text, auto-converted to ADF
+jr workflow comment --issue PROJ-123 --text "This is done"
+```
+
+### Link issues
+```bash
+# Resolves link type ID automatically
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+```
+
+### Log work
+```bash
+# Human-friendly duration (e.g. 2h, 1d 3h, 45m)
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+```
+
+### Move to sprint
+```bash
+# Resolves sprint ID by name automatically
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 ```
 
 ### List projects
@@ -108,6 +143,15 @@ echo '{"key":"value"}' | jr raw POST /rest/api/3/some/endpoint --body -
 Jira responses can be huge (10K+ tokens for a single issue). Always minimize output:
 
 ```bash
+# --preset: use a named preset for common field combinations
+jr issue get --issueIdOrKey PROJ-123 --preset agent    # key, summary, status, assignee, type, priority
+jr issue get --issueIdOrKey PROJ-123 --preset detail   # above + description, comments, subtasks, links
+jr issue get --issueIdOrKey PROJ-123 --preset triage   # key, summary, status, priority, created, updated, reporter
+jr issue get --issueIdOrKey PROJ-123 --preset board    # key, summary, status, assignee, sprint, story points, type
+
+# List all available presets
+jr preset list
+
 # --fields: tell Jira to return only these fields (server-side filtering)
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
 
@@ -121,7 +165,7 @@ jr issue get --issueIdOrKey PROJ-123 --fields key,summary --jq '{key: .key, summ
 jr project search --cache 5m --jq '[.values[].key]'
 ```
 
-**Always use `--fields` and `--jq` together.** `--fields` reduces what Jira sends back, `--jq` shapes the output into exactly what you need.
+**Always use `--preset` or `--fields` + `--jq`.** `--preset` gives you common field sets with zero effort. `--fields` reduces what Jira sends back, `--jq` shapes the output into exactly what you need.
 
 ## Batch Operations
 
@@ -144,7 +188,7 @@ Errors are structured JSON on stderr. Branch on `exit_code` and `error_type`:
 | Exit code | error_type | Meaning | What to do |
 |-----------|-----------|---------|------------|
 | 0 | — | Success | Parse stdout as JSON |
-| 1 | `connection_error` | General error | Log and report to user |
+| 1 | — | General error | Log and report to user |
 | 2 | `auth_failed` | Auth failed (401/403) | Check token/credentials |
 | 3 | `not_found` | Resource not found (404/410) | Verify issue key / resource ID |
 | 4 | `validation_error` | Bad request (400/422/4xx) | Fix the request payload |
@@ -166,6 +210,7 @@ Example error output:
 
 | Flag | Description |
 |------|-------------|
+| `--preset <name>` | named output preset (agent, detail, triage, board) |
 | `--jq <expr>` | jq filter on response |
 | `--fields <list>` | comma-separated fields to return (GET only) |
 | `--cache <duration>` | cache GET responses (e.g. `5m`, `1h`) |
@@ -195,6 +240,6 @@ jr raw GET /rest/api/3/myself
 
 **Unknown command** — Command names are auto-generated from Jira's API and can be verbose. Use `jr schema` to find the right name, or use `jr raw` as an escape hatch.
 
-**Large responses filling context** — Always use `--fields` and `--jq` to minimize output.
+**Large responses filling context** — Always use `--preset` or `--fields` + `--jq` to minimize output.
 
 **"--dry-run"** — Use this to preview what `jr` will send without making the API call. Useful for debugging request bodies.

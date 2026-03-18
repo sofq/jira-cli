@@ -146,7 +146,8 @@ The `SKILL.md` teaches agents to:
 | Capability | How |
 |-----------|-----|
 | **Discover commands** | `jr schema` for runtime discovery — no hardcoded knowledge |
-| **Minimize tokens** | Always combine `--fields` + `--jq` (10,000 → 50 tokens) |
+| **Workflow commands** | `jr workflow` for transitions, assignments, comments, issue creation — no raw JSON |
+| **Minimize tokens** | `--preset` for common field sets, `--fields` + `--jq` for custom filtering |
 | **Batch calls** | `jr batch` for multiple operations in one process |
 | **Handle errors** | Branch on exit codes: 0=ok, 2=auth, 3=not_found, 5=rate_limited |
 | **Configure auth** | Setup with `jr configure`, profiles, env vars |
@@ -159,8 +160,9 @@ If your tool doesn't support the Agent Skills standard, add this to the system p
 ```
 You have access to `jr`, an agent-friendly Jira CLI.
 - All output is JSON on stdout. Errors are JSON on stderr.
-- Use --fields and --jq to limit token usage.
-- Exit codes: 0=ok, 2=auth, 3=not_found, 4=validation, 5=rate_limited.
+- Use `jr workflow` for transitions, assignments, comments, and issue creation (no raw JSON).
+- Use --preset (agent, detail, triage, board) or --fields + --jq to limit token usage.
+- Exit codes: 0=ok, 1=error, 2=auth, 3=not_found, 4=validation, 5=rate_limited, 6=conflict, 7=server.
 - Run `jr schema` to discover commands at runtime.
 - Use `jr batch` to run multiple operations efficiently.
 ```

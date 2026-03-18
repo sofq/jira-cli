@@ -11,6 +11,7 @@ All persistent flags listed here can be used with any `jr` command. They control
 | `--auth-type` | | `string` | `""` | Auth type: `basic`, `bearer`, or `oauth2` (overrides config) |
 | `--auth-user` | | `string` | `""` | Username for basic auth (overrides config) |
 | `--auth-token` | | `string` | `""` | API token or bearer token (overrides config) |
+| `--preset` | | `string` | `""` | Named output preset (`agent`, `detail`, `triage`, `board`) |
 | `--jq` | | `string` | `""` | jq filter expression applied to the response |
 | `--fields` | | `string` | `""` | Comma-separated list of fields to return (GET only) |
 | `--cache` | | `duration` | `0` | Cache GET responses for this duration |
@@ -61,7 +62,11 @@ jr issue get --base-url https://other.atlassian.net --issueIdOrKey OTHER-1
 **Type:** `string`
 **Default:** `""` (uses value from config)
 
-Override the authentication type. Accepted values: `basic`, `bearer`, `oauth2`.
+Override the authentication type for a single command. Accepted values: `basic`, `bearer`, `oauth2`.
+
+::: info
+`oauth2` works as a runtime override but cannot be used with `jr configure` — OAuth2 profiles must be configured manually in the config file since they require `client_id`, `client_secret`, and `token_url`.
+:::
 
 ```bash
 jr raw GET /rest/api/3/myself --auth-type bearer --auth-token MY_PAT
@@ -96,6 +101,35 @@ jr raw GET /rest/api/3/myself --auth-token NEW_TOKEN
 ::: warning
 Avoid passing tokens directly on the command line in shared environments. Prefer environment variables (`JR_AUTH_TOKEN`) or config file profiles for sensitive credentials.
 :::
+
+---
+
+### `--preset`
+
+**Type:** `string`
+**Default:** `""` (no preset)
+
+Select a named output preset that expands to a predefined set of `--fields`. Presets provide a shorthand for common field combinations, avoiding the need to remember or type out long `--fields` lists.
+
+| Preset | Fields included |
+|--------|----------------|
+| `agent` | key, summary, status, assignee, issuetype, priority |
+| `detail` | key, summary, status, assignee, issuetype, priority, description, comment, subtasks, issuelinks |
+| `triage` | key, summary, status, priority, created, updated, reporter |
+| `board` | key, summary, status, assignee, sprint, story_points, issuetype |
+
+```bash
+# Quick agent-friendly view
+jr issue get --issueIdOrKey PROJ-123 --preset agent
+
+# Detailed view with description and comments
+jr issue get --issueIdOrKey PROJ-123 --preset detail
+
+# List available presets
+jr preset list
+```
+
+If `--preset` is used together with `--fields` or `--jq`, the explicit flags take precedence.
 
 ---
 

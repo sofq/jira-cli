@@ -72,12 +72,23 @@ jr configure \
 
 ### OAuth2
 
-```bash
-jr configure \
-  --base-url https://yourorg.atlassian.net \
-  --auth-type oauth2 \
-  --token YOUR_OAUTH2_ACCESS_TOKEN
+OAuth2 requires fields (`client_id`, `client_secret`, `token_url`) that cannot be set via CLI flags, so you must configure it manually in the config file (`~/.config/jr/config.json`):
+
+```json
+{
+  "profiles": {
+    "default": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth_type": "oauth2",
+      "client_id": "YOUR_CLIENT_ID",
+      "client_secret": "YOUR_CLIENT_SECRET",
+      "token_url": "https://auth.atlassian.com/oauth/token"
+    }
+  }
+}
 ```
+
+You can still use `--auth-type oauth2` as a runtime flag override for individual commands.
 
 ### Environment variables
 
@@ -138,9 +149,55 @@ Command names are auto-generated from Jira's OpenAPI spec, so they can be verbos
 jr project search
 ```
 
+## Workflow commands
+
+`jr workflow` provides high-level commands that accept simple flags instead of raw JSON. These resolve human-friendly names (status names, user emails, sprint names) to Jira IDs automatically.
+
+```bash
+# Transition an issue by status name
+jr workflow transition --issue PROJ-123 --to "Done"
+
+# Assign by name, email, or "me"
+jr workflow assign --issue PROJ-123 --to "me"
+
+# Transition + assign in one step
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+
+# Add a plain-text comment (auto-converted to ADF)
+jr workflow comment --issue PROJ-123 --text "This is done"
+
+# Create an issue from flags (no raw JSON)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+
+# Link two issues by type name
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+
+# Log work with human-friendly duration
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+
+# Move issue to sprint by name
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
+```
+
+See the full [workflow command reference](/commands/workflow) for all flags and options.
+
 ## Filtering output
 
-Jira API responses are large. A single issue can be 10,000+ tokens of JSON. `jr` provides two flags to cut that down dramatically.
+Jira API responses are large. A single issue can be 10,000+ tokens of JSON. `jr` provides several ways to cut that down dramatically.
+
+### `--preset` --- named output presets
+
+The `--preset` flag selects a predefined combination of fields, so you don't need to remember which fields to request:
+
+```bash
+# Get key fields for agent use
+jr issue get --issueIdOrKey PROJ-123 --preset agent
+
+# Get detailed view with description and comments
+jr issue get --issueIdOrKey PROJ-123 --preset detail
+```
+
+Available presets: `agent`, `detail`, `triage`, `board`. Run `jr preset list` to see all presets and what fields they include.
 
 ### `--fields` --- server-side filtering
 
