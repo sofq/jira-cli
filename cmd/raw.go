@@ -61,6 +61,22 @@ func runRaw(cmd *cobra.Command, args []string) error {
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
 	}
 
+	// Set operation for policy/audit: "raw METHOD".
+	// Policy check is deferred to here because the HTTP method is a positional
+	// arg not available during PersistentPreRunE.
+	c.Operation = "raw " + method
+	if c.Policy != nil {
+		if err := c.Policy.Check(c.Operation); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   err.Error(),
+				Hint:      "This operation is not allowed by the current profile",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
+		}
+	}
+
 	// Build query values.
 	queryPairs, _ := cmd.Flags().GetStringArray("query")
 	q := url.Values{}
