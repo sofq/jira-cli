@@ -139,3 +139,42 @@ func TestDefaultPath(t *testing.T) {
 		t.Errorf("DefaultPath() = %q, want absolute path", p)
 	}
 }
+
+func TestNewLogger_InvalidPath(t *testing.T) {
+	// Attempt to create a logger at a path that cannot be created.
+	_, err := audit.NewLogger("/dev/null/impossible/audit.log")
+	if err == nil {
+		t.Error("expected error for invalid path")
+	}
+}
+
+func TestLogger_LogAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	l, err := audit.NewLogger(path)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	l.Close()
+	// Log after close should be a no-op (no panic).
+	l.Log(audit.Entry{Operation: "after-close"})
+
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "after-close") {
+		t.Error("should not write after close")
+	}
+}
+
+func TestLogger_DoubleClose(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	l, err := audit.NewLogger(path)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	l.Close()
+	// Second close should not panic.
+	l.Close()
+}

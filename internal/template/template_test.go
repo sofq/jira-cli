@@ -296,7 +296,7 @@ func TestLoadUserTemplates_SkipsNonYAMLAndDirs(t *testing.T) {
 
 	// Write a non-YAML file and a subdirectory.
 	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte("not a template"), 0o644)
-	os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o755)
+	_ = os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o755)
 
 	// Write a valid user template.
 	tmpl := Template{

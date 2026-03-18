@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sofq/jira-cli/internal/policy"
@@ -104,5 +105,48 @@ func TestCheck_NilPolicy(t *testing.T) {
 	var p *policy.Policy
 	if err := p.Check("anything"); err != nil {
 		t.Errorf("nil policy should allow everything, got: %v", err)
+	}
+}
+
+func TestDeniedError_ErrorMessage(t *testing.T) {
+	p, _ := policy.NewFromConfig([]string{"issue get"}, nil)
+	err := p.Check("issue delete")
+	if err == nil {
+		t.Fatal("expected error for denied operation")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "issue delete") {
+		t.Errorf("expected operation name in error, got: %s", msg)
+	}
+	if !strings.Contains(msg, "denied") {
+		t.Errorf("expected 'denied' in error, got: %s", msg)
+	}
+}
+
+func TestNewFromConfig_InvalidGlobPattern(t *testing.T) {
+	_, err := policy.NewFromConfig([]string{"[invalid"}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid glob pattern")
+	}
+	if !strings.Contains(err.Error(), "invalid glob pattern") {
+		t.Errorf("expected 'invalid glob pattern' in error, got: %s", err.Error())
+	}
+}
+
+func TestNewFromConfig_InvalidDenyGlobPattern(t *testing.T) {
+	_, err := policy.NewFromConfig(nil, []string{"[bad"})
+	if err == nil {
+		t.Fatal("expected error for invalid deny glob pattern")
+	}
+}
+
+func TestCheck_DenyMode_ErrorContainsPattern(t *testing.T) {
+	p, _ := policy.NewFromConfig(nil, []string{"* delete*"})
+	err := p.Check("issue delete")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "* delete*") {
+		t.Errorf("expected pattern in error, got: %s", err.Error())
 	}
 }

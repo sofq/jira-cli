@@ -2464,7 +2464,9 @@ func TestDo_DryRun_AuditLogging(t *testing.T) {
 	}
 
 	var entry map[string]interface{}
-	json.Unmarshal([]byte(lines[0]), &entry)
+	if err := json.Unmarshal([]byte(lines[0]), &entry); err != nil {
+		t.Fatalf("failed to unmarshal audit entry: %v", err)
+	}
 	if entry["dry_run"] != true {
 		t.Error("expected dry_run=true in audit entry")
 	}

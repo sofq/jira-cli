@@ -15,8 +15,14 @@ import (
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/client"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/policy"
 	"github.com/spf13/cobra"
 )
+
+// newTestDenyPolicy creates a policy that denies all operations.
+func newTestDenyPolicy() (*policy.Policy, error) {
+	return policy.NewFromConfig(nil, []string{"*"})
+}
 
 // --- Op map: workflow commands are included ---
 
@@ -2620,5 +2626,630 @@ func TestBatchDiff_DryRun(t *testing.T) {
 	}
 	if !strings.Contains(result["note"], "would fetch changelog") {
 		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+func TestBatchDiff_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/changelog") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":"100","author":{"accountId":"abc","emailAddress":"a@b.com"},"created":"2025-01-15T10:00:00.000+0000","items":[{"field":"status","fieldtype":"jira","fromString":"Open","toString":"In Progress"}]}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "status") {
+		t.Errorf("expected changelog to contain 'status', got: %s", stdout.String())
+	}
+}
+
+func TestBatchDiff_WithFieldFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"values":[{"id":"100","author":{"accountId":"abc","emailAddress":"a@b.com"},"created":"2025-01-15T10:00:00.000+0000","items":[{"field":"status","fieldtype":"jira","fromString":"Open","toString":"Done"},{"field":"priority","fieldtype":"jira","fromString":"Low","toString":"High"}]}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "TEST-1", "field": "status"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "status") {
+		t.Errorf("expected 'status' in output, got: %s", stdout.String())
+	}
+}
+
+func TestBatchDiff_WithSinceFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"values":[{"id":"100","author":{"accountId":"abc","emailAddress":"a@b.com"},"created":"2020-01-01T10:00:00.000+0000","items":[{"field":"status","fieldtype":"jira","fromString":"Open","toString":"Done"}]}]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "TEST-1", "since": "2025-01-01"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	// Should have empty changes since all entries are from 2020
+	if !strings.Contains(stdout.String(), "changes") {
+		t.Errorf("expected 'changes' in output, got: %s", stdout.String())
+	}
+}
+
+func TestBatchDiff_FetchError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, `{"errorMessages":["issue not found"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "NOPE-999"},
+	})
+	if code != jrerrors.ExitNotFound {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitNotFound, code)
+	}
+}
+
+func TestBatchDiff_InvalidSince(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"values":[]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "TEST-1", "since": "not-a-date"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+}
+
+// --- batchTemplateApply: additional coverage ---
+
+func TestBatchTemplateApply_WithAssign(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"accountId":"me123"}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-51"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "Test with assignee",
+		"assign":  "me",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "PROJ-51") {
+		t.Errorf("expected PROJ-51 in output, got: %s", stdout.String())
+	}
+}
+
+func TestBatchTemplateApply_MissingRequiredVar(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		// missing 'summary' which is required
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "missing required") {
+		t.Errorf("expected 'missing required' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchTemplateApply_WithLabelsAndParent(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			fields := body["fields"].(map[string]any)
+			if fields["parent"] == nil {
+				t.Error("expected parent field")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10002","key":"PROJ-52"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "subtask",
+		"project": "PROJ",
+		"summary": "Sub task test",
+		"parent":  "PROJ-100",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// --- parseErrorJSON: additional coverage ---
+
+func TestParseErrorJSON_ValidJSON(t *testing.T) {
+	input := `{"error":"something broke"}`
+	result := parseErrorJSON(input)
+	if string(result) != input {
+		t.Errorf("expected %s, got %s", input, string(result))
+	}
+}
+
+func TestParseErrorJSON_MultiLineJSON(t *testing.T) {
+	input := `{"error":"first"}` + "\n" + `{"error":"second"}`
+	result := parseErrorJSON(input)
+	// Should return an array of the two JSON objects.
+	if !strings.HasPrefix(string(result), "[") {
+		t.Errorf("expected JSON array for multi-line, got: %s", string(result))
+	}
+}
+
+func TestParseErrorJSON_SingleLineInMulti(t *testing.T) {
+	input := `{"error":"only one"}` + "\n"
+	result := parseErrorJSON(input)
+	// Single valid JSON line after split should return that line.
+	if !strings.Contains(string(result), "only one") {
+		t.Errorf("expected 'only one' in result, got: %s", string(result))
+	}
+}
+
+func TestParseErrorJSON_PlainText(t *testing.T) {
+	input := "plain text error"
+	result := parseErrorJSON(input)
+	if !strings.Contains(string(result), "plain text error") {
+		t.Errorf("expected plain text wrapped in JSON, got: %s", string(result))
+	}
+}
+
+func TestParseErrorJSON_MixedLines(t *testing.T) {
+	input := `{"valid":"json"}` + "\n" + "not json"
+	result := parseErrorJSON(input)
+	// Mixed lines should fall back to wrapping in message.
+	if !strings.Contains(string(result), "message") {
+		t.Errorf("expected wrapped message for mixed lines, got: %s", string(result))
+	}
+}
+
+// --- stripVerboseLogs: additional coverage ---
+
+func TestStripVerboseLogs_OnlyErrorLines(t *testing.T) {
+	input := `{"error_type":"api_error","message":"bad request"}`
+	result := stripVerboseLogs(input)
+	if result != input {
+		t.Errorf("expected error line preserved, got: %s", result)
+	}
+}
+
+func TestStripVerboseLogs_EmptyInput(t *testing.T) {
+	result := stripVerboseLogs("")
+	if result != "" {
+		t.Errorf("expected empty output, got: %q", result)
+	}
+}
+
+func TestStripVerboseLogs_NonJSONLines(t *testing.T) {
+	input := "plain text error\nanother line"
+	result := stripVerboseLogs(input)
+	if !strings.Contains(result, "plain text error") {
+		t.Errorf("expected plain text preserved, got: %s", result)
+	}
+	if !strings.Contains(result, "another line") {
+		t.Errorf("expected second line preserved, got: %s", result)
+	}
+}
+
+// --- errorResult ---
+
+func TestErrorResult(t *testing.T) {
+	result := errorResult(3, jrerrors.ExitValidation, "validation_error", "missing field")
+	if result.Index != 3 {
+		t.Errorf("expected index=3, got %d", result.Index)
+	}
+	if result.ExitCode != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, result.ExitCode)
+	}
+	if result.Data != nil {
+		t.Errorf("expected nil data, got %s", string(result.Data))
+	}
+	if !strings.Contains(string(result.Error), "missing field") {
+		t.Errorf("expected 'missing field' in error, got: %s", string(result.Error))
+	}
+}
+
+// --- executeBatchOp: policy check ---
+
+func TestBatchOp_PolicyDenied(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp, len(allOps))
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	// Create a deny-all policy.
+	pol, _ := newTestDenyPolicy()
+	c.Policy = pol
+
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.SetContext(context.Background())
+
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "issue get",
+		Args:    map[string]string{"issueIdOrKey": "TEST-1"},
+	}, opMap)
+
+	if result.ExitCode != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d for policy denial, got %d", jrerrors.ExitValidation, result.ExitCode)
+	}
+	if !strings.Contains(string(result.Error), "denied") {
+		t.Errorf("expected 'denied' in error, got: %s", string(result.Error))
+	}
+}
+
+// --- batchMove: error paths ---
+
+func TestBatchMove_TransitionFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, `{"errorMessages":["issue not found"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "NOPE-1", "Done", "")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for failed transition")
+	}
+}
+
+func TestBatchMove_AssignResolveError(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.URL.Path == "/rest/api/3/user/search" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `[]`) // empty results = not found
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "nonexistent@user.com")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for unresolved assignee")
+	}
+}
+
+// --- batchComment: error path ---
+
+func TestBatchComment_FetchError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintln(w, `{"errorMessages":["no permission"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchComment(t.Context(), c, "TEST-1", "Hello")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for forbidden")
+	}
+}
+
+// --- batchLink: error paths ---
+
+func TestBatchLink_ResolveTypeError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/issueLinkType") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLink(t.Context(), c, "A-1", "B-2", "nonexistent-type")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for unresolved link type")
+	}
+}
+
+func TestBatchLink_PostError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/issueLinkType") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/issueLink") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"errorMessages":["no permission"]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLink(t.Context(), c, "A-1", "B-2", "Blocks")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for POST error")
+	}
+}
+
+// --- batchCreateIssue: error paths ---
+
+func TestBatchCreateIssue_WithAllOptionalFields(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			fields := body["fields"].(map[string]any)
+			if fields["description"] == nil {
+				t.Error("expected description field")
+			}
+			if fields["priority"] == nil {
+				t.Error("expected priority field")
+			}
+			if fields["labels"] == nil {
+				t.Error("expected labels field")
+			}
+			if fields["parent"] == nil {
+				t.Error("expected parent field")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-99"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchCreateIssue(t.Context(), c, map[string]string{
+		"project":     "PROJ",
+		"type":        "Sub-task",
+		"summary":     "Full fields",
+		"description": "Detailed desc",
+		"priority":    "High",
+		"labels":      "bug,critical",
+		"parent":      "PROJ-1",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+func TestBatchCreateIssue_FetchError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"errorMessages":["server error"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchCreateIssue(t.Context(), c, map[string]string{
+		"project": "PROJ",
+		"type":    "Bug",
+		"summary": "Will fail",
+	})
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for server error")
+	}
+}
+
+// --- batchSprint: error path ---
+
+func TestBatchSprint_ResolveFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/board") && !strings.Contains(r.URL.Path, "/sprint") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":1}]}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/sprint") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":10,"name":"Sprint 1","state":"active"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchSprint(t.Context(), c, "TEST-1", "Nonexistent Sprint 999")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for unresolved sprint")
+	}
+}
+
+func TestBatchSprint_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/board") && !strings.Contains(r.URL.Path, "/sprint") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":1}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":10,"name":"Sprint 5","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"errorMessages":["no permission"]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for POST failure")
+	}
+}
+
+// --- batchLogWork: error path ---
+
+func TestBatchLogWork_FetchError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintln(w, `{"errorMessages":["no permission"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLogWork(t.Context(), c, "TEST-1", "2h", "working")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit for forbidden")
+	}
+}
+
+func TestBatchLogWork_SuccessWithComment(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/worklog") {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["comment"] == nil {
+				t.Error("expected comment in worklog body")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"5001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLogWork(t.Context(), c, "TEST-1", "1h 30m", "debugging session")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "logged") {
+		t.Errorf("expected 'logged' in output, got: %s", stdout.String())
+	}
+}
+
+// --- batchMove: dry-run with assign ---
+
+func TestBatchMove_DryRun_WithAssign_Output(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "john@example.com")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["assign"] == nil {
+		t.Error("expected 'assign' field in dry-run output")
 	}
 }
