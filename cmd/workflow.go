@@ -69,6 +69,12 @@ var logWorkCmd = &cobra.Command{
 	RunE:  runLogWork,
 }
 
+var sprintCmd = &cobra.Command{
+	Use:   "sprint",
+	Short: "Move an issue to a sprint by name (resolves sprint ID)",
+	RunE:  runSprint,
+}
+
 func init() {
 	transitionCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = transitionCmd.MarkFlagRequired("issue")
@@ -116,6 +122,11 @@ func init() {
 	_ = logWorkCmd.MarkFlagRequired("time")
 	logWorkCmd.Flags().String("comment", "", "optional worklog comment (plain text)")
 
+	sprintCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
+	_ = sprintCmd.MarkFlagRequired("issue")
+	sprintCmd.Flags().String("to", "", "sprint name (case-insensitive match)")
+	_ = sprintCmd.MarkFlagRequired("to")
+
 	workflowCmd.AddCommand(transitionCmd)
 	workflowCmd.AddCommand(assignCmd)
 	workflowCmd.AddCommand(commentCmd)
@@ -123,6 +134,7 @@ func init() {
 	workflowCmd.AddCommand(moveCmd)
 	workflowCmd.AddCommand(linkCmd)
 	workflowCmd.AddCommand(logWorkCmd)
+	workflowCmd.AddCommand(sprintCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -680,6 +692,136 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 		"status": "logged",
 		"issue":  issueKey,
 		"time":   timeStr,
+	})
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+// sprintInfo holds a matched sprint's ID and name.
+type sprintInfo struct {
+	ID   int
+	Name string
+}
+
+// resolveSprint fetches all boards and their sprints, then matches one by name.
+// Exact case-insensitive match is tried first, then substring match.
+// Returns the matched sprint or writes an error to c.Stderr and returns a non-zero exit code.
+func resolveSprint(ctx context.Context, c *client.Client, sprintName string) (*sprintInfo, int) {
+	boardsBody, exitCode := c.Fetch(ctx, "GET", "/rest/agile/1.0/board", nil)
+	if exitCode != jrerrors.ExitOK {
+		return nil, exitCode
+	}
+
+	var boardsResp struct {
+		Values []struct {
+			ID int `json:"id"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(boardsBody, &boardsResp); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "failed to parse boards response: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return nil, jrerrors.ExitError
+	}
+
+	toLower := strings.ToLower(sprintName)
+	var exactMatch *sprintInfo
+	var substringMatch *sprintInfo
+	var allNames []string
+
+	for _, board := range boardsResp.Values {
+		sprintsBody, code := c.Fetch(ctx, "GET",
+			fmt.Sprintf("/rest/agile/1.0/board/%d/sprint?state=active,future", board.ID), nil)
+		if code != jrerrors.ExitOK {
+			// Skip boards that fail (e.g. board type doesn't support sprints).
+			continue
+		}
+
+		var sprintsResp struct {
+			Values []struct {
+				ID    int    `json:"id"`
+				Name  string `json:"name"`
+				State string `json:"state"`
+			} `json:"values"`
+		}
+		if err := json.Unmarshal(sprintsBody, &sprintsResp); err != nil {
+			continue
+		}
+
+		for _, s := range sprintsResp.Values {
+			allNames = append(allNames, s.Name)
+			sLower := strings.ToLower(s.Name)
+			if exactMatch == nil && sLower == toLower {
+				match := &sprintInfo{ID: s.ID, Name: s.Name}
+				exactMatch = match
+			}
+			if substringMatch == nil && strings.Contains(sLower, toLower) {
+				match := &sprintInfo{ID: s.ID, Name: s.Name}
+				substringMatch = match
+			}
+		}
+	}
+
+	if exactMatch != nil {
+		return exactMatch, jrerrors.ExitOK
+	}
+	if substringMatch != nil {
+		return substringMatch, jrerrors.ExitOK
+	}
+
+	apiErr := &jrerrors.APIError{
+		ErrorType: "not_found",
+		Message:   fmt.Sprintf("no sprint matching %q; available: %s", sprintName, strings.Join(allNames, ", ")),
+	}
+	apiErr.WriteJSON(c.Stderr)
+	return nil, jrerrors.ExitNotFound
+}
+
+func runSprint(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	issueKey, _ := cmd.Flags().GetString("issue")
+	sprintName, _ := cmd.Flags().GetString("to")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/agile/1.0/sprint/{sprintId}/issue",
+			"note":   fmt.Sprintf("would move %s to sprint %q (sprint ID resolved at runtime)", issueKey, sprintName),
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	sprint, exitCode := resolveSprint(cmd.Context(), c, sprintName)
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	sprintBody, _ := json.Marshal(map[string]any{"issues": []string{issueKey}})
+	_, exitCode = c.Fetch(cmd.Context(), "POST",
+		fmt.Sprintf("/rest/agile/1.0/sprint/%d/issue", sprint.ID),
+		bytes.NewReader(sprintBody))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "sprint_set",
+		"issue":  issueKey,
+		"sprint": sprint.Name,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}

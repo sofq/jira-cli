@@ -918,6 +918,122 @@ func TestRunLogWork_InvalidDuration(t *testing.T) {
 	}
 }
 
+// newSprintCmd creates a workflow sprint command with flags and client context.
+func newSprintCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "sprint", RunE: runSprint}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunSprint_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected issue key in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "Sprint 5") {
+		t.Errorf("expected sprint name in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunSprint_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			fmt.Fprintln(w, `{"values":[{"id":1,"name":"My Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":100,"name":"Sprint 5","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/100/issue") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "sprint_set") {
+		t.Errorf("expected 'sprint_set' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Sprint 5") {
+		t.Errorf("expected sprint name in output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected issue key in output, got: %s", output)
+	}
+}
+
+func TestRunSprint_NotFound(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			fmt.Fprintln(w, `{"values":[{"id":1,"name":"My Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":100,"name":"Sprint 1","state":"active"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Nonexistent Sprint")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for no matching sprint")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitNotFound, aw.Code)
+	}
+	if !strings.Contains(stderr.String(), "Nonexistent Sprint") {
+		t.Errorf("expected sprint name in error output, got: %s", stderr.String())
+	}
+}
+
 func TestRunCreateIssue_NoClient(t *testing.T) {
 	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
 	cmd.Flags().String("project", "", "")

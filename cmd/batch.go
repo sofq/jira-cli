@@ -356,6 +356,12 @@ func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) in
 			return batchValidationError(c, "workflow log-work requires a 'time' arg")
 		}
 		return batchLogWork(ctx, c, issueKey, timeStr, bop.Args["comment"])
+	case "workflow sprint":
+		to := bop.Args["to"]
+		if to == "" {
+			return batchValidationError(c, "workflow sprint requires a 'to' arg")
+		}
+		return batchSprint(ctx, c, issueKey, to)
 	default:
 		return batchValidationError(c, fmt.Sprintf("unknown workflow command %q", bop.Command))
 	}
@@ -619,6 +625,38 @@ func batchCreateIssue(ctx context.Context, c *client.Client, args map[string]str
 	}
 
 	return c.WriteOutput(respBody)
+}
+
+// batchSprint executes a workflow sprint (move issue to sprint) within a batch operation.
+func batchSprint(ctx context.Context, c *client.Client, issueKey, sprintName string) int {
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/agile/1.0/sprint/{sprintId}/issue",
+			"note":   fmt.Sprintf("would move %s to sprint %q (sprint ID resolved at runtime)", issueKey, sprintName),
+		})
+		return c.WriteOutput(out)
+	}
+
+	sprint, code := resolveSprint(ctx, c, sprintName)
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	sprintBody, _ := json.Marshal(map[string]any{"issues": []string{issueKey}})
+	_, code = c.Fetch(ctx, "POST",
+		fmt.Sprintf("/rest/agile/1.0/sprint/%d/issue", sprint.ID),
+		bytes.NewReader(sprintBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "sprint_set",
+		"issue":  issueKey,
+		"sprint": sprint.Name,
+	})
+	return c.WriteOutput(out)
 }
 
 // batchLogWork executes a workflow log-work within a batch operation.

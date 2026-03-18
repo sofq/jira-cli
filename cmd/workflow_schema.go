@@ -100,5 +100,17 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 				{Name: "comment", Required: false, Type: "string", Description: "optional worklog comment (plain text)", In: "custom"},
 			},
 		},
+		{
+			Resource: "workflow",
+			Verb:     "sprint",
+			Method:   "POST",
+			Path:     "/rest/agile/1.0/sprint/{sprintId}/issue",
+			Summary:  "Move an issue to a sprint by name (resolves sprint ID automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "sprint name (case-insensitive match)", In: "custom"},
+			},
+		},
 	}
 }
