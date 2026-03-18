@@ -317,6 +317,12 @@ func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) in
 			return batchValidationError(c, "workflow transition requires a 'to' arg")
 		}
 		return batchTransition(ctx, c, issueKey, to)
+	case "workflow move":
+		to := bop.Args["to"]
+		if to == "" {
+			return batchValidationError(c, "workflow move requires a 'to' arg")
+		}
+		return batchMove(ctx, c, issueKey, to, bop.Args["assign"])
 	case "workflow assign":
 		to := bop.Args["to"]
 		if to == "" {
@@ -363,6 +369,71 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 		"issue":      issueKey,
 		"transition": match.Name,
 	})
+	return c.WriteOutput(out)
+}
+
+// batchMove executes a workflow move (transition + optional assign) within a batch operation.
+func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign string) int {
+	if c.DryRun {
+		dryOut := map[string]any{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
+		}
+		if assign != "" {
+			dryOut["assign"] = fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, assign)
+		}
+		out, _ := marshalNoEscape(dryOut)
+		return c.WriteOutput(out)
+	}
+
+	match, code := resolveTransition(ctx, c, issueKey, toStatus)
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
+	_, code = c.Fetch(ctx, "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		bytes.NewReader(transBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	result := map[string]any{
+		"status":     "moved",
+		"issue":      issueKey,
+		"transition": match.Name,
+	}
+
+	if assign != "" {
+		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
+		if code != jrerrors.ExitOK {
+			return code
+		}
+
+		if isUnassign {
+			assignBody := `{"accountId":null}`
+			_, code = c.Fetch(ctx, "PUT",
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				strings.NewReader(assignBody))
+			if code != jrerrors.ExitOK {
+				return code
+			}
+			result["assigned"] = "unassigned"
+		} else {
+			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
+			_, code = c.Fetch(ctx, "PUT",
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				bytes.NewReader(marshaledAssign))
+			if code != jrerrors.ExitOK {
+				return code
+			}
+			result["assigned"] = assign
+		}
+	}
+
+	out, _ := marshalNoEscape(result)
 	return c.WriteOutput(out)
 }
 

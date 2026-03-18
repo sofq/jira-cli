@@ -545,6 +545,124 @@ func TestRunCreateIssue_WithAllFlags(t *testing.T) {
 	}
 }
 
+// newMoveCmd creates a workflow move command with flags and client context.
+func newMoveCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "move", RunE: runMove}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.Flags().String("assign", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunMove_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	_ = cmd.Flags().Set("assign", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected issue key in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "assign") {
+		t.Errorf("expected assign note in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunMove_TransitionOnly(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"41","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "moved") {
+		t.Errorf("expected 'moved' in output, got: %s", output)
+	}
+	if strings.Contains(output, "assigned") {
+		t.Errorf("did not expect 'assigned' in transition-only output, got: %s", output)
+	}
+}
+
+func TestRunMove_WithAssign(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"41","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"user123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	_ = cmd.Flags().Set("assign", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "moved") {
+		t.Errorf("expected 'moved' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "assigned") {
+		t.Errorf("expected 'assigned' in output, got: %s", output)
+	}
+}
+
 func TestRunCreateIssue_NoClient(t *testing.T) {
 	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
 	cmd.Flags().String("project", "", "")

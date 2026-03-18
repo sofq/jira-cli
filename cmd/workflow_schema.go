@@ -45,6 +45,19 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 		},
 		{
 			Resource: "workflow",
+			Verb:     "move",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/transitions",
+			Summary:  "Transition an issue and optionally reassign in one step",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "target status name (case-insensitive match)", In: "custom"},
+				{Name: "assign", Required: false, Type: "string", Description: "assignee after transition: display name, email, 'me', 'none', or 'unassign'", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
 			Verb:     "create",
 			Method:   "POST",
 			Path:     "/rest/api/3/issue",

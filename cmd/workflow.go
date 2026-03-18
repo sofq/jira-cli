@@ -41,6 +41,13 @@ var commentCmd = &cobra.Command{
 	RunE:  runComment,
 }
 
+var moveCmd = &cobra.Command{
+	Use:   "move",
+	Short: "Transition an issue and optionally reassign in one step",
+	Long:  "Transitions an issue to a new status and optionally reassigns it. Use --to for the target status and --assign for the assignee.",
+	RunE:  runMove,
+}
+
 var createIssueCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an issue from flags (no raw JSON needed)",
@@ -64,6 +71,12 @@ func init() {
 	commentCmd.Flags().String("text", "", "comment text (plain text, converted to ADF)")
 	_ = commentCmd.MarkFlagRequired("text")
 
+	moveCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
+	_ = moveCmd.MarkFlagRequired("issue")
+	moveCmd.Flags().String("to", "", "target status name (case-insensitive match)")
+	_ = moveCmd.MarkFlagRequired("to")
+	moveCmd.Flags().String("assign", "", "assignee after transition: display name, email, 'me', 'none', or 'unassign'")
+
 	createIssueCmd.Flags().String("project", "", "project key (e.g. PROJ)")
 	_ = createIssueCmd.MarkFlagRequired("project")
 	createIssueCmd.Flags().String("type", "", "issue type name (e.g. Bug, Story, Task)")
@@ -80,6 +93,7 @@ func init() {
 	workflowCmd.AddCommand(assignCmd)
 	workflowCmd.AddCommand(commentCmd)
 	workflowCmd.AddCommand(createIssueCmd)
+	workflowCmd.AddCommand(moveCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -249,6 +263,88 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		"issue":      issueKey,
 		"transition": match.Name,
 	})
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+func runMove(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	issueKey, _ := cmd.Flags().GetString("issue")
+	toStatus, _ := cmd.Flags().GetString("to")
+	assign, _ := cmd.Flags().GetString("assign")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		dryOut := map[string]any{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
+		}
+		if assign != "" {
+			dryOut["assign"] = fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, assign)
+		}
+		out, _ := marshalNoEscape(dryOut)
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	match, exitCode := resolveTransition(cmd.Context(), c, issueKey, toStatus)
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
+	_, exitCode = c.Fetch(cmd.Context(), "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		bytes.NewReader(transBody))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	result := map[string]any{
+		"status":     "moved",
+		"issue":      issueKey,
+		"transition": match.Name,
+	}
+
+	if assign != "" {
+		accountID, isUnassign, code := resolveAssignee(cmd.Context(), c, assign)
+		if code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+
+		if isUnassign {
+			assignBody := `{"accountId":null}`
+			_, code = c.Fetch(cmd.Context(), "PUT",
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				strings.NewReader(assignBody))
+			if code != jrerrors.ExitOK {
+				return &jrerrors.AlreadyWrittenError{Code: code}
+			}
+			result["assigned"] = "unassigned"
+		} else {
+			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
+			_, code = c.Fetch(cmd.Context(), "PUT",
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				bytes.NewReader(marshaledAssign))
+			if code != jrerrors.ExitOK {
+				return &jrerrors.AlreadyWrittenError{Code: code}
+			}
+			result["assigned"] = assign
+		}
+	}
+
+	out, _ := marshalNoEscape(result)
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
