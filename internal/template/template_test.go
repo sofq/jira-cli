@@ -273,3 +273,147 @@ func TestValidateName(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadUserTemplates_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	os.WriteFile(filepath.Join(tmpDir, "bad.yaml"), []byte("invalid: yaml: [unclosed"), 0o644)
+
+	_, _, err := Lookup("anything")
+	if err == nil {
+		t.Fatal("expected error for invalid YAML in user templates")
+	}
+}
+
+func TestLoadUserTemplates_SkipsNonYAMLAndDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	// Write a non-YAML file and a subdirectory.
+	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte("not a template"), 0o644)
+	os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o755)
+
+	// Write a valid user template.
+	tmpl := Template{
+		Name:      "custom",
+		IssueType: "Task",
+		Fields:    map[string]string{"summary": "{{.summary}}"},
+	}
+	data, _ := yaml.Marshal(tmpl)
+	os.WriteFile(filepath.Join(tmpDir, "custom.yaml"), data, 0o644)
+
+	list, err := List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result []templateEntry
+	if err := json.Unmarshal(list, &result); err != nil {
+		t.Fatalf("output not valid JSON: %v", err)
+	}
+
+	// Should have builtin templates + 1 user template, no .txt or subdir.
+	foundCustom := false
+	for _, r := range result {
+		if r.Name == "custom" {
+			foundCustom = true
+			if r.Source != "user" {
+				t.Errorf("expected source 'user' for custom, got %q", r.Source)
+			}
+		}
+		if r.Name == "readme" || r.Name == "subdir" {
+			t.Errorf("unexpected entry %q should have been skipped", r.Name)
+		}
+	}
+	if !foundCustom {
+		t.Error("expected to find user template 'custom' in list")
+	}
+}
+
+func TestRenderFields_RequiredWithDefault(t *testing.T) {
+	tmpl := &Template{
+		Variables: []Variable{
+			{Name: "summary", Required: true, Default: "fallback value"},
+		},
+		Fields: map[string]string{
+			"summary": "{{.summary}}",
+		},
+	}
+
+	rendered, err := RenderFields(tmpl, map[string]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rendered["summary"] != "fallback value" {
+		t.Errorf("expected 'fallback value', got %q", rendered["summary"])
+	}
+}
+
+func TestRenderFields_BadTemplateSyntax(t *testing.T) {
+	tmpl := &Template{
+		Variables: []Variable{
+			{Name: "summary", Required: true},
+		},
+		Fields: map[string]string{
+			"summary": "{{.unclosed",
+		},
+	}
+
+	_, err := RenderFields(tmpl, map[string]string{"summary": "test"})
+	if err == nil {
+		t.Fatal("expected error for bad template syntax")
+	}
+	if !strings.Contains(err.Error(), "parsing template") {
+		t.Errorf("expected 'parsing template' in error, got: %v", err)
+	}
+}
+
+func TestList_WithUserTemplate(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	userTmpl := Template{
+		Name:        "my-custom",
+		IssueType:   "Story",
+		Description: "A user template",
+		Variables:   []Variable{{Name: "summary", Required: true}},
+		Fields:      map[string]string{"summary": "{{.summary}}"},
+	}
+	data, _ := yaml.Marshal(userTmpl)
+	os.WriteFile(filepath.Join(tmpDir, "my-custom.yaml"), data, 0o644)
+
+	list, err := List()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var result []templateEntry
+	if err := json.Unmarshal(list, &result); err != nil {
+		t.Fatalf("output not valid JSON: %v", err)
+	}
+
+	// Should have builtins (6) + 1 user = 7.
+	if len(result) != 7 {
+		t.Errorf("expected 7 templates, got %d", len(result))
+	}
+
+	found := false
+	for _, r := range result {
+		if r.Name == "my-custom" {
+			found = true
+			if r.Source != "user" {
+				t.Errorf("expected source 'user', got %q", r.Source)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected to find 'my-custom' in list")
+	}
+}

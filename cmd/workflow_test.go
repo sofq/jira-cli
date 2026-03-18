@@ -1051,3 +1051,388 @@ func TestRunCreateIssue_NoClient(t *testing.T) {
 		t.Fatal("expected error when no client in context")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// runMove — additional branch coverage
+// ---------------------------------------------------------------------------
+
+func TestRunMove_DryRunNoAssign(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	// Intentionally do NOT set --assign.
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if strings.Contains(output, "assign") {
+		t.Errorf("did not expect 'assign' in dry-run output when --assign is empty, got: %s", output)
+	}
+}
+
+func TestRunMove_WithUnassign(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"41","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				if body["accountId"] != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	_ = cmd.Flags().Set("assign", "none")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "moved") {
+		t.Errorf("expected 'moved' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "unassigned") {
+		t.Errorf("expected 'unassigned' in output, got: %s", output)
+	}
+}
+
+func TestRunMove_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "move", RunE: runMove}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.Flags().String("assign", "", "")
+	cmd.SetContext(context.Background())
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+func TestRunMove_TransitionFetchFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when transition fetch fails")
+	}
+}
+
+func TestRunMove_AssignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"41","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"user123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	_ = cmd.Flags().Set("assign", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when PUT assignee returns 403")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveLinkType / runLink — additional branch coverage
+// ---------------------------------------------------------------------------
+
+func TestRunLink_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "link", RunE: runLink}
+	cmd.Flags().String("from", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.Flags().String("type", "", "")
+	cmd.SetContext(context.Background())
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+func TestRunLink_SubstringMatch(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			// "Blocks" is the canonical name; requesting "block" (partial) should resolve it.
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issueLink" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "block") // partial — should match "Blocks"
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "linked") {
+		t.Errorf("expected 'linked' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Blocks") {
+		t.Errorf("expected resolved type 'Blocks' in output, got: %s", output)
+	}
+}
+
+func TestRunLink_LinkTypeFetchFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when issueLinkType fetch returns 500")
+	}
+}
+
+func TestRunLink_LinkTypeMalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "not json")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when issueLinkType response is malformed JSON")
+	}
+}
+
+func TestRunLink_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issueLink" {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST issueLink returns 403")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runLogWork — additional branch coverage
+// ---------------------------------------------------------------------------
+
+func TestRunLogWork_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "log-work", RunE: runLogWork}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("time", "", "")
+	cmd.Flags().String("comment", "", "")
+	cmd.SetContext(context.Background())
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+func TestRunLogWork_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "1h")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST worklog returns 500")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runSprint — additional branch coverage
+// ---------------------------------------------------------------------------
+
+func TestRunSprint_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "sprint", RunE: runSprint}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.SetContext(context.Background())
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+func TestRunSprint_BoardFetchFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when board fetch returns 500")
+	}
+}
+
+func TestRunSprint_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			fmt.Fprintln(w, `{"values":[{"id":1,"name":"My Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":100,"name":"Sprint 5","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/100/issue") {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST sprint issue returns 500")
+	}
+}

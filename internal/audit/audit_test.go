@@ -126,3 +126,16 @@ func TestNilLogger_LogIsNoop(t *testing.T) {
 	l.Log(audit.Entry{Operation: "test"})
 	l.Close()
 }
+
+func TestDefaultPath(t *testing.T) {
+	p := audit.DefaultPath()
+	if p == "" {
+		t.Error("DefaultPath() returned empty string")
+	}
+	if !strings.HasSuffix(p, "audit.log") {
+		t.Errorf("DefaultPath() = %q, want suffix 'audit.log'", p)
+	}
+	if !filepath.IsAbs(p) {
+		t.Errorf("DefaultPath() = %q, want absolute path", p)
+	}
+}

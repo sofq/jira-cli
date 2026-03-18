@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sofq/jira-cli/internal/client"
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/watch"
 	"github.com/spf13/cobra"
 )
@@ -209,6 +211,67 @@ func TestWatch_SingleIssueMode(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 NDJSON line, got %d", len(lines))
+	}
+}
+
+func TestRunWatch_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "watch", RunE: runWatch}
+	cmd.Flags().String("jql", "", "")
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().Duration("interval", 30*time.Second, "")
+	cmd.Flags().Int("max-events", 0, "")
+	cmd.SetContext(context.Background()) // no client
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+func TestRunWatch_WithFields(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.Fields = "key,summary,status"
+
+	cmd := newWatchCmd(c)
+	_ = cmd.Flags().Set("jql", "project = TEST")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "project = TEST") {
+		t.Errorf("expected JQL in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunWatch_RunReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer srv.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(srv.URL, &stdout, &stderr)
+
+	cmd := newWatchCmd(c)
+	_ = cmd.Flags().Set("jql", "project = TEST")
+	_ = cmd.Flags().Set("max-events", "1")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when watch.Run fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Error("expected non-zero exit code")
 	}
 }
 

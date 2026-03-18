@@ -1606,3 +1606,1019 @@ func TestBatch_FieldsPrecedence(t *testing.T) {
 		})
 	}
 }
+
+// --- executeBatchWorkflow: additional dispatch paths ---
+
+func TestBatchWorkflow_Move_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow move",
+		Args:    map[string]string{"issue": "TEST-1", "to": "In Progress"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/transitions") {
+		t.Errorf("expected URL containing /transitions, got %s", result["url"])
+	}
+}
+
+func TestBatchWorkflow_Move_MissingTo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow move",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'to'") {
+		t.Errorf("expected 'to' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchWorkflow_Comment_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow comment",
+		Args:    map[string]string{"issue": "TEST-1", "text": "Hello"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/comment") {
+		t.Errorf("expected URL containing /comment, got %s", result["url"])
+	}
+}
+
+func TestBatchWorkflow_Comment_MissingText(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow comment",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+}
+
+func TestBatchWorkflow_LogWork_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow log-work",
+		Args:    map[string]string{"issue": "TEST-1", "time": "1h"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %v", result["method"])
+	}
+}
+
+func TestBatchWorkflow_LogWork_MissingTime(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow log-work",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+}
+
+func TestBatchWorkflow_Sprint_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow sprint",
+		Args:    map[string]string{"issue": "TEST-1", "to": "Sprint 5"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["note"], "would move") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+func TestBatchWorkflow_Sprint_MissingTo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow sprint",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+}
+
+func TestBatchWorkflow_Link_MissingArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args map[string]string
+		want string
+	}{
+		{
+			name: "missing from",
+			args: map[string]string{"to": "TEST-2", "type": "blocks"},
+			want: "'from'",
+		},
+		{
+			name: "missing to",
+			args: map[string]string{"from": "TEST-1", "type": "blocks"},
+			want: "'to'",
+		},
+		{
+			name: "missing type",
+			args: map[string]string{"from": "TEST-1", "to": "TEST-2"},
+			want: "'type'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			c := newTestClient("http://unused", &stdout, &stderr)
+
+			code := executeBatchWorkflow(t.Context(), c, BatchOp{
+				Command: "workflow link",
+				Args:    tt.args,
+			})
+			if code != jrerrors.ExitValidation {
+				t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("expected %q in error, got: %s", tt.want, stderr.String())
+			}
+		})
+	}
+}
+
+func TestBatchWorkflow_Create_MissingArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args map[string]string
+		want string
+	}{
+		{
+			name: "missing project",
+			args: map[string]string{"type": "Bug", "summary": "oops"},
+			want: "'project'",
+		},
+		{
+			name: "missing type",
+			args: map[string]string{"project": "PROJ", "summary": "oops"},
+			want: "'type'",
+		},
+		{
+			name: "missing summary",
+			args: map[string]string{"project": "PROJ", "type": "Bug"},
+			want: "'summary'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			c := newTestClient("http://unused", &stdout, &stderr)
+
+			code := executeBatchWorkflow(t.Context(), c, BatchOp{
+				Command: "workflow create",
+				Args:    tt.args,
+			})
+			if code != jrerrors.ExitValidation {
+				t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("expected %q in error, got: %s", tt.want, stderr.String())
+			}
+		})
+	}
+}
+
+func TestBatchWorkflow_UnknownCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow frobnicate",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "unknown workflow command") {
+		t.Errorf("expected 'unknown workflow command' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchWorkflow_MissingIssue_CommentLogWorkSprintMove(t *testing.T) {
+	cmds := []struct {
+		command string
+		extra   map[string]string
+	}{
+		{"workflow comment", map[string]string{"text": "hi"}},
+		{"workflow log-work", map[string]string{"time": "1h"}},
+		{"workflow sprint", map[string]string{"to": "Sprint 1"}},
+		{"workflow move", map[string]string{"to": "Done"}},
+	}
+
+	for _, tc := range cmds {
+		t.Run(tc.command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			c := newTestClient("http://unused", &stdout, &stderr)
+
+			args := make(map[string]string)
+			for k, v := range tc.extra {
+				args[k] = v
+			}
+			// Deliberately omit "issue".
+
+			code := executeBatchWorkflow(t.Context(), c, BatchOp{
+				Command: tc.command,
+				Args:    args,
+			})
+			if code != jrerrors.ExitValidation {
+				t.Fatalf("[%s] expected exit %d, got %d", tc.command, jrerrors.ExitValidation, code)
+			}
+			if !strings.Contains(stderr.String(), "'issue'") {
+				t.Errorf("[%s] expected 'issue' in error, got: %s", tc.command, stderr.String())
+			}
+		})
+	}
+}
+
+// --- batchMove ---
+
+func TestBatchMove_Success_NoAssign(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "TEST-1", "In Progress", "")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "moved" {
+		t.Errorf("expected status=moved, got %v", result["status"])
+	}
+	if result["transition"] != "In Progress" {
+		t.Errorf("expected transition=In Progress, got %v", result["transition"])
+	}
+	if _, hasAssign := result["assigned"]; hasAssign {
+		t.Errorf("expected no assigned field when assign is empty")
+	}
+}
+
+func TestBatchMove_Success_WithAssignMe(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"21","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "moved" {
+		t.Errorf("expected status=moved, got %v", result["status"])
+	}
+	if result["assigned"] != "me" {
+		t.Errorf("expected assigned=me, got %v", result["assigned"])
+	}
+}
+
+func TestBatchMove_Success_WithUnassign(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"21","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "none")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["assigned"] != "unassigned" {
+		t.Errorf("expected assigned=unassigned, got %v", result["assigned"])
+	}
+}
+
+func TestBatchMove_DryRun_NoAssign(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %v", result["method"])
+	}
+	if _, hasAssign := result["assign"]; hasAssign {
+		t.Errorf("expected no assign field for empty assign")
+	}
+}
+
+func TestBatchMove_DryRun_WithAssign(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchMove(t.Context(), c, "TEST-1", "Done", "me")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if _, hasAssign := result["assign"]; !hasAssign {
+		t.Errorf("expected assign field in dry-run output when assign='me'")
+	}
+}
+
+// --- batchComment ---
+
+func TestBatchComment_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/comment") {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchComment(t.Context(), c, "TEST-1", "Great work!")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "commented" {
+		t.Errorf("expected status=commented, got %s", result["status"])
+	}
+	if result["issue"] != "TEST-1" {
+		t.Errorf("expected issue=TEST-1, got %s", result["issue"])
+	}
+}
+
+func TestBatchComment_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchComment(t.Context(), c, "TEST-1", "A comment")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/comment") {
+		t.Errorf("expected URL containing /comment, got %s", result["url"])
+	}
+	if !strings.Contains(result["note"], "would add comment") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+// --- batchLink ---
+
+func TestBatchLink_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10001","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issueLink" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "linked" {
+		t.Errorf("expected status=linked, got %s", result["status"])
+	}
+	if result["from"] != "TEST-1" {
+		t.Errorf("expected from=TEST-1, got %s", result["from"])
+	}
+	if result["to"] != "TEST-2" {
+		t.Errorf("expected to=TEST-2, got %s", result["to"])
+	}
+}
+
+func TestBatchLink_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "issueLink") {
+		t.Errorf("expected URL containing issueLink, got %s", result["url"])
+	}
+	if !strings.Contains(result["note"], "would link") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+// --- batchCreateIssue ---
+
+func TestBatchCreateIssue_MissingArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args map[string]string
+		want string
+	}{
+		{
+			name: "missing project",
+			args: map[string]string{"type": "Bug", "summary": "oops"},
+			want: "'project'",
+		},
+		{
+			name: "missing type",
+			args: map[string]string{"project": "PROJ", "summary": "oops"},
+			want: "'type'",
+		},
+		{
+			name: "missing summary",
+			args: map[string]string{"project": "PROJ", "type": "Bug"},
+			want: "'summary'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			c := newTestClient("http://unused", &stdout, &stderr)
+
+			code := batchCreateIssue(t.Context(), c, tt.args)
+			if code != jrerrors.ExitValidation {
+				t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("expected %q in error, got: %s", tt.want, stderr.String())
+			}
+		})
+	}
+}
+
+func TestBatchCreateIssue_Success_Minimal(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-42"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchCreateIssue(t.Context(), c, map[string]string{
+		"project": "PROJ",
+		"type":    "Bug",
+		"summary": "Login broken",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["key"] != "PROJ-42" {
+		t.Errorf("expected key=PROJ-42, got %s", result["key"])
+	}
+}
+
+func TestBatchCreateIssue_DryRun_AllFields(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchCreateIssue(t.Context(), c, map[string]string{
+		"project":     "PROJ",
+		"type":        "Bug",
+		"summary":     "Login broken",
+		"description": "Steps to reproduce...",
+		"priority":    "High",
+		"labels":      "bug,urgent",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %v", result["method"])
+	}
+	if !strings.Contains(result["url"].(string), "/rest/api/3/issue") {
+		t.Errorf("expected URL containing /rest/api/3/issue, got %v", result["url"])
+	}
+}
+
+func TestBatchCreateIssue_Success_WithAssignMe(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/api/3/myself" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10002","key":"PROJ-43"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchCreateIssue(t.Context(), c, map[string]string{
+		"project": "PROJ",
+		"type":    "Task",
+		"summary": "Do the thing",
+		"assign":  "me",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["key"] != "PROJ-43" {
+		t.Errorf("expected key=PROJ-43, got %s", result["key"])
+	}
+}
+
+// --- batchSprint ---
+
+func TestBatchSprint_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %s", result["method"])
+	}
+	if !strings.Contains(result["note"], "would move") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
+
+func TestBatchSprint_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":1}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"values":[{"id":42,"name":"Sprint 5","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "sprint_set" {
+		t.Errorf("expected status=sprint_set, got %s", result["status"])
+	}
+	if result["sprint"] != "Sprint 5" {
+		t.Errorf("expected sprint=Sprint 5, got %s", result["sprint"])
+	}
+}
+
+// --- batchLogWork ---
+
+func TestBatchLogWork_InvalidDuration(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchLogWork(t.Context(), c, "TEST-1", "not-a-duration", "")
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "invalid duration") {
+		t.Errorf("expected 'invalid duration' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchLogWork_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchLogWork(t.Context(), c, "TEST-1", "2h30m", "debugging")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %v", result["method"])
+	}
+	if !strings.Contains(result["url"].(string), "/worklog") {
+		t.Errorf("expected URL containing /worklog, got %v", result["url"])
+	}
+	// 2h30m = 9000 seconds.
+	if result["timeSpentSeconds"] != float64(9000) {
+		t.Errorf("expected timeSpentSeconds=9000, got %v", result["timeSpentSeconds"])
+	}
+}
+
+func TestBatchLogWork_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/worklog") {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchLogWork(t.Context(), c, "TEST-1", "1h", "debugging session")
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["status"] != "logged" {
+		t.Errorf("expected status=logged, got %s", result["status"])
+	}
+	if result["issue"] != "TEST-1" {
+		t.Errorf("expected issue=TEST-1, got %s", result["issue"])
+	}
+	if result["time"] != "1h" {
+		t.Errorf("expected time=1h, got %s", result["time"])
+	}
+}
+
+// --- executeBatchTemplate ---
+
+func TestBatchTemplate_UnknownCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchTemplate(t.Context(), c, BatchOp{
+		Command: "template list",
+		Args:    map[string]string{},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "unknown template command") {
+		t.Errorf("expected 'unknown template command' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchTemplate_Apply_MissingName(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchTemplate(t.Context(), c, BatchOp{
+		Command: "template apply",
+		Args:    map[string]string{"project": "PROJ"},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'name'") {
+		t.Errorf("expected 'name' in error, got: %s", stderr.String())
+	}
+}
+
+// --- batchTemplateApply ---
+
+func TestBatchTemplateApply_MissingName(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{"project": "PROJ"})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'name'") {
+		t.Errorf("expected 'name' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchTemplateApply_MissingProject(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{"name": "bug-report"})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'project'") {
+		t.Errorf("expected 'project' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchTemplateApply_TemplateNotFound(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "nonexistent-template-xyz",
+		"project": "PROJ",
+	})
+	if code != jrerrors.ExitNotFound {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitNotFound, code)
+	}
+	if !strings.Contains(stderr.String(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchTemplateApply_DryRun_Success(t *testing.T) {
+	// Use the builtin "bug-report" template which requires "summary".
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "Login page crashes",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "POST" {
+		t.Errorf("expected method=POST, got %v", result["method"])
+	}
+	if result["template"] != "bug-report" {
+		t.Errorf("expected template=bug-report, got %v", result["template"])
+	}
+	if !strings.Contains(result["url"].(string), "/rest/api/3/issue") {
+		t.Errorf("expected URL containing /rest/api/3/issue, got %v", result["url"])
+	}
+}
+
+func TestBatchTemplateApply_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-50"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "App crashes on startup",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["key"] != "PROJ-50" {
+		t.Errorf("expected key=PROJ-50, got %s", result["key"])
+	}
+}
+
+// --- executeBatchDiff ---
+
+func TestBatchDiff_MissingIssue(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{},
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'issue'") {
+		t.Errorf("expected 'issue' in error, got: %s", stderr.String())
+	}
+}
+
+func TestBatchDiff_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	code := executeBatchDiff(t.Context(), c, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "TEST-1"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
+		t.Fatalf("stdout not valid JSON: %s", stdout.String())
+	}
+	if result["method"] != "GET" {
+		t.Errorf("expected method=GET, got %s", result["method"])
+	}
+	if !strings.Contains(result["url"], "/changelog") {
+		t.Errorf("expected URL containing /changelog, got %s", result["url"])
+	}
+	if !strings.Contains(result["note"], "would fetch changelog") {
+		t.Errorf("expected dry-run note, got %s", result["note"])
+	}
+}
