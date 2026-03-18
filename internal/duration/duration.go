@@ -35,9 +35,6 @@ func Parse(s string) (int, error) {
 	}
 
 	matches := unitPattern.FindAllStringSubmatch(s, -1)
-	if len(matches) == 0 {
-		return 0, fmt.Errorf("invalid duration %q: expected format like 2h, 1d 3h, 30m", s)
-	}
 
 	total := 0
 	for _, m := range matches {

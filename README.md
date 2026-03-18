@@ -106,9 +106,12 @@ jr diff --issue PROJ-123 --since 2h --field status
 | Exit | Meaning | Agent action |
 |------|---------|-------------|
 | 0 | OK | Parse stdout |
+| 1 | General error | Log and report |
 | 2 | Auth failed | Re-authenticate |
 | 3 | Not found | Check issue key |
+| 4 | Validation error | Fix request payload |
 | 5 | Rate limited | Wait `retry_after` |
+| 6 | Conflict | Fetch latest and retry |
 | 7 | Server error | Retry with backoff |
 
 ### Raw escape hatch
