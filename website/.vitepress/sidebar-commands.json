@@ -80,6 +80,10 @@
     "link": "/commands/data-policy"
   },
   {
+    "text": "diff",
+    "link": "/commands/diff"
+  },
+  {
     "text": "events",
     "link": "/commands/events"
   },
@@ -290,6 +294,10 @@
   {
     "text": "task",
     "link": "/commands/task"
+  },
+  {
+    "text": "template",
+    "link": "/commands/template"
   },
   {
     "text": "uiModifications",
