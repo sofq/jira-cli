@@ -332,6 +332,44 @@ jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token
 | `--verbose` | Log HTTP details to stderr as JSON |
 | `--timeout <duration>` | HTTP request timeout (default `30s`) |
 | `--profile <name>` | Use a named config profile |
+| `--audit` | Enable audit logging for this invocation |
+| `--audit-file <path>` | Audit log file path (implies `--audit`) |
+
+## Security
+
+### Operation policy (per profile)
+
+Restrict which operations a profile can execute via `allowed_operations` or `denied_operations` in the config file:
+
+```json
+{
+  "profiles": {
+    "agent": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "token": "..."},
+      "allowed_operations": ["issue get", "search *", "workflow *"]
+    },
+    "readonly": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "token": "..."},
+      "denied_operations": ["* delete*", "bulk *", "raw *"]
+    }
+  }
+}
+```
+
+- Use one or the other, not both. Patterns use glob matching (`*` = any sequence).
+- `allowed_operations`: implicit deny-all, only matching ops run.
+- `denied_operations`: implicit allow-all, only matching ops blocked.
+
+### Batch limits
+
+Default max batch size is 50. Override with `--max-batch N` on the `batch` command.
+
+### Audit logging
+
+Enable per-profile (`"audit_log": true` in config) or per-invocation (`--audit` flag).
+Logs to `~/.config/jr/audit.log` (JSONL format). Override path with `--audit-file`.
 
 ## Development
 

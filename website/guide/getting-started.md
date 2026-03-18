@@ -122,6 +122,28 @@ jr configure --profile work --delete
 CLI flags take the highest priority, followed by environment variables, followed by the config file. This means you can override any config file setting with a flag or env var on a per-command basis.
 :::
 
+### Security settings
+
+Profiles can include operation restrictions and audit logging. Edit `~/.config/jr/config.json` directly:
+
+```json
+{
+  "profiles": {
+    "agent": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "username": "...", "token": "..."},
+      "allowed_operations": ["issue get", "search *", "workflow *"],
+      "audit_log": true
+    }
+  }
+}
+```
+
+- `allowed_operations` / `denied_operations` — glob patterns restricting which commands the profile can run (use one or the other, not both)
+- `audit_log` — write a JSONL entry per operation to `~/.config/jr/audit.log`
+
+See [Global Flags](./global-flags) for `--audit` and `--audit-file` flags.
+
 ## Your first commands
 
 ### Get an issue

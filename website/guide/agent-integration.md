@@ -12,6 +12,7 @@
 | **Workflow commands** | `jr workflow` commands accept simple flags — no JSON body construction needed |
 | **Discovery** | `jr schema` for runtime command discovery — no hardcoding needed |
 | **Batch operations** | `jr batch` runs multiple commands in a single process |
+| **Security controls** | Per-profile operation allowlist/denylist, batch limits, audit logging |
 | **600+ commands** | Auto-generated from Jira's OpenAPI spec, always up to date |
 
 ## Runtime Discovery

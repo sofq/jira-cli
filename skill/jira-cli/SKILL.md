@@ -275,6 +275,38 @@ Example error output:
 | `--verbose` | log HTTP details to stderr (JSON) |
 | `--timeout <duration>` | HTTP request timeout (default 30s) |
 | `--profile <name>` | use a named config profile |
+| `--audit` | enable audit logging for this invocation |
+| `--audit-file <path>` | audit log file path (implies --audit) |
+
+## Security
+
+### Operation Policy (per profile)
+Restrict which operations a profile can execute:
+
+```json
+{
+  "profiles": {
+    "agent": {
+      "allowed_operations": ["issue get", "search *", "workflow *"]
+    },
+    "readonly": {
+      "denied_operations": ["* delete*", "bulk *", "raw *"]
+    }
+  }
+}
+```
+
+- Use `allowed_operations` OR `denied_operations`, not both
+- Patterns use glob matching: `*` matches any sequence
+- `allowed_operations`: implicit deny-all, only matching ops run
+- `denied_operations`: implicit allow-all, only matching ops blocked
+
+### Batch Limits
+Default max batch size is 50. Override with `--max-batch N`.
+
+### Audit Logging
+Enable per-profile (`"audit_log": true`) or per-invocation (`--audit`).
+Logs to `~/.config/jr/audit.log` (JSONL). Override path with `--audit-file`.
 
 ## Pagination
 

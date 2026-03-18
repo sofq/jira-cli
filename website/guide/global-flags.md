@@ -20,6 +20,8 @@ All persistent flags listed here can be used with any `jr` command. They control
 | `--verbose` | | `bool` | `false` | Log HTTP request/response details to stderr |
 | `--dry-run` | | `bool` | `false` | Print the request as JSON without executing it |
 | `--timeout` | | `duration` | `30s` | HTTP request timeout |
+| `--audit` | | `bool` | `false` | Enable audit logging for this invocation |
+| `--audit-file` | | `string` | `""` | Path to audit log file (implies `--audit`) |
 
 ## Detailed reference
 
@@ -277,6 +279,32 @@ jr search search-and-reconsile-issues-using-jql \
 # Short timeout for quick checks
 jr raw GET /rest/api/3/myself --timeout 5s
 ```
+
+### `--audit`
+
+**Type:** `bool`
+**Default:** `false`
+
+Enable audit logging for this invocation. Writes a JSONL entry per operation to the audit log file (`~/.config/jr/audit.log` by default). Can also be enabled per-profile with `"audit_log": true` in the config file.
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 --audit
+```
+
+---
+
+### `--audit-file`
+
+**Type:** `string`
+**Default:** `""` (uses `~/.config/jr/audit.log`)
+
+Path to the audit log file. Implies `--audit`. Useful for directing audit logs to a specific location.
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 --audit-file /var/log/jr-audit.log
+```
+
+---
 
 ## Configuration resolution order
 
