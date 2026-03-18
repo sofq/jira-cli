@@ -298,8 +298,13 @@ func batchValidationError(c *client.Client, message string) int {
 	return jrerrors.ExitValidation
 }
 
-// executeBatchWorkflow runs workflow commands (transition, assign, comment) as a batch operation.
+// executeBatchWorkflow runs workflow commands (transition, assign, comment, create) as a batch operation.
 func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) int {
+	switch bop.Command {
+	case "workflow create":
+		return batchCreateIssue(ctx, c, bop.Args)
+	}
+
 	issueKey := bop.Args["issue"]
 	if issueKey == "" {
 		return batchValidationError(c, "workflow commands require an 'issue' arg")
@@ -425,6 +430,68 @@ func batchComment(ctx context.Context, c *client.Client, issueKey, text string) 
 		"issue":  issueKey,
 	})
 	return c.WriteOutput(out)
+}
+
+// batchCreateIssue executes a workflow create within a batch operation.
+func batchCreateIssue(ctx context.Context, c *client.Client, args map[string]string) int {
+	project := args["project"]
+	if project == "" {
+		return batchValidationError(c, "workflow create requires a 'project' arg")
+	}
+	issueType := args["type"]
+	if issueType == "" {
+		return batchValidationError(c, "workflow create requires a 'type' arg")
+	}
+	summary := args["summary"]
+	if summary == "" {
+		return batchValidationError(c, "workflow create requires a 'summary' arg")
+	}
+
+	fields := map[string]any{
+		"project":   map[string]string{"key": project},
+		"issuetype": map[string]string{"name": issueType},
+		"summary":   summary,
+	}
+	if description := args["description"]; description != "" {
+		fields["description"] = adf.FromText(description)
+	}
+	if priority := args["priority"]; priority != "" {
+		fields["priority"] = map[string]string{"name": priority}
+	}
+	if labels := args["labels"]; labels != "" {
+		fields["labels"] = strings.Split(labels, ",")
+	}
+	if parent := args["parent"]; parent != "" {
+		fields["parent"] = map[string]string{"key": parent}
+	}
+
+	if c.DryRun {
+		bodyPreview, _ := marshalNoEscape(map[string]any{"fields": fields})
+		out, _ := marshalNoEscape(map[string]any{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/api/3/issue",
+			"body":   json.RawMessage(bodyPreview),
+		})
+		return c.WriteOutput(out)
+	}
+
+	if assign := args["assign"]; assign != "" {
+		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
+		if code != jrerrors.ExitOK {
+			return code
+		}
+		if !isUnassign {
+			fields["assignee"] = map[string]string{"accountId": accountID}
+		}
+	}
+
+	createBody, _ := json.Marshal(map[string]any{"fields": fields})
+	respBody, code := c.Fetch(ctx, "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	return c.WriteOutput(respBody)
 }
 
 // stripVerboseLogs separates verbose log lines from error lines in captured stderr.

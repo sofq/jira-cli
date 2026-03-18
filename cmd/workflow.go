@@ -41,6 +41,13 @@ var commentCmd = &cobra.Command{
 	RunE:  runComment,
 }
 
+var createIssueCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create an issue from flags (no raw JSON needed)",
+	Long:  "Creates a Jira issue using individual flags. Required: --project, --type, --summary. Optional: --description, --assign, --priority, --labels, --parent.",
+	RunE:  runCreateIssue,
+}
+
 func init() {
 	transitionCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = transitionCmd.MarkFlagRequired("issue")
@@ -57,9 +64,22 @@ func init() {
 	commentCmd.Flags().String("text", "", "comment text (plain text, converted to ADF)")
 	_ = commentCmd.MarkFlagRequired("text")
 
+	createIssueCmd.Flags().String("project", "", "project key (e.g. PROJ)")
+	_ = createIssueCmd.MarkFlagRequired("project")
+	createIssueCmd.Flags().String("type", "", "issue type name (e.g. Bug, Story, Task)")
+	_ = createIssueCmd.MarkFlagRequired("type")
+	createIssueCmd.Flags().String("summary", "", "issue summary/title")
+	_ = createIssueCmd.MarkFlagRequired("summary")
+	createIssueCmd.Flags().String("description", "", "issue description (plain text, converted to ADF)")
+	createIssueCmd.Flags().String("assign", "", "assignee: display name, email, 'me', 'none', or 'unassign'")
+	createIssueCmd.Flags().String("priority", "", "priority name (e.g. High, Medium, Low)")
+	createIssueCmd.Flags().String("labels", "", "comma-separated list of labels")
+	createIssueCmd.Flags().String("parent", "", "parent issue key (e.g. PROJ-100)")
+
 	workflowCmd.AddCommand(transitionCmd)
 	workflowCmd.AddCommand(assignCmd)
 	workflowCmd.AddCommand(commentCmd)
+	workflowCmd.AddCommand(createIssueCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -296,6 +316,78 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"to":     to,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+func runCreateIssue(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	project, _ := cmd.Flags().GetString("project")
+	issueType, _ := cmd.Flags().GetString("type")
+	summary, _ := cmd.Flags().GetString("summary")
+	description, _ := cmd.Flags().GetString("description")
+	assign, _ := cmd.Flags().GetString("assign")
+	priority, _ := cmd.Flags().GetString("priority")
+	labels, _ := cmd.Flags().GetString("labels")
+	parent, _ := cmd.Flags().GetString("parent")
+
+	fields := map[string]any{
+		"project":   map[string]string{"key": project},
+		"issuetype": map[string]string{"name": issueType},
+		"summary":   summary,
+	}
+	if description != "" {
+		fields["description"] = adf.FromText(description)
+	}
+	if priority != "" {
+		fields["priority"] = map[string]string{"name": priority}
+	}
+	if labels != "" {
+		fields["labels"] = strings.Split(labels, ",")
+	}
+	if parent != "" {
+		fields["parent"] = map[string]string{"key": parent}
+	}
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		bodyPreview, _ := marshalNoEscape(map[string]any{"fields": fields})
+		out, _ := marshalNoEscape(map[string]any{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/api/3/issue",
+			"body":   json.RawMessage(bodyPreview),
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	// Resolve assignee if provided.
+	if assign != "" {
+		accountID, isUnassign, exitCode := resolveAssignee(cmd.Context(), c, assign)
+		if exitCode != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: exitCode}
+		}
+		if !isUnassign {
+			fields["assignee"] = map[string]string{"accountId": accountID}
+		}
+	}
+
+	createBody, _ := json.Marshal(map[string]any{"fields": fields})
+	respBody, exitCode := c.Fetch(cmd.Context(), "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	if exitCode := c.WriteOutput(respBody); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil

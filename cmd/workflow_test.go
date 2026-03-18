@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -410,6 +411,150 @@ func TestRunComment_NoClient(t *testing.T) {
 	cmd := &cobra.Command{Use: "comment", RunE: runComment}
 	cmd.Flags().String("issue", "", "")
 	cmd.Flags().String("text", "", "")
+	cmd.SetContext(context.Background()) // context without client
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+}
+
+// newCreateIssueCmd creates a workflow create command with flags and client context.
+func newCreateIssueCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().String("type", "", "")
+	cmd.Flags().String("summary", "", "")
+	cmd.Flags().String("description", "", "")
+	cmd.Flags().String("assign", "", "")
+	cmd.Flags().String("priority", "", "")
+	cmd.Flags().String("labels", "", "")
+	cmd.Flags().String("parent", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunCreateIssue_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "/rest/api/3/issue") {
+		t.Errorf("expected issue endpoint in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunCreateIssue_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001","key":"PROJ-1","self":"http://example.com/rest/api/3/issue/10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected 'PROJ-1' in output, got: %s", output)
+	}
+}
+
+func TestRunCreateIssue_WithAllFlags(t *testing.T) {
+	var capturedBody []byte
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var err error
+			capturedBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10002","key":"PROJ-2","self":"http://example.com/rest/api/3/issue/10002"}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+	_ = cmd.Flags().Set("description", "Steps to reproduce")
+	_ = cmd.Flags().Set("assign", "me")
+	_ = cmd.Flags().Set("priority", "High")
+	_ = cmd.Flags().Set("labels", "bug,urgent")
+	_ = cmd.Flags().Set("parent", "PROJ-100")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	body := string(capturedBody)
+	if !strings.Contains(body, `"High"`) {
+		t.Errorf("expected priority 'High' in request body, got: %s", body)
+	}
+	if !strings.Contains(body, "PROJ-100") {
+		t.Errorf("expected parent 'PROJ-100' in request body, got: %s", body)
+	}
+	if !strings.Contains(body, "bug") {
+		t.Errorf("expected label 'bug' in request body, got: %s", body)
+	}
+	if !strings.Contains(body, "urgent") {
+		t.Errorf("expected label 'urgent' in request body, got: %s", body)
+	}
+}
+
+func TestRunCreateIssue_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().String("type", "", "")
+	cmd.Flags().String("summary", "", "")
+	cmd.Flags().String("description", "", "")
+	cmd.Flags().String("assign", "", "")
+	cmd.Flags().String("priority", "", "")
+	cmd.Flags().String("labels", "", "")
+	cmd.Flags().String("parent", "", "")
 	cmd.SetContext(context.Background()) // context without client
 
 	err := cmd.RunE(cmd, nil)
