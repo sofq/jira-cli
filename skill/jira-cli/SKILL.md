@@ -158,6 +158,21 @@ jr template create my-template --from PROJ-123
 
 User-defined templates are stored in `~/.config/jr/templates/` as YAML files.
 
+### Diff / Changelog
+```bash
+# All changes on an issue
+jr diff --issue PROJ-123
+
+# Changes in last 2 hours
+jr diff --issue PROJ-123 --since 2h
+
+# Changes since a specific date
+jr diff --issue PROJ-123 --since 2025-01-01
+
+# Only status changes
+jr diff --issue PROJ-123 --field status
+```
+
 ### List projects
 ```bash
 jr project search --jq '[.values[] | {key, name}]'

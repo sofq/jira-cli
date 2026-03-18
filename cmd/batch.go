@@ -15,6 +15,7 @@ import (
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/duration"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/changelog"
 	"github.com/sofq/jira-cli/internal/jq"
 	tmpl "github.com/sofq/jira-cli/internal/template"
 	"github.com/spf13/cobra"
@@ -141,6 +142,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	allOps := generated.AllSchemaOps()
 	allOps = append(allOps, HandWrittenSchemaOps()...)
 	allOps = append(allOps, TemplateSchemaOps()...)
+	allOps = append(allOps, DiffSchemaOps()...)
 	// Build a lookup map: "resource verb" -> SchemaOp
 	opMap := make(map[string]generated.SchemaOp, len(allOps))
 	for _, op := range allOps {
@@ -249,6 +251,10 @@ func executeBatchOp(
 	}
 	if strings.HasPrefix(bop.Command, "template ") {
 		exitCode := executeBatchTemplate(cmd.Context(), opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+	}
+	if bop.Command == "diff diff" {
+		exitCode := executeBatchDiff(cmd.Context(), opClient, bop)
 		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 	}
 
@@ -888,6 +894,48 @@ func batchTemplateApply(ctx context.Context, c *client.Client, args map[string]s
 		return code
 	}
 	return c.WriteOutput(respBody)
+}
+
+// executeBatchDiff runs a diff command as a batch operation.
+func executeBatchDiff(ctx context.Context, c *client.Client, bop BatchOp) int {
+	issueKey := bop.Args["issue"]
+	if issueKey == "" {
+		return batchValidationError(c, "diff requires an 'issue' arg")
+	}
+
+	changelogPath := fmt.Sprintf("/rest/api/3/issue/%s/changelog", url.PathEscape(issueKey))
+
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "GET",
+			"url":    c.BaseURL + changelogPath,
+			"note":   fmt.Sprintf("would fetch changelog for %s", issueKey),
+		})
+		return c.WriteOutput(out)
+	}
+
+	body, exitCode := c.Fetch(ctx, "GET", changelogPath, nil)
+	if exitCode != jrerrors.ExitOK {
+		return exitCode
+	}
+
+	opts := changelog.Options{
+		Since: bop.Args["since"],
+		Field: bop.Args["field"],
+	}
+
+	result, err := changelog.Parse(issueKey, body, opts)
+	if err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitValidation
+	}
+
+	out, _ := marshalNoEscape(result)
+	return c.WriteOutput(out)
 }
 
 // errorResult constructs a BatchResult for an error condition.

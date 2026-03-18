@@ -204,6 +204,41 @@ jr template create my-template --from PROJ-123
 
 Built-in templates: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`. User-defined templates are stored in `~/.config/jr/templates/`.
 
+### Diff / Changelog
+
+Show what changed on an issue as structured JSON — useful for monitoring agents and audit workflows.
+
+```bash
+# All changes
+jr diff --issue PROJ-123
+
+# Changes in last 2 hours
+jr diff --issue PROJ-123 --since 2h
+
+# Changes since a specific date
+jr diff --issue PROJ-123 --since 2025-01-01
+
+# Only status changes
+jr diff --issue PROJ-123 --field status
+```
+
+Output:
+
+```json
+{
+  "issue": "PROJ-123",
+  "changes": [
+    {
+      "timestamp": "2025-03-18T10:30:00Z",
+      "author": "john@example.com",
+      "field": "status",
+      "from": "To Do",
+      "to": "In Progress"
+    }
+  ]
+}
+```
+
 ### Error handling for agents
 
 Every error is a JSON object on stderr with a typed `error_type` agents can branch on:

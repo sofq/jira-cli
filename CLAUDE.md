@@ -88,6 +88,12 @@ jr template apply bug-report --project PROJ --var summary="Login broken" --var s
 jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=PROJ-100
 jr template create my-template                     # create empty template scaffold
 jr template create my-template --from PROJ-123     # create template from existing issue
+
+# Diff / Changelog — structured change history
+jr diff --issue PROJ-123                           # all changes
+jr diff --issue PROJ-123 --since 2h                # changes in last 2 hours
+jr diff --issue PROJ-123 --since 2025-01-01        # changes since date
+jr diff --issue PROJ-123 --field status            # only status changes
 ```
 
 ## Discovery
@@ -101,6 +107,7 @@ jr schema issue get           # full schema with flags for one operation
 jr preset list                # list available output presets
 jr template list              # list available issue templates
 jr template show <name>       # show a template's variables and fields
+jr diff --issue <key>         # show changelog for an issue
 ```
 
 ## Global Flags
