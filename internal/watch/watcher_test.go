@@ -54,6 +54,11 @@ func issueJSONFieldsUpdated(key, updated string) string {
 	return `{"key":"` + key + `","fields":{"updated":"` + updated + `"}}`
 }
 
+// writeJSON writes b to w, discarding the error (test helper to satisfy errcheck).
+func writeJSON(w http.ResponseWriter, b []byte) {
+	_, _ = w.Write(b)
+}
+
 // --- marshalNoEscape ---
 
 func TestMarshalNoEscape(t *testing.T) {
@@ -177,7 +182,7 @@ func TestEmitEvent_Pretty(t *testing.T) {
 
 func TestPoll_FirstPoll_InitialEvents(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -201,7 +206,7 @@ func TestPoll_FirstPoll_InitialEvents(t *testing.T) {
 
 func TestPoll_SecondPoll_CreatedEvent(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-2", "2025-01-02T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-2", "2025-01-02T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -219,7 +224,7 @@ func TestPoll_SecondPoll_CreatedEvent(t *testing.T) {
 
 func TestPoll_UpdatedEvent(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-02T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-02T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -239,7 +244,7 @@ func TestPoll_UpdatedEvent(t *testing.T) {
 
 func TestPoll_NoChange(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -257,7 +262,7 @@ func TestPoll_NoChange(t *testing.T) {
 func TestPoll_RemovedEvent(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		// Return empty results — T-1 is gone
-		w.Write(searchJSON())
+		writeJSON(w, searchJSON())
 	})
 	defer te.Close()
 
@@ -277,7 +282,7 @@ func TestPoll_RemovedEvent(t *testing.T) {
 
 func TestPoll_RemovedNotOnFirstPoll(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON())
+		writeJSON(w, searchJSON())
 	})
 	defer te.Close()
 
@@ -293,7 +298,7 @@ func TestPoll_RemovedNotOnFirstPoll(t *testing.T) {
 func TestPoll_FetchError(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"message":"unauthorized"}`))
+		writeJSON(w, []byte(`{"message":"unauthorized"}`))
 	})
 	defer te.Close()
 
@@ -307,7 +312,7 @@ func TestPoll_FetchError(t *testing.T) {
 
 func TestPoll_InvalidJSON(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`not json`))
+		writeJSON(w, []byte(`not json`))
 	})
 	defer te.Close()
 
@@ -325,7 +330,7 @@ func TestPoll_InvalidJSON(t *testing.T) {
 func TestPoll_FieldsUpdatedFallback(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		// Issue has no top-level "updated", only in fields
-		w.Write(searchJSON(issueJSONFieldsUpdated("T-1", "2025-02-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSONFieldsUpdated("T-1", "2025-02-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -343,7 +348,7 @@ func TestPoll_FieldsUpdatedFallback(t *testing.T) {
 func TestPoll_BadIssueJSON(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		// Issue array contains invalid JSON element
-		w.Write([]byte(`{"issues":[{bad json}]}`))
+		writeJSON(w, []byte(`{"issues":[{bad json}]}`))
 	})
 	defer te.Close()
 
@@ -364,7 +369,7 @@ func TestPoll_BadIssueJSON(t *testing.T) {
 func TestPoll_SkipBadIssueFingerprint(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		// One valid issue, one that can't be parsed as fingerprint (number instead of object)
-		w.Write([]byte(`{"issues":[42,` + issueJSON("T-1", "2025-01-01T00:00:00Z") + `]}`))
+		writeJSON(w, []byte(`{"issues":[42,` + issueJSON("T-1", "2025-01-01T00:00:00Z") + `]}`))
 	})
 	defer te.Close()
 
@@ -381,7 +386,7 @@ func TestPoll_SkipBadIssueFingerprint(t *testing.T) {
 
 func TestPoll_MaxEventsReached(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(
+		writeJSON(w, searchJSON(
 			issueJSON("T-1", "2025-01-01T00:00:00Z"),
 			issueJSON("T-2", "2025-01-01T00:00:00Z"),
 		))
@@ -398,7 +403,7 @@ func TestPoll_MaxEventsReached(t *testing.T) {
 
 func TestPoll_MaxEventsOnUpdate(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-02T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-02T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -412,7 +417,7 @@ func TestPoll_MaxEventsOnUpdate(t *testing.T) {
 
 func TestPoll_MaxEventsOnRemoval(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON())
+		writeJSON(w, searchJSON())
 	})
 	defer te.Close()
 
@@ -428,7 +433,7 @@ func TestPoll_WithFields(t *testing.T) {
 	var gotBody []byte
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		gotBody, _ = io.ReadAll(r.Body)
-		w.Write(searchJSON())
+		writeJSON(w, searchJSON())
 	})
 	defer te.Close()
 
@@ -447,7 +452,7 @@ func TestPoll_WithFields(t *testing.T) {
 func TestRun_FirstPollError(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message":"server error"}`))
+		writeJSON(w, []byte(`{"message":"server error"}`))
 	})
 	defer te.Close()
 
@@ -462,7 +467,7 @@ func TestRun_FirstPollError(t *testing.T) {
 
 func TestRun_FirstPollMaxEvents(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -480,7 +485,7 @@ func TestRun_ContextCancelled(t *testing.T) {
 	var pollCount atomic.Int32
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		pollCount.Add(1)
-		w.Write(searchJSON())
+		writeJSON(w, searchJSON())
 	})
 	defer te.Close()
 
@@ -501,7 +506,7 @@ func TestRun_IssueToJQL(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		gotBody = string(b)
-		w.Write(searchJSON(issueJSON("PROJ-1", "2025-01-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("PROJ-1", "2025-01-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -523,7 +528,7 @@ func TestRun_WithFields(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		gotBody = string(b)
-		w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 	})
 	defer te.Close()
 
@@ -546,9 +551,9 @@ func TestRun_SecondPollMaxEvents(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
 		if n == 1 {
-			w.Write(searchJSON()) // empty first poll
+			writeJSON(w, searchJSON()) // empty first poll
 		} else {
-			w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 		}
 	})
 	defer te.Close()
@@ -568,10 +573,10 @@ func TestRun_AuthErrorStopsImmediately(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
 		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
+			writeJSON(w, searchJSON()) // first poll OK
 		} else {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"message":"unauthorized"}`))
+			writeJSON(w, []byte(`{"message":"unauthorized"}`))
 		}
 	})
 	defer te.Close()
@@ -592,14 +597,15 @@ func TestRun_TransientErrorContinues(t *testing.T) {
 	var pollCount atomic.Int32
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
-		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
-		} else if n == 2 {
+		switch n {
+		case 1:
+			writeJSON(w, searchJSON()) // first poll OK
+		case 2:
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message":"server error"}`))
-		} else {
+			writeJSON(w, []byte(`{"message":"server error"}`))
+		default:
 			// third poll: emit an event so we can stop
-			w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 		}
 	})
 	defer te.Close()
@@ -622,13 +628,13 @@ func TestRun_BackoffOnRepeatedErrors(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
 		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
+			writeJSON(w, searchJSON()) // first poll OK
 		} else if n <= 3 {
 			// Two consecutive errors to trigger backoff
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message":"server error"}`))
+			writeJSON(w, []byte(`{"message":"server error"}`))
 		} else {
-			w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 		}
 	})
 	defer te.Close()
@@ -648,11 +654,11 @@ func TestRun_BackoffContextCancel(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
 		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
+			writeJSON(w, searchJSON()) // first poll OK
 		} else {
 			// Keep returning errors to force backoff
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message":"server error"}`))
+			writeJSON(w, []byte(`{"message":"server error"}`))
 		}
 	})
 	defer te.Close()
@@ -673,17 +679,18 @@ func TestRun_ConsecutiveErrorsReset(t *testing.T) {
 	var pollCount atomic.Int32
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
-		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
-		} else if n == 2 {
+		switch n {
+		case 1:
+			writeJSON(w, searchJSON()) // first poll OK
+		case 2:
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message":"err"}`))
-		} else if n == 3 {
+			writeJSON(w, []byte(`{"message":"err"}`))
+		case 3:
 			// Success — should reset consecutiveErrors
-			w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
-		} else {
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		default:
 			// Another event to stop
-			w.Write(searchJSON(
+			writeJSON(w, searchJSON(
 				issueJSON("T-1", "2025-01-01T00:00:00Z"),
 				issueJSON("T-2", "2025-01-01T00:00:00Z"),
 			))
@@ -720,13 +727,13 @@ func TestRun_BackoffCapped(t *testing.T) {
 	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
 		n := pollCount.Add(1)
 		if n == 1 {
-			w.Write(searchJSON()) // first poll OK
+			writeJSON(w, searchJSON()) // first poll OK
 		} else if n <= 4 {
 			// 3 consecutive errors: backoff = 3*10ms = 30ms > 5ms cap
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message":"err"}`))
+			writeJSON(w, []byte(`{"message":"err"}`))
 		} else {
-			w.Write(searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
 		}
 	})
 	defer te.Close()
