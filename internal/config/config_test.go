@@ -986,3 +986,136 @@ func TestValidAuthType(t *testing.T) {
 	}
 }
 
+// TestProfilePolicyFieldsRoundtrip verifies that allowed/denied operations
+// survive a SaveTo/LoadFrom roundtrip.
+func TestProfilePolicyFieldsRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "agent",
+		Profiles: map[string]config.Profile{
+			"agent": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Token: "tok"},
+				AllowedOperations: []string{"issue get", "search *"},
+			},
+			"restricted": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Token: "tok"},
+				DeniedOperations: []string{"* delete*", "bulk *"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	loaded, err := config.LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	agent := loaded.Profiles["agent"]
+	if len(agent.AllowedOperations) != 2 {
+		t.Errorf("agent AllowedOperations = %v, want 2 items", agent.AllowedOperations)
+	}
+
+	restricted := loaded.Profiles["restricted"]
+	if len(restricted.DeniedOperations) != 2 {
+		t.Errorf("restricted DeniedOperations = %v, want 2 items", restricted.DeniedOperations)
+	}
+}
+
+// TestProfileAuditLogFieldRoundtrip verifies audit_log survives roundtrip.
+func TestProfileAuditLogFieldRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "audited",
+		Profiles: map[string]config.Profile{
+			"audited": {
+				BaseURL:  "https://example.com",
+				Auth:     config.AuthConfig{Type: "basic", Token: "tok"},
+				AuditLog: true,
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	loaded, err := config.LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+
+	if !loaded.Profiles["audited"].AuditLog {
+		t.Error("expected AuditLog=true after roundtrip")
+	}
+}
+
+// TestResolveReturnsProfileName verifies that Resolve carries the profile name.
+func TestResolveReturnsProfileName(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "work",
+		Profiles: map[string]config.Profile{
+			"work": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Token: "tok"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	setEnv(t, map[string]string{
+		"JR_BASE_URL": "", "JR_AUTH_TYPE": "", "JR_AUTH_USER": "", "JR_AUTH_TOKEN": "",
+	})
+
+	resolved, err := config.Resolve(cfgPath, "work", nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if resolved.ProfileName != "work" {
+		t.Errorf("ProfileName = %q, want %q", resolved.ProfileName, "work")
+	}
+}
+
+// TestResolveReturnsPolicyFields verifies that Resolve carries allow/deny lists.
+func TestResolveReturnsPolicyFields(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				BaseURL:           "https://example.com",
+				Auth:              config.AuthConfig{Type: "basic", Token: "tok"},
+				AllowedOperations: []string{"issue *"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	setEnv(t, map[string]string{
+		"JR_BASE_URL": "", "JR_AUTH_TYPE": "", "JR_AUTH_USER": "", "JR_AUTH_TOKEN": "",
+	})
+
+	resolved, err := config.Resolve(cfgPath, "", nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if len(resolved.AllowedOperations) != 1 || resolved.AllowedOperations[0] != "issue *" {
+		t.Errorf("AllowedOperations = %v, want [issue *]", resolved.AllowedOperations)
+	}
+}
+

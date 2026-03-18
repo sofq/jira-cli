@@ -72,12 +72,23 @@ jr configure \
 
 ### OAuth2
 
-```bash
-jr configure \
-  --base-url https://yourorg.atlassian.net \
-  --auth-type oauth2 \
-  --token YOUR_OAUTH2_ACCESS_TOKEN
+OAuth2 requires fields (`client_id`, `client_secret`, `token_url`) that cannot be set via CLI flags, so you must configure it manually in the config file (`~/.config/jr/config.json`):
+
+```json
+{
+  "profiles": {
+    "default": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth_type": "oauth2",
+      "client_id": "YOUR_CLIENT_ID",
+      "client_secret": "YOUR_CLIENT_SECRET",
+      "token_url": "https://auth.atlassian.com/oauth/token"
+    }
+  }
+}
 ```
+
+You can still use `--auth-type oauth2` as a runtime flag override for individual commands.
 
 ### Environment variables
 
@@ -111,6 +122,28 @@ jr configure --profile work --delete
 CLI flags take the highest priority, followed by environment variables, followed by the config file. This means you can override any config file setting with a flag or env var on a per-command basis.
 :::
 
+### Security settings
+
+Profiles can include operation restrictions and audit logging. Edit `~/.config/jr/config.json` directly:
+
+```json
+{
+  "profiles": {
+    "agent": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "username": "...", "token": "..."},
+      "allowed_operations": ["issue get", "search *", "workflow *"],
+      "audit_log": true
+    }
+  }
+}
+```
+
+- `allowed_operations` / `denied_operations` — glob patterns restricting which commands the profile can run (use one or the other, not both)
+- `audit_log` — write a JSONL entry per operation to `~/.config/jr/audit.log`
+
+See [Global Flags](./global-flags) for `--audit` and `--audit-file` flags.
+
 ## Your first commands
 
 ### Get an issue
@@ -138,89 +171,42 @@ Command names are auto-generated from Jira's OpenAPI spec, so they can be verbos
 jr project search
 ```
 
-## Filtering output
+## Workflow commands
 
-Jira API responses are large. A single issue can be 10,000+ tokens of JSON. `jr` provides two flags to cut that down dramatically.
-
-### `--fields` --- server-side filtering
-
-The `--fields` flag tells Jira to return only the fields you ask for. This reduces what comes over the wire:
+`jr workflow` provides high-level commands that accept simple flags instead of raw JSON. These resolve human-friendly names (status names, user emails, sprint names) to Jira IDs automatically.
 
 ```bash
-jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
+# Transition an issue by status name
+jr workflow transition --issue PROJ-123 --to "Done"
+
+# Assign by name, email, or "me"
+jr workflow assign --issue PROJ-123 --to "me"
+
+# Transition + assign in one step
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+
+# Add a plain-text comment (auto-converted to ADF)
+jr workflow comment --issue PROJ-123 --text "This is done"
+
+# Create an issue from flags (no raw JSON)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+
+# Link two issues by type name
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+
+# Log work with human-friendly duration
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+
+# Move issue to sprint by name
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 ```
 
-### `--jq` --- client-side filtering
-
-The `--jq` flag applies a [jq](https://jqlang.github.io/jq/) expression to the response, reshaping or extracting data:
-
-```bash
-jr issue get --issueIdOrKey PROJ-123 --jq '{key: .key, summary: .fields.summary}'
-```
-
-### Combine both for maximum efficiency
-
-Use `--fields` and `--jq` together to minimize tokens at every stage:
-
-**Before** (no filtering) --- ~10,000 tokens:
-```bash
-jr issue get --issueIdOrKey PROJ-123
-```
-
-**After** (both flags) --- ~50 tokens:
-```bash
-jr issue get --issueIdOrKey PROJ-123 \
-  --fields key,summary \
-  --jq '{key: .key, summary: .fields.summary}'
-```
-
-::: tip
-Always use `--fields` and `--jq` together. `--fields` reduces what Jira sends back (saving bandwidth and API quota), while `--jq` shapes the output into exactly the structure you need.
-:::
-
-### Cache read-heavy data
-
-For data that changes infrequently (like project lists), use `--cache` to avoid redundant API calls:
-
-```bash
-jr project search --cache 5m --jq '[.values[].key]'
-```
-
-## Discovering commands
-
-`jr` has over 600 commands, all auto-generated from the official Jira OpenAPI v3 spec. Rather than memorizing them, use `jr schema` to explore what is available.
-
-### Four discovery modes
-
-**1. Resource-to-verb mapping** (default, best starting point):
-```bash
-jr schema
-# Shows every resource and its available verbs
-```
-
-**2. List all resource names:**
-```bash
-jr schema --list
-# issue, project, search, workflow, board, sprint, ...
-```
-
-**3. All operations for a resource:**
-```bash
-jr schema issue
-# Lists every operation under the "issue" resource, with flags
-```
-
-**4. Full schema for a single operation:**
-```bash
-jr schema issue get
-# Shows all available flags, types, and descriptions for "issue get"
-```
-
-::: tip
-Start with `jr schema` or `jr schema --list` to orient yourself, then drill into a specific resource and operation. This is especially useful for AI agents that need to discover commands at runtime.
-:::
+See the full [workflow command reference](/commands/workflow) for all flags and options.
 
 ## Next steps
 
+- [Filtering & Presets](./filtering) --- cut 10,000-token responses down to ~50 tokens
+- [Discovering Commands](./discovery) --- explore 600+ commands with `jr schema`
+- [Templates](./templates) --- create issues from predefined patterns with variables
 - [Global Flags](./global-flags) --- full reference for all persistent flags
 - [Agent Integration](./agent-integration) --- how AI agents can use `jr` effectively

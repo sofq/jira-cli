@@ -1,0 +1,14 @@
+name: task
+issuetype: Task
+description: General task with summary, description, and optional assignee
+variables:
+  - name: summary
+    required: true
+    description: Task summary
+  - name: description
+    description: Task description
+  - name: assignee
+    description: "Assignee (display name, email, or 'me')"
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}"

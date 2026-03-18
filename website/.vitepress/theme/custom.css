@@ -26,32 +26,10 @@
   --vp-c-brand-soft: rgba(255, 136, 0, 0.14);
 }
 
-/* ---- Hero ---- */
+/* ---- Hide default hero when custom hero is active ---- */
 
-.VPHero .name {
-  font-family: var(--vp-font-family-mono) !important;
-  font-size: 4rem !important;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #FF8800 0%, #FFA940 50%, #FFD080 100%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-}
-
-.VPHero .VPImage {
+.VPHero {
   display: none !important;
-}
-
-.VPHero .text {
-  font-size: 2.25rem !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.01em;
-}
-
-.VPHero .tagline {
-  font-size: 1.05rem !important;
-  line-height: 1.7;
-  max-width: 520px;
 }
 
 /* ---- Feature cards ---- */
@@ -170,4 +148,78 @@
   font-family: var(--vp-font-family-mono);
   font-size: 0.85rem;
   color: var(--vp-c-text-2);
+}
+
+/* ---- "Why jr" section ---- */
+
+.why-section {
+  max-width: 688px;
+  margin: 0 auto 3rem;
+  padding: 0 24px;
+}
+
+.why-section h2 {
+  font-family: var(--vp-font-family-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.why-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .why-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.why-card {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.why-card.highlight {
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+.why-label {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vp-c-text-3);
+  margin-bottom: 8px;
+}
+
+.why-card.highlight .why-label {
+  color: var(--vp-c-brand-1);
+}
+
+.why-content {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+.why-card.highlight .why-content {
+  color: var(--vp-c-text-1);
+}
+
+/* ---- Section titles ---- */
+
+.section-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1.5rem;
 }

@@ -74,6 +74,9 @@ type schemaKey struct {
 func buildSchemaLookup() map[schemaKey]generated.SchemaOp {
 	m := make(map[schemaKey]generated.SchemaOp)
 	all := append(generated.AllSchemaOps(), cmd.HandWrittenSchemaOps()...)
+	all = append(all, cmd.WatchSchemaOps()...)
+	all = append(all, cmd.TemplateSchemaOps()...)
+	all = append(all, cmd.DiffSchemaOps()...)
 	for _, op := range all {
 		m[schemaKey{op.Resource, op.Verb}] = op
 	}

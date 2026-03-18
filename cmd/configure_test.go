@@ -699,6 +699,115 @@ func TestTestConnection_NoOAuth2Branch(t *testing.T) {
 	}
 }
 
+func TestConfigure_TestExistingProfile_ConnectionFails(t *testing.T) {
+	// A valid profile whose base_url points to a failing server.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintln(w, `{"message":"Forbidden"}`)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	cfg := &config.Config{
+		DefaultProfile: "bad",
+		Profiles: map[string]config.Profile{
+			"bad": {
+				BaseURL: ts.URL,
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("test", "true")
+	_ = cmd.Flags().Set("profile", "bad")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for failed connection test")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+func TestConfigure_TestAndSave_Success(t *testing.T) {
+	// --test with --base-url and --token: test passes, then save.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"accountId":"abc123"}`)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", ts.URL)
+	_ = cmd.Flags().Set("token", "test-token")
+	_ = cmd.Flags().Set("username", "user@example.com")
+	_ = cmd.Flags().Set("test", "true")
+
+	captured := captureStdout(t, func() {
+		if err := runConfigure(cmd, nil); err != nil {
+			t.Fatalf("runConfigure error: %v", err)
+		}
+	})
+
+	if !strings.Contains(captured, `"saved"`) {
+		t.Errorf("expected saved status, got: %s", captured)
+	}
+
+	// Config should be written.
+	cfg, err := config.LoadFrom(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Profiles["default"].Auth.Token != "test-token" {
+		t.Errorf("expected token saved, got: %s", cfg.Profiles["default"].Auth.Token)
+	}
+}
+
+func TestConfigure_TestAndSave_FailsConnectionTest(t *testing.T) {
+	// --test with --base-url/--token: test fails, should NOT save.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"message":"Bad creds"}`)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", ts.URL)
+	_ = cmd.Flags().Set("token", "bad-token")
+	_ = cmd.Flags().Set("test", "true")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for failed connection test")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
 func TestTestConnection_HTTPErrorIncludesBody(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -715,5 +824,273 @@ func TestTestConnection_HTTPErrorIncludesBody(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Invalid credentials") {
 		t.Errorf("error should contain response body, got: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runConfigure — whitespace-only --base-url is rejected
+// ---------------------------------------------------------------------------
+
+func TestConfigureRejectsWhitespaceBaseURL(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", "   ")
+	_ = cmd.Flags().Set("token", "some-token")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only --base-url")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runConfigure — whitespace-only --token is rejected
+// ---------------------------------------------------------------------------
+
+func TestConfigureRejectsWhitespaceToken(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", "https://example.atlassian.net")
+	_ = cmd.Flags().Set("token", "   ")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only --token")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// deleteProfileByName — LoadFrom error on malformed config file
+// ---------------------------------------------------------------------------
+
+func TestDeleteProfile_MalformedConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{bad json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("delete", "true")
+	_ = cmd.Flags().Set("profile", "myprofile")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for malformed config file on delete")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected ExitError, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runConfigure — SaveTo error when config file is read-only (lines 155-163)
+// ---------------------------------------------------------------------------
+
+func TestConfigure_SaveError(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+
+	// Write a valid initial config so LoadFrom succeeds.
+	cfg := &config.Config{Profiles: map[string]config.Profile{}}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	// Make the file read-only so the subsequent SaveTo write fails.
+	if err := os.Chmod(configPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(configPath, 0o755) })
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", "https://example.com")
+	_ = cmd.Flags().Set("token", "mytoken")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when SaveTo fails due to read-only file")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected ExitError (%d), got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// deleteProfileByName — SaveTo error after successful deletion (lines 270-277)
+// ---------------------------------------------------------------------------
+
+func TestDeleteProfile_SaveError(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+
+	cfg := &config.Config{
+		DefaultProfile: "test",
+		Profiles: map[string]config.Profile{
+			"test": {BaseURL: "https://example.com"},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	// Make the file read-only so the SaveTo after deletion fails.
+	if err := os.Chmod(configPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(configPath, 0o755) })
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("delete", "true")
+	_ = cmd.Flags().Set("profile", "test")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when SaveTo fails after profile deletion")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected ExitError (%d), got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runConfigure — LoadFrom error on malformed config file (save path)
+// ---------------------------------------------------------------------------
+
+func TestConfigure_MalformedConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{bad json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("base-url", "https://example.com")
+	_ = cmd.Flags().Set("token", "mytoken")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for malformed config file on save")
+	}
+	if _, ok := err.(*jrerrors.AlreadyWrittenError); !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// testExistingProfile — LoadFrom error on malformed config file
+// ---------------------------------------------------------------------------
+
+// TestTestConnection_NetworkError verifies that testConnection returns an error
+// when the server is unreachable (httpClient.Do failure, line 306-307).
+func TestTestConnection_NetworkError(t *testing.T) {
+	err := ExportTestConnection("http://127.0.0.1:1", "basic", "user", "token")
+	if err == nil {
+		t.Fatal("expected error for unreachable server, got nil")
+	}
+}
+
+// TestTestConnection_InvalidURL verifies that testConnection returns an error
+// when the base URL is malformed (http.NewRequest failure, line 292-293).
+func TestTestConnection_InvalidURL(t *testing.T) {
+	err := ExportTestConnection("://bad-url", "basic", "user", "token")
+	if err == nil {
+		t.Fatal("expected error for invalid URL, got nil")
+	}
+}
+
+func TestConfigure_TestExistingProfile_MalformedConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{bad}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("test", "true")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for malformed config file on test-existing-profile")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected ExitError, got %d", aw.Code)
+	}
+}
+
+// TestConfigure_TestExistingProfile_DefaultProfileMissing verifies that when
+// default_profile points to a non-existent profile and --profile is not
+// explicitly set, testExistingProfile returns a not_found error.
+func TestConfigure_TestExistingProfile_DefaultProfileMissing(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	cfg := &config.Config{
+		DefaultProfile: "gone",
+		Profiles: map[string]config.Profile{
+			"other": {
+				BaseURL: "https://example.com",
+				Auth:    config.AuthConfig{Type: "basic", Username: "u", Token: "t"},
+			},
+		},
+	}
+	if err := config.SaveTo(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", configPath)
+
+	cmd := newConfigureCmd()
+	_ = cmd.Flags().Set("test", "true")
+
+	err := runConfigure(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when default_profile points to missing profile")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected ExitNotFound, got %d", aw.Code)
 	}
 }

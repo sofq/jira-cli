@@ -25,7 +25,7 @@ Most CLIs are built for humans — they print tables, prompt for input, and bury
 | Parseable output | Pure JSON on stdout, always |
 | Machine-readable errors | Structured JSON on stderr with `error_type`, `status`, `retry_after` |
 | Predictable exit codes | 0-7, each mapped to a specific failure class |
-| Token efficiency | `--jq` and `--fields` to minimize response size |
+| Token efficiency | `--preset`, `--jq`, and `--fields` to minimize response size |
 | No interactivity | Flag-driven, zero prompts, stdin/stdout clean |
 | Batch operations | `jr batch` executes N operations in one process |
 | Self-description | `jr schema` lets agents discover commands at runtime |
@@ -138,7 +138,7 @@ echo '[
 
 ### Workflow commands (agents don't need to know Jira internals)
 
-High-level commands that resolve IDs automatically — agents don't need to look up transition IDs or account IDs:
+High-level commands that resolve IDs automatically — agents don't need to look up transition IDs, account IDs, sprint IDs, or link type IDs:
 
 ```bash
 # Transition by status name (resolves transition ID automatically)
@@ -146,7 +146,97 @@ jr workflow transition --issue PROJ-123 --to "Done"
 
 # Assign by name or "me" (resolves account ID automatically)
 jr workflow assign --issue PROJ-123 --to "me"
-jr workflow assign --issue PROJ-123 --to "john.doe@company.com"
+
+# Transition + assign in one step
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+
+# Add a plain-text comment (auto-converted to ADF)
+jr workflow comment --issue PROJ-123 --text "Fixed in latest deploy"
+
+# Create issue from flags (no raw JSON needed)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+
+# Link issues by type name
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+
+# Log work with human-friendly duration
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+
+# Move issue to sprint by name
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
+```
+
+### Watch for changes (autonomous agents)
+
+Stream Jira changes as NDJSON for autonomous monitoring agents:
+
+```bash
+# Poll a JQL query every 30s, emit change events
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
+
+# Watch a single issue
+jr watch --issue PROJ-123 --interval 10s
+
+# Stop after 10 events, use a preset for output shaping
+jr watch --jql "assignee = currentUser()" --max-events 10 --preset triage
+```
+
+Events: `initial` (first poll), `created`, `updated`, `removed`. Graceful shutdown on Ctrl-C.
+
+### Issue templates (standardized creation)
+
+Pre-built and user-defined templates for common issue creation patterns — agents don't need to construct field JSON:
+
+```bash
+# List available templates
+jr template list
+
+# Show a template's variables and fields
+jr template show bug-report
+
+# Create an issue from a template
+jr template apply bug-report --project PROJ \
+  --var summary="Login broken" --var severity=High --var steps="1. Click login"
+
+# Create a template from an existing issue
+jr template create my-template --from PROJ-123
+```
+
+Built-in templates: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`. User-defined templates are stored in `~/.config/jr/templates/`.
+
+### Diff / Changelog
+
+Show what changed on an issue as structured JSON — useful for monitoring agents and audit workflows.
+
+```bash
+# All changes
+jr diff --issue PROJ-123
+
+# Changes in last 2 hours
+jr diff --issue PROJ-123 --since 2h
+
+# Changes since a specific date
+jr diff --issue PROJ-123 --since 2025-01-01
+
+# Only status changes
+jr diff --issue PROJ-123 --field status
+```
+
+Output:
+
+```json
+{
+  "issue": "PROJ-123",
+  "changes": [
+    {
+      "timestamp": "2025-03-18T10:30:00Z",
+      "author": "john@example.com",
+      "field": "status",
+      "from": "To Do",
+      "to": "In Progress"
+    }
+  ]
+}
 ```
 
 ### Error handling for agents
@@ -182,6 +272,9 @@ Jira responses can be 10K+ tokens for a single issue. jr helps agents stay withi
 ```bash
 # Full response: ~10,000 tokens
 jr issue get --issueIdOrKey PROJ-123
+
+# With --preset: agent-friendly field set
+jr issue get --issueIdOrKey PROJ-123 --preset agent
 
 # With --fields: ~500 tokens
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
@@ -229,6 +322,7 @@ jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token
 
 | Flag | Description |
 |------|-------------|
+| `--preset <name>` | Named output preset (`agent`, `detail`, `triage`, `board`) |
 | `--jq <expr>` | jq filter applied to response |
 | `--fields <list>` | Comma-separated fields to return (GET only) |
 | `--cache <duration>` | Cache GET responses (e.g. `5m`, `1h`) |
@@ -236,7 +330,46 @@ jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token
 | `--no-paginate` | Disable automatic pagination |
 | `--dry-run` | Print request as JSON without executing |
 | `--verbose` | Log HTTP details to stderr as JSON |
+| `--timeout <duration>` | HTTP request timeout (default `30s`) |
 | `--profile <name>` | Use a named config profile |
+| `--audit` | Enable audit logging for this invocation |
+| `--audit-file <path>` | Audit log file path (implies `--audit`) |
+
+## Security
+
+### Operation policy (per profile)
+
+Restrict which operations a profile can execute via `allowed_operations` or `denied_operations` in the config file:
+
+```json
+{
+  "profiles": {
+    "agent": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "token": "..."},
+      "allowed_operations": ["issue get", "search *", "workflow *"]
+    },
+    "readonly": {
+      "base_url": "https://yourorg.atlassian.net",
+      "auth": {"type": "basic", "token": "..."},
+      "denied_operations": ["* delete*", "bulk *", "raw *"]
+    }
+  }
+}
+```
+
+- Use one or the other, not both. Patterns use glob matching (`*` = any sequence).
+- `allowed_operations`: implicit deny-all, only matching ops run.
+- `denied_operations`: implicit allow-all, only matching ops blocked.
+
+### Batch limits
+
+Default max batch size is 50. Override with `--max-batch N` on the `batch` command.
+
+### Audit logging
+
+Enable per-profile (`"audit_log": true` in config) or per-invocation (`--audit` flag).
+Logs to `~/.config/jr/audit.log` (JSONL format). Override path with `--audit-file`.
 
 ## Development
 

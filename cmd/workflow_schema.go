@@ -31,5 +31,106 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 				{Name: "to", Required: true, Type: "string", Description: "assignee: display name, email, 'me', 'none', or 'unassign'", In: "custom"},
 			},
 		},
+		{
+			Resource: "workflow",
+			Verb:     "comment",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/comment",
+			Summary:  "Add a plain-text comment to an issue (converted to ADF automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "text", Required: true, Type: "string", Description: "comment text (plain text, converted to ADF)", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
+			Verb:     "move",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/transitions",
+			Summary:  "Transition an issue and optionally reassign in one step",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "target status name (case-insensitive match)", In: "custom"},
+				{Name: "assign", Required: false, Type: "string", Description: "assignee after transition: display name, email, 'me', 'none', or 'unassign'", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
+			Verb:     "create",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue",
+			Summary:  "Create an issue from flags (no raw JSON needed)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "project", Required: true, Type: "string", Description: "project key (e.g. PROJ)", In: "custom"},
+				{Name: "type", Required: true, Type: "string", Description: "issue type name (e.g. Bug, Story, Task)", In: "custom"},
+				{Name: "summary", Required: true, Type: "string", Description: "issue summary/title", In: "custom"},
+				{Name: "description", Required: false, Type: "string", Description: "issue description (plain text, converted to ADF)", In: "custom"},
+				{Name: "assign", Required: false, Type: "string", Description: "assignee: display name, email, 'me', 'none', or 'unassign'", In: "custom"},
+				{Name: "priority", Required: false, Type: "string", Description: "priority name (e.g. High, Medium, Low)", In: "custom"},
+				{Name: "labels", Required: false, Type: "string", Description: "comma-separated list of labels", In: "custom"},
+				{Name: "parent", Required: false, Type: "string", Description: "parent issue key (e.g. PROJ-100)", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
+			Verb:     "link",
+			Method:   "POST",
+			Path:     "/rest/api/3/issueLink",
+			Summary:  "Create an issue link by type name (resolves link type ID automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "from", Required: true, Type: "string", Description: "source issue key (e.g. PROJ-1)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "target issue key (e.g. PROJ-2)", In: "custom"},
+				{Name: "type", Required: true, Type: "string", Description: "link type name (e.g. blocks, clones, relates to)", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
+			Verb:     "log-work",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/worklog",
+			Summary:  "Add a worklog entry with human-friendly duration (e.g. 2h 30m)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "time", Required: true, Type: "string", Description: "time spent (e.g. 2h 30m, 1d, 45m)", In: "custom"},
+				{Name: "comment", Required: false, Type: "string", Description: "optional worklog comment (plain text)", In: "custom"},
+			},
+		},
+		{
+			Resource: "workflow",
+			Verb:     "sprint",
+			Method:   "POST",
+			Path:     "/rest/agile/1.0/sprint/{sprintId}/issue",
+			Summary:  "Move an issue to a sprint by name (resolves sprint ID automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "sprint name (case-insensitive match)", In: "custom"},
+			},
+		},
+	}
+}
+
+// WatchSchemaOps returns schema operations for the watch command.
+func WatchSchemaOps() []generated.SchemaOp {
+	return []generated.SchemaOp{
+		{
+			Resource: "watch",
+			Verb:     "watch",
+			Method:   "POST",
+			Path:     "/rest/api/3/search/jql",
+			Summary:  "Poll Jira for changes matching a JQL query and emit NDJSON events",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "jql", Required: false, Type: "string", Description: "JQL query to watch", In: "custom"},
+				{Name: "issue", Required: false, Type: "string", Description: "single issue key to watch (e.g. PROJ-123)", In: "custom"},
+				{Name: "interval", Required: false, Type: "string", Description: "poll interval (default 30s, e.g. 10s, 1m, 5m)", In: "custom"},
+				{Name: "max-events", Required: false, Type: "integer", Description: "stop after N events (default: unlimited)", In: "custom"},
+			},
+		},
 	}
 }

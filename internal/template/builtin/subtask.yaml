@@ -1,0 +1,15 @@
+name: subtask
+issuetype: Sub-task
+description: Sub-task linked to a parent issue
+variables:
+  - name: summary
+    required: true
+    description: Sub-task summary
+  - name: description
+    description: Sub-task description
+  - name: parent
+    required: true
+    description: "Parent issue key (e.g. PROJ-100)"
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}"
