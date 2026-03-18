@@ -55,6 +55,13 @@ var createIssueCmd = &cobra.Command{
 	RunE:  runCreateIssue,
 }
 
+var linkCmd = &cobra.Command{
+	Use:   "link",
+	Short: "Create an issue link by type name (resolves link type ID)",
+	Long:  "Creates a link between two issues. Use --from, --to, and --type. The link type name is matched case-insensitively against name, inward, and outward fields.",
+	RunE:  runLink,
+}
+
 func init() {
 	transitionCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = transitionCmd.MarkFlagRequired("issue")
@@ -89,11 +96,19 @@ func init() {
 	createIssueCmd.Flags().String("labels", "", "comma-separated list of labels")
 	createIssueCmd.Flags().String("parent", "", "parent issue key (e.g. PROJ-100)")
 
+	linkCmd.Flags().String("from", "", "source issue key (e.g. PROJ-1)")
+	_ = linkCmd.MarkFlagRequired("from")
+	linkCmd.Flags().String("to", "", "target issue key (e.g. PROJ-2)")
+	_ = linkCmd.MarkFlagRequired("to")
+	linkCmd.Flags().String("type", "", "link type name (e.g. blocks, clones, relates to)")
+	_ = linkCmd.MarkFlagRequired("type")
+
 	workflowCmd.AddCommand(transitionCmd)
 	workflowCmd.AddCommand(assignCmd)
 	workflowCmd.AddCommand(commentCmd)
 	workflowCmd.AddCommand(createIssueCmd)
 	workflowCmd.AddCommand(moveCmd)
+	workflowCmd.AddCommand(linkCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -484,6 +499,114 @@ func runCreateIssue(cmd *cobra.Command, args []string) error {
 	}
 
 	if exitCode := c.WriteOutput(respBody); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+// resolveLinkType fetches available issue link types and matches one by name.
+// Matches by name, inward, or outward (case-insensitive exact first, then substring).
+// Returns the resolved type name or writes an error and returns a non-zero exit code.
+func resolveLinkType(ctx context.Context, c *client.Client, typeName string) (string, int) {
+	body, exitCode := c.Fetch(ctx, "GET", "/rest/api/3/issueLinkType", nil)
+	if exitCode != jrerrors.ExitOK {
+		return "", exitCode
+	}
+
+	var linkTypesResp struct {
+		IssueLinkTypes []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Inward  string `json:"inward"`
+			Outward string `json:"outward"`
+		} `json:"issueLinkTypes"`
+	}
+	if err := json.Unmarshal(body, &linkTypesResp); err != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "connection_error",
+			Message:   "failed to parse issueLinkType response: " + err.Error(),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return "", jrerrors.ExitError
+	}
+
+	toLower := strings.ToLower(typeName)
+	// Exact match first (name, inward, or outward).
+	for _, lt := range linkTypesResp.IssueLinkTypes {
+		if strings.ToLower(lt.Name) == toLower ||
+			strings.ToLower(lt.Inward) == toLower ||
+			strings.ToLower(lt.Outward) == toLower {
+			return lt.Name, jrerrors.ExitOK
+		}
+	}
+	// Substring match.
+	for _, lt := range linkTypesResp.IssueLinkTypes {
+		if strings.Contains(strings.ToLower(lt.Name), toLower) ||
+			strings.Contains(strings.ToLower(lt.Inward), toLower) ||
+			strings.Contains(strings.ToLower(lt.Outward), toLower) {
+			return lt.Name, jrerrors.ExitOK
+		}
+	}
+
+	names := make([]string, len(linkTypesResp.IssueLinkTypes))
+	for i, lt := range linkTypesResp.IssueLinkTypes {
+		names[i] = lt.Name
+	}
+	apiErr := &jrerrors.APIError{
+		ErrorType: "validation_error",
+		Message:   fmt.Sprintf("no link type matching %q; available: %s", typeName, strings.Join(names, ", ")),
+	}
+	apiErr.WriteJSON(c.Stderr)
+	return "", jrerrors.ExitValidation
+}
+
+func runLink(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	from, _ := cmd.Flags().GetString("from")
+	to, _ := cmd.Flags().GetString("to")
+	linkType, _ := cmd.Flags().GetString("type")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/api/3/issueLink",
+			"note":   fmt.Sprintf("would link %s -> %s with type %q (link type ID resolved at runtime)", from, to, linkType),
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	resolvedType, exitCode := resolveLinkType(cmd.Context(), c, linkType)
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	linkBody, _ := json.Marshal(map[string]any{
+		"type":         map[string]string{"name": resolvedType},
+		"inwardIssue":  map[string]string{"key": to},
+		"outwardIssue": map[string]string{"key": from},
+	})
+	_, exitCode = c.Fetch(cmd.Context(), "POST", "/rest/api/3/issueLink", bytes.NewReader(linkBody))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "linked",
+		"from":   from,
+		"to":     to,
+		"type":   resolvedType,
+	})
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
 	}
 	return nil

@@ -663,6 +663,121 @@ func TestRunMove_WithAssign(t *testing.T) {
 	}
 }
 
+// newLinkCmd creates a workflow link command with flags and client context.
+func newLinkCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "link", RunE: runLink}
+	cmd.Flags().String("from", "", "")
+	cmd.Flags().String("to", "", "")
+	cmd.Flags().String("type", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunLink_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "/rest/api/3/issueLink") {
+		t.Errorf("expected issueLink endpoint in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected PROJ-1 in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunLink_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issueLink" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "linked") {
+		t.Errorf("expected 'linked' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected PROJ-1 in output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-2") {
+		t.Errorf("expected PROJ-2 in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Blocks") {
+		t.Errorf("expected resolved type 'Blocks' in output, got: %s", output)
+	}
+}
+
+func TestRunLink_TypeNotFound(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "nonexistent")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for unknown link type")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+	if !strings.Contains(stderr.String(), "nonexistent") {
+		t.Errorf("expected type name in error output, got: %s", stderr.String())
+	}
+}
+
 func TestRunCreateIssue_NoClient(t *testing.T) {
 	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
 	cmd.Flags().String("project", "", "")

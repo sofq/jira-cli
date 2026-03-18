@@ -74,5 +74,18 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 				{Name: "parent", Required: false, Type: "string", Description: "parent issue key (e.g. PROJ-100)", In: "custom"},
 			},
 		},
+		{
+			Resource: "workflow",
+			Verb:     "link",
+			Method:   "POST",
+			Path:     "/rest/api/3/issueLink",
+			Summary:  "Create an issue link by type name (resolves link type ID automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "from", Required: true, Type: "string", Description: "source issue key (e.g. PROJ-1)", In: "custom"},
+				{Name: "to", Required: true, Type: "string", Description: "target issue key (e.g. PROJ-2)", In: "custom"},
+				{Name: "type", Required: true, Type: "string", Description: "link type name (e.g. blocks, clones, relates to)", In: "custom"},
+			},
+		},
 	}
 }

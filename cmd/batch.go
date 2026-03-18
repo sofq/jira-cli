@@ -298,11 +298,25 @@ func batchValidationError(c *client.Client, message string) int {
 	return jrerrors.ExitValidation
 }
 
-// executeBatchWorkflow runs workflow commands (transition, assign, comment, create) as a batch operation.
+// executeBatchWorkflow runs workflow commands (transition, assign, comment, create, link) as a batch operation.
 func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) int {
 	switch bop.Command {
 	case "workflow create":
 		return batchCreateIssue(ctx, c, bop.Args)
+	case "workflow link":
+		from := bop.Args["from"]
+		if from == "" {
+			return batchValidationError(c, "workflow link requires a 'from' arg")
+		}
+		to := bop.Args["to"]
+		if to == "" {
+			return batchValidationError(c, "workflow link requires a 'to' arg")
+		}
+		linkType := bop.Args["type"]
+		if linkType == "" {
+			return batchValidationError(c, "workflow link requires a 'type' arg")
+		}
+		return batchLink(ctx, c, from, to, linkType)
 	}
 
 	issueKey := bop.Args["issue"]
@@ -499,6 +513,41 @@ func batchComment(ctx context.Context, c *client.Client, issueKey, text string) 
 	out, _ := marshalNoEscape(map[string]string{
 		"status": "commented",
 		"issue":  issueKey,
+	})
+	return c.WriteOutput(out)
+}
+
+// batchLink executes a workflow link within a batch operation.
+func batchLink(ctx context.Context, c *client.Client, from, to, linkType string) int {
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + "/rest/api/3/issueLink",
+			"note":   fmt.Sprintf("would link %s -> %s with type %q (link type ID resolved at runtime)", from, to, linkType),
+		})
+		return c.WriteOutput(out)
+	}
+
+	resolvedType, code := resolveLinkType(ctx, c, linkType)
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	linkBody, _ := json.Marshal(map[string]any{
+		"type":         map[string]string{"name": resolvedType},
+		"inwardIssue":  map[string]string{"key": to},
+		"outwardIssue": map[string]string{"key": from},
+	})
+	_, code = c.Fetch(ctx, "POST", "/rest/api/3/issueLink", bytes.NewReader(linkBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "linked",
+		"from":   from,
+		"to":     to,
+		"type":   resolvedType,
 	})
 	return c.WriteOutput(out)
 }
