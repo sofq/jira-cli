@@ -135,6 +135,25 @@ func TestRenderFieldsMissingRequired(t *testing.T) {
 	}
 }
 
+func TestRenderFieldsEmptyRequiredWithoutDefault(t *testing.T) {
+	tmpl := &Template{
+		Variables: []Variable{
+			{Name: "summary", Required: true},
+		},
+		Fields: map[string]string{
+			"summary": "{{.summary}}",
+		},
+	}
+
+	_, err := RenderFields(tmpl, map[string]string{"summary": ""})
+	if err == nil {
+		t.Fatal("expected error for empty required variable without default")
+	}
+	if !strings.Contains(err.Error(), "missing required variables: summary") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderFieldsEmptyOmitted(t *testing.T) {
 	tmpl := &Template{
 		Variables: []Variable{

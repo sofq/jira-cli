@@ -15,6 +15,7 @@ func TestParse(t *testing.T) {
 		{"1d 3h", 39600, false},   // 8h + 3h = 11h
 		{"2h 30m", 9000, false},   // 2.5h
 		{"1w 2d 3h 15m", 213300, false}, // 40h + 16h + 3h + 15m
+		{"1w2d3h15m", 213300, false}, // adjacent tokens are also accepted
 		{"", 0, true},
 		{"abc", 0, true},
 		{"0h", 0, false},
