@@ -28,8 +28,11 @@ type AuthConfig struct {
 
 // Profile holds the configuration for a named Jira instance.
 type Profile struct {
-	BaseURL string     `json:"base_url"`
-	Auth    AuthConfig `json:"auth"`
+	BaseURL           string     `json:"base_url"`
+	Auth              AuthConfig `json:"auth"`
+	AllowedOperations []string   `json:"allowed_operations,omitempty"`
+	DeniedOperations  []string   `json:"denied_operations,omitempty"`
+	AuditLog          bool       `json:"audit_log,omitempty"`
 }
 
 // Config is the top-level configuration structure persisted to disk.
@@ -49,8 +52,12 @@ type FlagOverrides struct {
 
 // ResolvedConfig is the final, merged configuration ready for use.
 type ResolvedConfig struct {
-	BaseURL string
-	Auth    AuthConfig
+	BaseURL           string
+	Auth              AuthConfig
+	ProfileName       string
+	AllowedOperations []string
+	DeniedOperations  []string
+	AuditLog          bool
 }
 
 // DefaultPath returns the path to the configuration file. It checks the
@@ -149,6 +156,8 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 
 	var fileBaseURL, fileAuthType, fileUsername, fileToken string
 	var fileClientID, fileClientSecret, fileTokenURL, fileScopes string
+	var fileAllowedOps, fileDeniedOps []string
+	var fileAuditLog bool
 	if p, ok := cfg.Profiles[name]; ok {
 		fileBaseURL = p.BaseURL
 		fileAuthType = p.Auth.Type
@@ -158,6 +167,9 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 		fileClientSecret = p.Auth.ClientSecret
 		fileTokenURL = p.Auth.TokenURL
 		fileScopes = p.Auth.Scopes
+		fileAllowedOps = p.AllowedOperations
+		fileDeniedOps = p.DeniedOperations
+		fileAuditLog = p.AuditLog
 	} else if profileName != "" {
 		// Explicit --profile that doesn't exist should give a clear error.
 		return nil, fmt.Errorf("profile %q not found; available profiles: %s", name, availableProfiles(cfg))
@@ -248,5 +260,9 @@ func Resolve(configPath, profileName string, flags *FlagOverrides) (*ResolvedCon
 			TokenURL:     fileTokenURL,
 			Scopes:       fileScopes,
 		},
+		ProfileName:       name,
+		AllowedOperations: fileAllowedOps,
+		DeniedOperations:  fileDeniedOps,
+		AuditLog:          fileAuditLog,
 	}, nil
 }
