@@ -36,6 +36,7 @@ export default defineConfig({
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Global Flags', link: '/guide/global-flags' },
             { text: 'Error Codes', link: '/guide/error-codes' },
+            { text: 'Templates', link: '/guide/templates' },
             { text: 'Agent Integration', link: '/guide/agent-integration' },
             { text: 'Skill Setup', link: '/guide/skill-setup' },
           ],
