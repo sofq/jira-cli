@@ -34,9 +34,11 @@ export default defineConfig({
           text: 'Guide',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Filtering & Presets', link: '/guide/filtering' },
+            { text: 'Discovering Commands', link: '/guide/discovery' },
+            { text: 'Templates', link: '/guide/templates' },
             { text: 'Global Flags', link: '/guide/global-flags' },
             { text: 'Error Codes', link: '/guide/error-codes' },
-            { text: 'Templates', link: '/guide/templates' },
             { text: 'Agent Integration', link: '/guide/agent-integration' },
             { text: 'Skill Setup', link: '/guide/skill-setup' },
           ],
