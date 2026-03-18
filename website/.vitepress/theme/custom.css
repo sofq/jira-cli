@@ -26,32 +26,10 @@
   --vp-c-brand-soft: rgba(255, 136, 0, 0.14);
 }
 
-/* ---- Hero ---- */
+/* ---- Hide default hero when custom hero is active ---- */
 
-.VPHero .name {
-  font-family: var(--vp-font-family-mono) !important;
-  font-size: 4rem !important;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #FF8800 0%, #FFA940 50%, #FFD080 100%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-}
-
-.VPHero .VPImage {
+.VPHero {
   display: none !important;
-}
-
-.VPHero .text {
-  font-size: 2.25rem !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.01em;
-}
-
-.VPHero .tagline {
-  font-size: 1.05rem !important;
-  line-height: 1.7;
-  max-width: 520px;
 }
 
 /* ---- Feature cards ---- */

@@ -1,17 +1,6 @@
 ---
 layout: home
-
-hero:
-  name: jr
-  text: Jira, but for agents.
-  tagline: The CLI that lets AI agents own your Jira workflows. 600+ commands auto-generated from OpenAPI. JSON in, JSON out. Drop-in skill for Claude Code, Cursor, Codex, and more.
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/getting-started
-    - theme: alt
-      text: View on GitHub
-      link: https://github.com/sofq/jira-cli
+customHero: true
 
 features:
   - title: "10,000 tokens → 50"
@@ -33,50 +22,6 @@ features:
   - title: 600+ Commands
     details: "Auto-generated from Jira's OpenAPI spec. Every endpoint is a CLI command, always in sync. Run jr schema to explore."
 ---
-
-<!-- Hero terminal demo -->
-<div class="terminal-section">
-  <div class="terminal-window">
-    <div class="terminal-header">
-      <div class="terminal-dots">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-      </div>
-      <div class="terminal-title">terminal</div>
-    </div>
-    <div class="terminal-body">
-
-```bash
-# Install
-brew install sofq/tap/jr
-
-# One command to move an issue, assign it, and comment
-jr workflow move --issue PROJ-123 --to "In Progress" --assign me
-jr workflow comment --issue PROJ-123 --text "On it"
-```
-
-  </div>
-  </div>
-
-  <div class="terminal-window output-window">
-    <div class="terminal-header">
-      <div class="terminal-dots">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-      </div>
-      <div class="terminal-title">output — clean JSON, always</div>
-    </div>
-    <div class="terminal-body">
-
-```json
-{"key":"PROJ-123","status":"In Progress","assignee":"me@company.com"}
-```
-
-  </div>
-  </div>
-</div>
 
 <!-- Why jr section -->
 <div class="why-section">
