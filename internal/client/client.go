@@ -199,7 +199,9 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if c.CacheTTL > 0 && method == "GET" {
 		cacheKey = cache.Key(method, rawURL, c.cacheAuthContext())
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
-			return c.WriteOutput(data)
+			exitCode := c.WriteOutput(data)
+			c.auditLog(method, path, 0, exitCode)
+			return exitCode
 		}
 	}
 
@@ -332,7 +334,9 @@ func (c *Client) doWithPagination(ctx context.Context, method, firstURL, path st
 	if c.CacheTTL > 0 {
 		cacheKey = cache.Key(method, firstURL, c.cacheAuthContext())
 		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
-			return c.WriteOutput(data)
+			exitCode := c.WriteOutput(data)
+			c.auditLog(method, path, 0, exitCode)
+			return exitCode
 		}
 	}
 

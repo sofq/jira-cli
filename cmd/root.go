@@ -135,7 +135,7 @@ var rootCmd = &cobra.Command{
 		// Check policy before proceeding.
 		// Skip for commands that check policy themselves (raw needs HTTP method
 		// from positional args; batch checks per sub-operation).
-		skipPolicyHere := map[string]bool{"raw": true, "batch": true, "watch": true, "diff": true}
+		skipPolicyHere := map[string]bool{"raw": true, "batch": true}
 		if pol != nil && !skipPolicyHere[cmd.Name()] {
 			if err := pol.Check(operation); err != nil {
 				apiErr := &jrerrors.APIError{

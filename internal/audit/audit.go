@@ -16,8 +16,8 @@ type Entry struct {
 	Operation string `json:"op,omitempty"`
 	Method    string `json:"method,omitempty"`
 	Path      string `json:"path,omitempty"`
-	Status    int    `json:"status,omitempty"`
-	Exit      int    `json:"exit,omitempty"`
+	Status    int    `json:"status"`
+	Exit      int    `json:"exit"`
 	DryRun    bool   `json:"dry_run,omitempty"`
 }
 
@@ -65,14 +65,17 @@ func (l *Logger) Log(entry Entry) {
 	}
 	entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return
 	}
 	data = append(data, '\n')
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file == nil {
+		return
+	}
 	_, _ = l.file.Write(data)
 }
 
@@ -85,5 +88,6 @@ func (l *Logger) Close() {
 	defer l.mu.Unlock()
 	if l.file != nil {
 		_ = l.file.Close()
+		l.file = nil
 	}
 }

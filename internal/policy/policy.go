@@ -2,7 +2,7 @@ package policy
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 )
 
 // Policy enforces operation-level access control per profile.
@@ -32,7 +32,7 @@ func NewFromConfig(allowed, denied []string) (*Policy, error) {
 		all = denied
 	}
 	for _, pattern := range all {
-		if _, err := filepath.Match(pattern, ""); err != nil {
+		if _, err := path.Match(pattern, ""); err != nil {
 			return nil, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 		}
 	}
@@ -58,14 +58,14 @@ func (p *Policy) Check(operation string) error {
 	switch p.mode {
 	case "allow":
 		for _, pattern := range p.allowedOps {
-			if matched, _ := filepath.Match(pattern, operation); matched {
+			if matched, _ := path.Match(pattern, operation); matched {
 				return nil
 			}
 		}
 		return &DeniedError{Operation: operation, Reason: "not in allowed_operations"}
 	case "deny":
 		for _, pattern := range p.deniedOps {
-			if matched, _ := filepath.Match(pattern, operation); matched {
+			if matched, _ := path.Match(pattern, operation); matched {
 				return &DeniedError{Operation: operation, Reason: "matched denied_operations pattern: " + pattern}
 			}
 		}
