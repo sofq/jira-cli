@@ -27,6 +27,17 @@ func TestBuildPathTemplateMalformedBrace(t *testing.T) {
 	}
 }
 
+func TestBuildPathTemplateEmptyParam(t *testing.T) {
+	// Path with {} (empty parameter name) — should pass through literally.
+	tmpl, args := buildPathTemplate("/rest/api/{}/items")
+	if !strings.Contains(tmpl, "{") {
+		t.Errorf("expected empty param brace to pass through literally, got tmpl=%q", tmpl)
+	}
+	if args != "" {
+		t.Errorf("expected no args for empty param path, got %q", args)
+	}
+}
+
 func TestLoadTemplateNotFound(t *testing.T) {
 	_, err := loadTemplate("nonexistent_template.tmpl")
 	if err == nil {

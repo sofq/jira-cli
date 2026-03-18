@@ -112,7 +112,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 				Message:   "failed to read stdin: " + err.Error(),
 			}
 			apiErr.WriteJSON(os.Stderr)
-			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+			return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
 		}
 	}
 

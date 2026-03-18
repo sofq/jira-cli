@@ -19,6 +19,14 @@ func TestParse(t *testing.T) {
 		{"abc", 0, true},
 		{"0h", 0, false},
 		{"10m", 600, false},
+		// Bug fix: garbage text around valid units must be rejected.
+		{"2h garbage", 0, true},
+		{"abc2h", 0, true},
+		{"2hx", 0, true},
+		{"2hours", 0, true},
+		{"hello 2h world", 0, true},
+		{"2h 30m extra", 0, true},
+		{" 2h ", 7200, false}, // leading/trailing whitespace is OK
 	}
 
 	for _, tt := range tests {

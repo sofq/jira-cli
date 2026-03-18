@@ -357,6 +357,28 @@ func TestRenderFields_RequiredWithDefault(t *testing.T) {
 	}
 }
 
+// TestRenderFields_EmptyOverrideKeepsDefault verifies that explicitly passing
+// an empty string for a required variable with a default does not silently
+// omit the field — the default value is preserved.
+func TestRenderFields_EmptyOverrideKeepsDefault(t *testing.T) {
+	tmpl := &Template{
+		Variables: []Variable{
+			{Name: "summary", Required: true, Default: "fallback"},
+		},
+		Fields: map[string]string{
+			"summary": "{{.summary}}",
+		},
+	}
+
+	rendered, err := RenderFields(tmpl, map[string]string{"summary": ""})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rendered["summary"] != "fallback" {
+		t.Errorf("expected default 'fallback' when empty string override provided, got %q", rendered["summary"])
+	}
+}
+
 func TestRenderFields_BadTemplateSyntax(t *testing.T) {
 	tmpl := &Template{
 		Variables: []Variable{
