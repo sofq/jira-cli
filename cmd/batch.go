@@ -60,6 +60,7 @@ Use --input to specify a file, or pipe JSON to stdin.`,
 
 func init() {
 	batchCmd.Flags().String("input", "", "path to JSON input file (reads stdin if not set)")
+	batchCmd.Flags().Int("max-batch", 50, "maximum number of operations per batch")
 	rootCmd.AddCommand(batchCmd)
 }
 
@@ -133,6 +134,18 @@ func runBatch(cmd *cobra.Command, args []string) error {
 			ErrorType: "validation_error",
 			Status:    0,
 			Message:   "invalid JSON input: expected a JSON array of operations, got null",
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
+	}
+
+	// Enforce batch size limit.
+	maxBatch, _ := cmd.Flags().GetInt("max-batch")
+	if maxBatch > 0 && len(ops) > maxBatch {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   fmt.Sprintf("batch limit exceeded: %d operations, max %d", len(ops), maxBatch),
+			Hint:      "Use --max-batch to increase the limit",
 		}
 		apiErr.WriteJSON(os.Stderr)
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
@@ -225,6 +238,22 @@ func executeBatchOp(
 		return errorResult(index, jrerrors.ExitError, "validation_error", errMsg)
 	}
 
+	// Check policy for this operation.
+	if baseClient.Policy != nil {
+		if err := baseClient.Policy.Check(bop.Command); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   err.Error(),
+			}
+			encoded, _ := json.Marshal(apiErr)
+			return BatchResult{
+				Index:    index,
+				ExitCode: jrerrors.ExitValidation,
+				Error:    json.RawMessage(encoded),
+			}
+		}
+	}
+
 	// Create a per-operation client with captured stdout/stderr.
 	var stdoutBuf strings.Builder
 	var stderrBuf strings.Builder
@@ -239,9 +268,12 @@ func executeBatchOp(
 		Paginate:   baseClient.Paginate,
 		DryRun:     baseClient.DryRun,
 		Verbose:    baseClient.Verbose,
-		Pretty:     false, // Pretty is applied to the batch output array, not per-op.
-		Fields:     baseClient.Fields,
-		CacheTTL:   baseClient.CacheTTL,
+		Pretty:      false, // Pretty is applied to the batch output array, not per-op.
+		Fields:      baseClient.Fields,
+		CacheTTL:    baseClient.CacheTTL,
+		AuditLogger: baseClient.AuditLogger,
+		Profile:     baseClient.Profile,
+		Operation:   bop.Command,
 	}
 
 	// Hand-written commands have custom execution logic.
