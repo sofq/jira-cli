@@ -164,6 +164,63 @@ func TestFetchUserComments(t *testing.T) {
 	}
 }
 
+func TestFetchUserChangelog_FiltersOtherAuthors(t *testing.T) {
+	const accountID = "user-abc"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"changelog": map[string]interface{}{
+						"histories": []interface{}{
+							// History from accountID — should be included
+							map[string]interface{}{
+								"author":  map[string]string{"accountId": accountID},
+								"created": "2025-01-15T10:00:00Z",
+								"items": []interface{}{
+									map[string]interface{}{
+										"field":      "status",
+										"fromString": "To Do",
+										"toString":   "In Progress",
+									},
+								},
+							},
+							// History from a different user — should be filtered out (exercises the continue path)
+							map[string]interface{}{
+								"author":  map[string]string{"accountId": "other-user"},
+								"created": "2025-01-15T11:00:00Z",
+								"items": []interface{}{
+									map[string]interface{}{
+										"field":      "status",
+										"fromString": "In Progress",
+										"toString":   "Done",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	entries, err := FetchUserChangelog(c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only 1 entry from accountID should be returned
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 changelog entry (other-user filtered), got %d", len(entries))
+	}
+	if entries[0].Author != accountID {
+		t.Errorf("expected author %q, got %q", accountID, entries[0].Author)
+	}
+}
+
 func TestFetchUserChangelog_ExpandAsQueryParam(t *testing.T) {
 	const accountID = "abc123"
 
@@ -226,6 +283,202 @@ func TestFetchUserChangelog_ExpandAsQueryParam(t *testing.T) {
 	}
 	if entries[0].To != "In Progress" {
 		t.Errorf("To = %q, want %q", entries[0].To, "In Progress")
+	}
+}
+
+func TestResolveUser_Myself_ServerError(t *testing.T) {
+	// Server returns 500 for /myself → exitCode != 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := ResolveUser(c, "")
+	if err == nil {
+		t.Fatal("expected error for 500 response from /myself, got nil")
+	}
+}
+
+func TestResolveUser_Search_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := ResolveUser(c, "test@example.com")
+	if err == nil {
+		t.Fatal("expected error for 500 response from user search, got nil")
+	}
+}
+
+func TestFetchUserComments_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserComments(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+func TestFetchUserIssues_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserIssues(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+func TestFetchUserChangelog_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserChangelog(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+func TestResolveUser_Myself_ParseError(t *testing.T) {
+	// Server returns invalid JSON for /myself
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := ResolveUser(c, "")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response from /myself, got nil")
+	}
+}
+
+func TestResolveUser_Search_ParseError(t *testing.T) {
+	// Server returns invalid JSON for user search
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := ResolveUser(c, "test@example.com")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response from user search, got nil")
+	}
+}
+
+func TestFetchUserComments_ParseError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserComments(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response, got nil")
+	}
+}
+
+func TestFetchUserIssues_ParseError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserIssues(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response, got nil")
+	}
+}
+
+func TestFetchUserChangelog_ParseError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserChangelog(c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response, got nil")
+	}
+}
+
+func TestExtractNodeText_TextNode(t *testing.T) {
+	// Direct text node
+	raw := json.RawMessage(`{"type":"text","text":"hello"}`)
+	got := extractNodeText(raw)
+	if got != "hello" {
+		t.Errorf("extractNodeText(text node) = %q, want %q", got, "hello")
+	}
+}
+
+func TestExtractNodeText_InvalidJSON(t *testing.T) {
+	raw := json.RawMessage(`not-json`)
+	got := extractNodeText(raw)
+	if got != "" {
+		t.Errorf("extractNodeText(invalid JSON) = %q, want empty", got)
+	}
+}
+
+func TestExtractNodeText_EmptyContent(t *testing.T) {
+	// Node with no content and not a text type
+	raw := json.RawMessage(`{"type":"hardBreak"}`)
+	got := extractNodeText(raw)
+	if got != "" {
+		t.Errorf("extractNodeText(hardBreak) = %q, want empty", got)
+	}
+}
+
+func TestExtractNodeText_NestedParagraph(t *testing.T) {
+	raw := json.RawMessage(`{
+		"type": "paragraph",
+		"content": [
+			{"type": "text", "text": "foo"},
+			{"type": "text", "text": "bar"}
+		]
+	}`)
+	got := extractNodeText(raw)
+	if got != "foobar" {
+		t.Errorf("extractNodeText(paragraph) = %q, want %q", got, "foobar")
+	}
+}
+
+func TestExtractTextFromADF_EmptyInput(t *testing.T) {
+	// Empty RawMessage (zero length)
+	got := extractTextFromADF(json.RawMessage{})
+	if got != "" {
+		t.Errorf("extractTextFromADF(empty) = %q, want empty", got)
+	}
+}
+
+func TestExtractTextFromADF_NoContent(t *testing.T) {
+	// Valid doc but content with no text nodes
+	raw := json.RawMessage(`{"type":"doc","version":1,"content":[{"type":"hardBreak"}]}`)
+	got := extractTextFromADF(raw)
+	// No paragraphs extracted → falls back to raw string
+	if got == "" {
+		t.Error("expected non-empty fallback for doc with no text content")
 	}
 }
 

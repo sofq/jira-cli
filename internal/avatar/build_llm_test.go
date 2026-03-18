@@ -110,6 +110,125 @@ func TestBuildLLM_CommandFailure(t *testing.T) {
 	}
 }
 
+// TestBuildLLM_EmptyCmd verifies that an empty llmCmd returns an error.
+func TestBuildLLM_EmptyCmd(t *testing.T) {
+	_, err := avatar.BuildLLM(minimalExtraction(), "", nil)
+	if err == nil {
+		t.Error("expected error for empty llmCmd, got nil")
+	}
+}
+
+// TestBuildLLM_InvalidVersionZero verifies that profile version "0" fails validation.
+func TestBuildLLM_InvalidVersionZero(t *testing.T) {
+	dir := t.TempDir()
+	// Profile with version=0 should fail: version must be >= 1
+	badVersionYAML := `version: 0
+user: "u"
+display_name: "U"
+generated_at: "2026-01-01T00:00:00Z"
+engine: "llm"
+style_guide:
+  writing: "Something."
+  workflow: "Something."
+  interaction: "Something."
+`
+	script := makeMockScript(t, dir, badVersionYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Error("expected error for version=0, got nil")
+	}
+}
+
+// TestBuildLLM_InvalidVersionNonNumeric verifies that a non-numeric profile version fails.
+func TestBuildLLM_InvalidVersionNonNumeric(t *testing.T) {
+	dir := t.TempDir()
+	badVersionYAML := `version: "abc"
+user: "u"
+display_name: "U"
+generated_at: "2026-01-01T00:00:00Z"
+engine: "llm"
+style_guide:
+  writing: "Something."
+  workflow: "Something."
+  interaction: "Something."
+`
+	script := makeMockScript(t, dir, badVersionYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Error("expected error for non-numeric version, got nil")
+	}
+}
+
+// TestBuildLLM_EmptyWriting verifies that missing style_guide.writing fails validation.
+func TestBuildLLM_EmptyWriting(t *testing.T) {
+	dir := t.TempDir()
+	missingWritingYAML := `version: 1
+user: "u"
+display_name: "U"
+generated_at: "2026-01-01T00:00:00Z"
+engine: "llm"
+style_guide:
+  writing: ""
+  workflow: "Something."
+  interaction: "Something."
+`
+	script := makeMockScript(t, dir, missingWritingYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Error("expected error for empty style_guide.writing, got nil")
+	}
+}
+
+// TestBuildLLM_EmptyWorkflow verifies that missing style_guide.workflow fails validation.
+func TestBuildLLM_EmptyWorkflow(t *testing.T) {
+	dir := t.TempDir()
+	missingWorkflowYAML := `version: 1
+user: "u"
+display_name: "U"
+generated_at: "2026-01-01T00:00:00Z"
+engine: "llm"
+style_guide:
+  writing: "Something."
+  workflow: ""
+  interaction: "Something."
+`
+	script := makeMockScript(t, dir, missingWorkflowYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Error("expected error for empty style_guide.workflow, got nil")
+	}
+}
+
+// TestBuildLLM_EmptyInteraction verifies that missing style_guide.interaction fails validation.
+func TestBuildLLM_EmptyInteraction(t *testing.T) {
+	dir := t.TempDir()
+	missingInteractionYAML := `version: 1
+user: "u"
+display_name: "U"
+generated_at: "2026-01-01T00:00:00Z"
+engine: "llm"
+style_guide:
+  writing: "Something."
+  workflow: "Something."
+  interaction: ""
+`
+	script := makeMockScript(t, dir, missingInteractionYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Error("expected error for empty style_guide.interaction, got nil")
+	}
+}
+
+// TestBuildLLM_InvalidOverride verifies that an override without '=' returns an error.
+func TestBuildLLM_InvalidOverride(t *testing.T) {
+	dir := t.TempDir()
+	script := makeMockScript(t, dir, validProfileYAML)
+	_, err := avatar.BuildLLM(minimalExtraction(), script, []string{"no-equals-sign"})
+	if err == nil {
+		t.Error("expected error for override without '=', got nil")
+	}
+}
+
 // TestBuildLLM_OverridesApplied verifies that key=value overrides are stored
 // in profile.Overrides after a successful build.
 func TestBuildLLM_OverridesApplied(t *testing.T) {

@@ -137,6 +137,98 @@ func TestFormatPrompt_Redact(t *testing.T) {
 	}
 }
 
+func TestFormatPrompt_DefaultFormat(t *testing.T) {
+	// Empty format string should default to "prose"
+	p := testProfile()
+	opts := PromptOptions{Format: ""}
+	out := FormatPrompt(p, opts)
+
+	if !strings.Contains(out, "# Style Profile: Jane Doe") {
+		t.Errorf("default format should produce prose, got:\n%s", out)
+	}
+}
+
+func TestFormatPrompt_NoStyleGuide(t *testing.T) {
+	// Profile with no style guide sections
+	p := &Profile{
+		Version:     "1",
+		DisplayName: "Empty Profile",
+		StyleGuide:  StyleGuide{},
+	}
+	opts := PromptOptions{Format: "prose"}
+	out := FormatPrompt(p, opts)
+
+	if !strings.Contains(out, "# Style Profile: Empty Profile") {
+		t.Errorf("expected header, got:\n%s", out)
+	}
+	if strings.Contains(out, "## Writing Style") {
+		t.Errorf("expected no Writing Style section for empty style guide, got:\n%s", out)
+	}
+}
+
+func TestFormatPrompt_SectionFilterWorkflow(t *testing.T) {
+	p := testProfile()
+	opts := PromptOptions{
+		Format:   "prose",
+		Sections: []string{"workflow"},
+	}
+	out := FormatPrompt(p, opts)
+
+	if !strings.Contains(out, "## Workflow Patterns") {
+		t.Errorf("expected Workflow Patterns section, got:\n%s", out)
+	}
+	if strings.Contains(out, "## Writing Style") {
+		t.Errorf("expected NO Writing Style section, got:\n%s", out)
+	}
+	if strings.Contains(out, "## Interaction Patterns") {
+		t.Errorf("expected NO Interaction Patterns section, got:\n%s", out)
+	}
+}
+
+func TestFormatPrompt_SectionFilterInteraction(t *testing.T) {
+	p := testProfile()
+	opts := PromptOptions{
+		Format:   "prose",
+		Sections: []string{"interaction"},
+	}
+	out := FormatPrompt(p, opts)
+
+	if !strings.Contains(out, "## Interaction Patterns") {
+		t.Errorf("expected Interaction Patterns section, got:\n%s", out)
+	}
+	if strings.Contains(out, "## Writing Style") {
+		t.Errorf("expected NO Writing Style section, got:\n%s", out)
+	}
+}
+
+func TestFormatPrompt_JSONRedact(t *testing.T) {
+	p := testProfile()
+	p.User = "jane.doe@example.com"
+	opts := PromptOptions{Format: "json", Redact: true}
+	out := FormatPrompt(p, opts)
+
+	if strings.Contains(out, "jane.doe@example.com") {
+		t.Errorf("expected email to be redacted in JSON output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[EMAIL]") {
+		t.Errorf("expected [EMAIL] placeholder in JSON output, got:\n%s", out)
+	}
+}
+
+func TestFormatPrompt_BothRedact(t *testing.T) {
+	p := testProfile()
+	p.StyleGuide.Writing = "Contact test@example.com about PROJ-5."
+	opts := PromptOptions{Format: "both", Redact: true}
+	out := FormatPrompt(p, opts)
+
+	if strings.Contains(out, "test@example.com") {
+		t.Errorf("expected email redacted in 'both' format, got:\n%s", out)
+	}
+	if strings.Contains(out, "PROJ-5") {
+		t.Errorf("expected issue key redacted in 'both' format, got:\n%s", out)
+	}
+}
+
 func TestFormatPrompt_RedactPreservesStructure(t *testing.T) {
 	p := testProfile()
 	p.StyleGuide.Writing = "Email alice@corp.io about PROJ-99."

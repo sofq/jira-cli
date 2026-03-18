@@ -1,6 +1,7 @@
 package avatar
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -82,6 +83,215 @@ func makeTestExtraction() *Extraction {
 				{Issue: "PROJ-2", Date: "2025-01-02", Text: "See below for details.", Context: "question"},
 			},
 		},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// lengthDescription
+// ---------------------------------------------------------------------------
+
+func TestLengthDescription(t *testing.T) {
+	tests := []struct {
+		median float64
+		want   string
+	}{
+		{0, "short"},
+		{10, "short"},
+		{19.9, "short"},
+		{20, "medium-length"},
+		{50, "medium-length"},
+		{59.9, "medium-length"},
+		{60, "long"},
+		{100, "long"},
+	}
+	for _, tc := range tests {
+		got := lengthDescription(tc.median)
+		if got != tc.want {
+			t.Errorf("lengthDescription(%v) = %q, want %q", tc.median, got, tc.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// parseOverrides
+// ---------------------------------------------------------------------------
+
+func TestParseOverrides(t *testing.T) {
+	// nil / empty returns nil
+	if got := parseOverrides(nil); got != nil {
+		t.Errorf("parseOverrides(nil) = %v, want nil", got)
+	}
+	if got := parseOverrides([]string{}); got != nil {
+		t.Errorf("parseOverrides([]) = %v, want nil", got)
+	}
+
+	// valid pairs
+	m := parseOverrides([]string{"key=value", "a=b=c"})
+	if m == nil {
+		t.Fatal("expected non-nil map")
+	}
+	if m["key"] != "value" {
+		t.Errorf("m[key] = %q, want %q", m["key"], "value")
+	}
+	// second '=' is preserved in value
+	if m["a"] != "b=c" {
+		t.Errorf("m[a] = %q, want %q", m["a"], "b=c")
+	}
+
+	// entry missing '=' is ignored; if all invalid, returns nil
+	got := parseOverrides([]string{"no-equals-sign"})
+	if got != nil {
+		t.Errorf("expected nil for no-equals-sign, got %v", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildLocal — display name fallback
+// ---------------------------------------------------------------------------
+
+func TestBuildLocal_UsesUserWhenDisplayNameEmpty(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "fallback.user",
+			DisplayName: "", // empty — should fall back to User
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if profile.DisplayName != "fallback.user" {
+		t.Errorf("DisplayName = %q, want %q", profile.DisplayName, "fallback.user")
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "fallback.user") {
+		t.Errorf("Writing should mention 'fallback.user', got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_LongComments(t *testing.T) {
+	// Test lengthDescription "long" path by setting MedianLengthWords >= 60
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "longwriter",
+			DisplayName: "Long Writer",
+		},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{
+				MedianLengthWords: 100,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "long") {
+		t.Errorf("expected 'long' in Writing section for MedianLengthWords=100, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_MediumComments(t *testing.T) {
+	// Test lengthDescription "medium-length" path
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "medwriter",
+			DisplayName: "Med Writer",
+		},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{
+				MedianLengthWords: 40,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "medium-length") {
+		t.Errorf("expected 'medium-length' in Writing section for MedianLengthWords=40, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_InteractionBranches(t *testing.T) {
+	// Test interaction section: RepliesToOthersPct > 0.5 branch
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "otheruser",
+			DisplayName: "Other User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime:       "1h",
+				RepliesToOwnIssuesPct: 0.3,
+				RepliesToOthersPct:    0.7,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "Other User") {
+		t.Errorf("Interaction section should mention 'Other User': %s", profile.StyleGuide.Interaction)
+	}
+}
+
+func TestBuildLocal_ActiveHoursWithTimezone(t *testing.T) {
+	// Test buildInteractionSection with ActiveHours.Start/End/Timezone set
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "tzuser",
+			DisplayName: "TZ User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime: "30m",
+			},
+			Collaboration: Collaboration{
+				ActiveHours: ActiveHours{
+					Start:    "08:00",
+					End:      "17:00",
+					Timezone: "America/New_York",
+				},
+				PeakActivityDays: []string{"Monday"},
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "08:00") {
+		t.Errorf("Interaction should contain active hours start '08:00': %s", profile.StyleGuide.Interaction)
+	}
+}
+
+func TestBuildLocal_ActiveHoursNoTimezone(t *testing.T) {
+	// Test buildInteractionSection with ActiveHours but no Timezone
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "notzuser",
+			DisplayName: "NoTZ User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime: "30m",
+			},
+			Collaboration: Collaboration{
+				ActiveHours: ActiveHours{
+					Start: "09:00",
+					End:   "18:00",
+					// no Timezone
+				},
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "09:00") {
+		t.Errorf("Interaction should contain active hours '09:00': %s", profile.StyleGuide.Interaction)
 	}
 }
 
@@ -235,6 +445,90 @@ func TestBuild_UnknownEngine(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown") {
 		t.Errorf("expected error to mention 'unknown', got: %v", err)
+	}
+}
+
+func TestBuild_LLMWithCmd(t *testing.T) {
+	// Build with engine=llm and a real mock script.
+	extraction := makeTestExtraction()
+	dir := t.TempDir()
+
+	// Write a valid profile YAML as mock LLM output.
+	script := dir + "/llm.sh"
+	scriptContent := `#!/bin/sh
+cat <<'YAML'
+version: 1
+user: "test@co.com"
+display_name: "Test User"
+generated_at: "2026-03-18T10:00:00Z"
+engine: "llm"
+style_guide:
+  writing: "Writes concise comments."
+  workflow: "Sets priority always."
+  interaction: "Responds quickly."
+defaults:
+  priority: "Medium"
+examples: []
+YAML
+`
+	if err := os.WriteFile(script, []byte(scriptContent), 0o755); err != nil {
+		t.Fatalf("write mock script: %v", err)
+	}
+
+	avatarCfg := &config.AvatarConfig{}
+	profile, err := Build(extraction, avatarCfg, BuildOptions{Engine: "llm", LLMCmd: script})
+	if err != nil {
+		t.Fatalf("Build with llm engine returned error: %v", err)
+	}
+	if profile.Engine != "llm" {
+		t.Errorf("expected Engine=llm, got %q", profile.Engine)
+	}
+}
+
+func TestBuild_WithOverrides(t *testing.T) {
+	extraction := makeTestExtraction()
+	avatarCfg := &config.AvatarConfig{
+		Engine: "local",
+		Overrides: map[string]string{
+			"tone": "casual",
+		},
+	}
+
+	profile, err := Build(extraction, avatarCfg, BuildOptions{})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	if profile.Overrides == nil {
+		t.Fatal("expected non-nil Overrides")
+	}
+	if profile.Overrides["tone"] != "casual" {
+		t.Errorf("expected Overrides[tone]=casual, got %q", profile.Overrides["tone"])
+	}
+}
+
+func TestBuild_NilAvatarCfg(t *testing.T) {
+	extraction := makeTestExtraction()
+
+	// nil avatarCfg should use "local" as default engine
+	profile, err := Build(extraction, nil, BuildOptions{})
+	if err != nil {
+		t.Fatalf("Build with nil config returned error: %v", err)
+	}
+	if profile.Engine != "local" {
+		t.Errorf("expected Engine=local with nil config, got %q", profile.Engine)
+	}
+}
+
+func TestBuild_EngineFromConfig(t *testing.T) {
+	extraction := makeTestExtraction()
+	avatarCfg := &config.AvatarConfig{Engine: "local"}
+
+	profile, err := Build(extraction, avatarCfg, BuildOptions{})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	if profile.Engine != "local" {
+		t.Errorf("expected Engine=local from config, got %q", profile.Engine)
 	}
 }
 

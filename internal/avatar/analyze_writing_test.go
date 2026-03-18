@@ -1,6 +1,7 @@
 package avatar
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -82,6 +83,47 @@ func TestAnalyzeComments(t *testing.T) {
 	}
 }
 
+// TestAnalyzeComments_ZeroTotalSentences verifies behavior when comments produce no sentences.
+func TestAnalyzeComments_ZeroTotalSentences(t *testing.T) {
+	// Empty strings produce no sentences, so totalSentences = 0 → tone stays at zero
+	got := AnalyzeComments([]string{""})
+	if got.ToneSignals.QuestionRatio != 0 {
+		t.Errorf("QuestionRatio = %f, want 0 for empty comments", got.ToneSignals.QuestionRatio)
+	}
+	if got.ToneSignals.FirstPersonRatio != 0 {
+		t.Errorf("FirstPersonRatio = %f, want 0 for empty comments", got.ToneSignals.FirstPersonRatio)
+	}
+}
+
+// TestAnalyzeComments_EvenCount verifies median calculation with even number of comments.
+func TestAnalyzeComments_EvenCount(t *testing.T) {
+	// 4 comments (even count): median = avg of 2nd and 3rd when sorted by word count
+	comments := []string{
+		"one",                     // 1 word
+		"two three",               // 2 words
+		"four five six",           // 3 words
+		"seven eight nine ten",    // 4 words
+	}
+	got := AnalyzeComments(comments)
+	if got.MedianLengthWords != 2.5 {
+		t.Errorf("MedianLengthWords = %f, want 2.5 (even-count median)", got.MedianLengthWords)
+	}
+}
+
+// TestAnalyzeComments_LongDescriptions tests the "long" length distribution.
+func TestAnalyzeComments_LongDescriptions(t *testing.T) {
+	// Build a comment with >= 80 words to hit the "long" length bucket.
+	words := make([]string, 90)
+	for i := range words {
+		words[i] = "word"
+	}
+	longComment := strings.Join(words, " ")
+	got := AnalyzeComments([]string{longComment})
+	if got.LengthDist.LongPct != 1.0 {
+		t.Errorf("LengthDist.LongPct = %f, want 1.0 for 90-word comment", got.LengthDist.LongPct)
+	}
+}
+
 // TestWordCount verifies the unexported wordCount helper.
 func TestWordCount(t *testing.T) {
 	tests := []struct {
@@ -123,6 +165,179 @@ func TestExtractCommonPhrases(t *testing.T) {
 	}
 	if !found["let me know"] {
 		t.Errorf("expected 'let me know' in phrases, got %v", phrases)
+	}
+}
+
+// TestAnalyzeDescriptions_Empty verifies zero-value DescriptionStats for empty input.
+func TestAnalyzeDescriptions_Empty(t *testing.T) {
+	got := AnalyzeDescriptions(nil)
+	if got.AvgLengthWords != 0 {
+		t.Errorf("AvgLengthWords = %f, want 0", got.AvgLengthWords)
+	}
+	if len(got.StructurePatterns) != 0 {
+		t.Errorf("StructurePatterns len = %d, want 0", len(got.StructurePatterns))
+	}
+
+	got2 := AnalyzeDescriptions([]string{})
+	if got2.AvgLengthWords != 0 {
+		t.Errorf("empty slice: AvgLengthWords = %f, want 0", got2.AvgLengthWords)
+	}
+}
+
+// TestAnalyzeDescriptions_StructurePatterns verifies that pattern keywords are detected.
+func TestAnalyzeDescriptions_StructurePatterns(t *testing.T) {
+	descriptions := []string{
+		"Background: this is context for the issue.\nSteps to reproduce: click button.",
+		"Acceptance criteria: must pass all tests.\nAC: verified by QA.",
+		"Some plain description without keywords.",
+	}
+
+	got := AnalyzeDescriptions(descriptions)
+	if got.AvgLengthWords == 0 {
+		t.Error("AvgLengthWords should be non-zero")
+	}
+
+	found := map[string]bool{}
+	for _, p := range got.StructurePatterns {
+		found[p] = true
+	}
+	if !found["steps_to_reproduce"] {
+		t.Errorf("expected 'steps_to_reproduce' in StructurePatterns, got %v", got.StructurePatterns)
+	}
+	if !found["acceptance_criteria"] {
+		t.Errorf("expected 'acceptance_criteria' in StructurePatterns, got %v", got.StructurePatterns)
+	}
+}
+
+// TestAnalyzeDescriptions_Formatting verifies that bullet and heading formatting is detected.
+func TestAnalyzeDescriptions_Formatting(t *testing.T) {
+	descriptions := []string{
+		"- item one\n- item two\n# Heading here",
+		"- another bullet point",
+		"plain text description",
+	}
+	got := AnalyzeDescriptions(descriptions)
+	if got.Formatting.UsesBullets == 0 {
+		t.Error("UsesBullets should be non-zero")
+	}
+	if got.Formatting.UsesHeadings == 0 {
+		t.Error("UsesHeadings should be non-zero")
+	}
+}
+
+// TestSplitSentences verifies sentence splitting.
+func TestSplitSentences(t *testing.T) {
+	tests := []struct {
+		input string
+		want  int // expected number of sentences
+	}{
+		{"Hello world.", 1},
+		{"Hello. World.", 2},
+		{"Is this right? Yes it is! Great.", 3},
+		{"", 0},
+		{"No punctuation here", 1},
+		{"Multi\nline\ntext", 3},
+		{"Ends with period.", 1},
+	}
+	for _, tc := range tests {
+		got := splitSentences(tc.input)
+		if len(got) != tc.want {
+			t.Errorf("splitSentences(%q) = %d sentences, want %d: %v", tc.input, len(got), tc.want, got)
+		}
+	}
+}
+
+// TestSplitSentences_EndOfLine verifies that sentences ending a line (no trailing space) are captured.
+func TestSplitSentences_EndOfLine(t *testing.T) {
+	input := "First sentence.\nSecond sentence.\nThird."
+	got := splitSentences(input)
+	if len(got) != 3 {
+		t.Errorf("expected 3 sentences from multi-line, got %d: %v", len(got), got)
+	}
+}
+
+// TestExtractJargon_InsufficientFrequency verifies that words below threshold are excluded.
+func TestExtractJargon_InsufficientFrequency(t *testing.T) {
+	// Each comment has different technical words — none appear >= 3 times.
+	comments := []string{
+		"deploying kubernetes",
+		"configuring nginx",
+		"running terraform",
+	}
+	jargon := extractJargon(comments)
+	if len(jargon) != 0 {
+		t.Errorf("expected empty jargon (all words appear <3 times), got %v", jargon)
+	}
+}
+
+// TestExtractJargon_FrequentWords verifies that words appearing >= 3 times are included.
+func TestExtractJargon_FrequentWords(t *testing.T) {
+	// "kubernetes" appears in all 4 comments.
+	comments := []string{
+		"deploying kubernetes pods",
+		"kubernetes cluster config",
+		"kubernetes networking issue",
+		"upgrading kubernetes version",
+	}
+	jargon := extractJargon(comments)
+	found := false
+	for _, j := range jargon {
+		if j == "kubernetes" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'kubernetes' in jargon, got %v", jargon)
+	}
+}
+
+// TestExtractJargon_MoreThan10Words verifies that only top 10 jargon words are returned.
+func TestExtractJargon_MoreThan10Words(t *testing.T) {
+	// Build a comment with 15 unique technical words (all >3 chars, not stop words).
+	// Each word must appear in >= 3 unique comments.
+	techWords := []string{
+		"kubernetes", "deployment", "terraform", "ansible", "dockerfile",
+		"microservice", "monitoring", "alerting", "observability", "loadbalancer",
+		"prometheus", "grafana", "elasticsearch", "postgresql", "rabbitmq",
+	}
+	// Create 4 comments each containing all 15 words so each word has count=4 >= 3.
+	commentText := strings.Join(techWords, " ")
+	comments := []string{commentText, commentText, commentText, commentText}
+	jargon := extractJargon(comments)
+	if len(jargon) > 10 {
+		t.Errorf("expected at most 10 jargon words, got %d: %v", len(jargon), jargon)
+	}
+	if len(jargon) < 10 {
+		t.Errorf("expected exactly 10 jargon words (capped from 15), got %d: %v", len(jargon), jargon)
+	}
+}
+
+// TestExtractCommonPhrases_NoRepeated verifies that phrases appearing < 2 times are excluded.
+func TestExtractCommonPhrases_NoRepeated(t *testing.T) {
+	comments := []string{
+		"hello world foo",
+		"different words here",
+		"completely other content",
+	}
+	phrases := extractCommonPhrases(comments, 20)
+	if len(phrases) != 0 {
+		t.Errorf("expected empty phrases (none repeated), got %v", phrases)
+	}
+}
+
+// TestExtractCommonPhrases_MaxCap verifies that at most maxPhrases are returned.
+func TestExtractCommonPhrases_MaxCap(t *testing.T) {
+	// Build many comments with many overlapping phrases, use maxPhrases=2 to cap output.
+	comments := []string{
+		"please review this change before merging",
+		"please review the PR carefully and let me know",
+		"can you please review the code and merge",
+		"let me know when ready to merge",
+		"let me know if you have any questions today",
+	}
+	phrases := extractCommonPhrases(comments, 2)
+	if len(phrases) > 2 {
+		t.Errorf("expected at most 2 phrases with maxPhrases=2, got %d: %v", len(phrases), phrases)
 	}
 }
 

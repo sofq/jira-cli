@@ -29,6 +29,8 @@ func TestParseWindowDuration(t *testing.T) {
 		{"0w", 0, true},
 		{"1x", 0, true},
 		{"-1m", 0, true},
+		{"w", 0, true},   // single char (len < 2)
+		{"1", 0, true},   // single char, no unit
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
@@ -194,6 +196,275 @@ func TestExtract_JQLUpperDateIncludesToday(t *testing.T) {
 		if !hasUpdatedTomorrow && !hasCreatedTomorrow {
 			t.Errorf("JQL should use tomorrow as upper bound, got:\n%s", jql)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extract — insufficient data
+// ---------------------------------------------------------------------------
+
+func TestExtract_InsufficientData(t *testing.T) {
+	const accountID = "user-abc"
+
+	// Server returns only 2 comments and 2 issues — below hard minimums (10 comments, 5 issues).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+		case "/rest/api/3/search/jql":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"issues": []interface{}{
+					map[string]interface{}{
+						"key": "PROJ-1",
+						"fields": map[string]interface{}{
+							"issuetype":   map[string]string{"name": "Bug"},
+							"subtasks":    []interface{}{},
+							"description": nil,
+							"comment": map[string]interface{}{
+								"comments": []interface{}{
+									map[string]interface{}{
+										"author":  map[string]string{"accountId": accountID},
+										"created": "2025-01-01T10:00:00Z",
+										"body":    nil,
+									},
+								},
+							},
+						},
+						"changelog": map[string]interface{}{"histories": []interface{}{}},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{
+		MinComments: 50, MinUpdates: 30, MaxWindow: "1w",
+	})
+	if err == nil {
+		t.Fatal("expected InsufficientDataError, got nil")
+	}
+	// Should be an InsufficientDataError
+	var insErr *InsufficientDataError
+	if !func() bool {
+		insErr, _ = err.(*InsufficientDataError)
+		return insErr != nil
+	}() {
+		t.Errorf("expected *InsufficientDataError, got %T: %v", err, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extract — invalid MaxWindow
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Extract — fetch errors
+// ---------------------------------------------------------------------------
+
+func TestExtract_FetchUserFails(t *testing.T) {
+	// Server returns 500 for /myself, causing ResolveUser to fail
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	if err == nil {
+		t.Fatal("expected error when ResolveUser fails, got nil")
+	}
+}
+
+func TestExtract_FetchIssuesFails(t *testing.T) {
+	const accountID = "user-abc"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/myself" {
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+			return
+		}
+		// First call (FetchUserComments) succeeds, second (FetchUserIssues) fails
+		callCount++
+		if callCount == 2 {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	if err == nil {
+		t.Fatal("expected error when FetchUserIssues fails, got nil")
+	}
+}
+
+func TestExtract_FetchChangelogFails(t *testing.T) {
+	const accountID = "user-abc"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/myself" {
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+			return
+		}
+		// First two calls succeed, third (FetchUserChangelog) fails
+		callCount++
+		if callCount == 3 {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	if err == nil {
+		t.Fatal("expected error when FetchUserChangelog fails, got nil")
+	}
+}
+
+func TestExtract_FetchCommentsFails(t *testing.T) {
+	const accountID = "user-abc"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/myself" {
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+			return
+		}
+		// First call succeeds (comments), second fails (issues or changelog)
+		callCount++
+		if callCount == 1 {
+			// First search/jql call — return error
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	if err == nil {
+		t.Fatal("expected error when FetchUserComments fails, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extract — adaptive window (window doubling)
+// ---------------------------------------------------------------------------
+
+func TestExtract_WindowDoubling(t *testing.T) {
+	const accountID = "user-abc"
+
+	// Build enough issues to eventually satisfy hard minimums but NOT soft minimums
+	// on first iteration (2 week window). Use MinComments=100 to force doubling.
+	makeADF := func(text string) interface{} {
+		return map[string]interface{}{
+			"type": "doc", "version": 1,
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "paragraph",
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": text},
+					},
+				},
+			},
+		}
+	}
+
+	// Build 15 comments and 5 issues — enough to pass hard minimum (10 comments, 5 issues)
+	// but NOT soft minimum (MinComments=100). The loop will double the window until max.
+	comments := make([]interface{}, 15)
+	for i := range comments {
+		comments[i] = map[string]interface{}{
+			"author":  map[string]string{"accountId": accountID},
+			"created": "2025-01-15T10:00:00Z",
+			"body":    makeADF(fmt.Sprintf("Comment %d for testing purposes.", i+1)),
+		}
+	}
+	issues := make([]interface{}, 5)
+	for i := range issues {
+		issueComments := comments
+		if i > 0 {
+			issueComments = nil
+		}
+		issues[i] = map[string]interface{}{
+			"key": fmt.Sprintf("PROJ-%d", i+1),
+			"fields": map[string]interface{}{
+				"issuetype":   map[string]string{"name": "Task"},
+				"subtasks":    []interface{}{},
+				"description": makeADF("Task description."),
+				"comment":     map[string]interface{}{"comments": issueComments},
+			},
+			"changelog": map[string]interface{}{"histories": []interface{}{}},
+		}
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+		case "/rest/api/3/search/jql":
+			json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	// Use MinComments=100 to ensure soft minimum is never met, forcing window to max
+	_, err := Extract(c, ExtractOptions{
+		MinComments: 100, MinUpdates: 1, MaxWindow: "1m",
+	})
+	// Should return InsufficientDataError since we never reach 100 comments
+	// (hard min is 10, we always get 15, so it should succeed with the data)
+	// Actually: found.Comments=15 >= hardMinComments=10 AND found.IssuesCreated=5 >= hardMinIssues=5
+	// So it should succeed even though soft minimum is not met
+	if err != nil {
+		t.Fatalf("Extract with window doubling returned error: %v", err)
+	}
+}
+
+func TestExtract_InvalidMaxWindow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/myself" {
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": "u", "emailAddress": "u@u.com", "displayName": "U",
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{MaxWindow: "bad-window"})
+	if err == nil {
+		t.Fatal("expected error for invalid MaxWindow, got nil")
 	}
 }
 

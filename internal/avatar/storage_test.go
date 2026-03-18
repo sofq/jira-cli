@@ -178,6 +178,104 @@ func TestExtractionExists(t *testing.T) {
 	}
 }
 
+func TestSaveExtraction_ReadOnlyDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping read-only dir test as root")
+	}
+	dir := t.TempDir()
+	// Make the dir read-only so WriteFile fails.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(dir, 0o700) //nolint:errcheck
+
+	e := &Extraction{Version: "1.0"}
+	err := SaveExtraction(dir, e)
+	if err == nil {
+		t.Fatal("expected error writing to read-only dir, got nil")
+	}
+}
+
+func TestSaveProfile_ReadOnlyDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping read-only dir test as root")
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(dir, 0o700) //nolint:errcheck
+
+	p := &Profile{Version: "1.0"}
+	err := SaveProfile(dir, p)
+	if err == nil {
+		t.Fatal("expected error writing to read-only dir, got nil")
+	}
+}
+
+func TestLoadExtraction_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	// Write invalid JSON to the extraction file.
+	path := filepath.Join(dir, extractionFile)
+	if err := os.WriteFile(path, []byte(`{not valid json`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := LoadExtraction(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestLoadProfile_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	_, err := LoadProfile(dir)
+	if err == nil {
+		t.Fatal("expected error when profile.yaml does not exist, got nil")
+	}
+}
+
+func TestLoadProfile_InvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	// Write a tab character which is invalid in YAML scalar context that would cause unmarshal issues.
+	// Actually, write something structurally invalid for Profile.
+	path := filepath.Join(dir, profileFile)
+	// YAML that can't unmarshal into Profile (e.g. wrong type for version field that is string but give a mapping)
+	if err := os.WriteFile(path, []byte("version:\n  - a\n  - b\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := LoadProfile(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML structure, got nil")
+	}
+}
+
+func TestProfileAgeDays_InvalidTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	p := &Profile{
+		Version:     "1.0",
+		GeneratedAt: "not-a-valid-timestamp",
+	}
+	if err := SaveProfile(dir, p); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	_, err := ProfileAgeDays(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid GeneratedAt timestamp, got nil")
+	}
+}
+
+func TestProfileAgeDays_LoadError(t *testing.T) {
+	dir := t.TempDir()
+	// No profile saved — LoadProfile will fail.
+	_, err := ProfileAgeDays(dir)
+	if err == nil {
+		t.Fatal("expected error when profile does not exist, got nil")
+	}
+}
+
 func TestCacheDir(t *testing.T) {
 	avatarDir := "/some/path/avatars/abc123"
 	cd := CacheDir(avatarDir)

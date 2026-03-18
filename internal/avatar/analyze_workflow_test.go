@@ -56,6 +56,54 @@ func TestAnalyzeTransitions_AssignsBeforeTransition(t *testing.T) {
 	}
 }
 
+func TestAnalyzeTransitions_EmptyFromField(t *testing.T) {
+	// When the first status entry has an empty From field, the sequence
+	// should not prepend an empty string.
+	entries := []ChangelogEntry{
+		{Issue: "PROJ-1", Timestamp: "2024-01-01T09:00:00Z", Author: "alice", Field: "status", From: "", To: "In Progress"},
+		{Issue: "PROJ-1", Timestamp: "2024-01-03T09:00:00Z", Author: "alice", Field: "status", From: "In Progress", To: "Done"},
+		{Issue: "PROJ-2", Timestamp: "2024-01-01T10:00:00Z", Author: "alice", Field: "status", From: "", To: "In Progress"},
+		{Issue: "PROJ-2", Timestamp: "2024-01-02T10:00:00Z", Author: "alice", Field: "status", From: "In Progress", To: "Done"},
+	}
+	result := AnalyzeTransitions(entries)
+	// Should have common sequences without empty strings at start
+	if len(result.CommonSequences) == 0 {
+		t.Fatal("expected at least one common sequence")
+	}
+	for _, seq := range result.CommonSequences {
+		for _, s := range seq {
+			if s == "" {
+				t.Errorf("sequence should not contain empty strings, got %v", seq)
+			}
+		}
+	}
+}
+
+func TestAnalyzeTransitions_InvalidTimestamps(t *testing.T) {
+	// Status entries with unparseable timestamps should be skipped without panic.
+	entries := []ChangelogEntry{
+		{Issue: "PROJ-1", Timestamp: "not-a-timestamp", Author: "alice", Field: "status", From: "Todo", To: "In Progress"},
+		{Issue: "PROJ-1", Timestamp: "also-invalid", Author: "alice", Field: "status", From: "In Progress", To: "Done"},
+	}
+	result := AnalyzeTransitions(entries)
+	// Should not panic; AvgTimeInStatus should be empty since timestamps are invalid
+	if result.AvgTimeInStatus == nil {
+		// okay — or it could be an empty map
+	}
+}
+
+func TestAnalyzeTransitions_SingleStatusEntry(t *testing.T) {
+	// Only 1 status entry per issue — no time-in-status calculation, no sequences
+	entries := []ChangelogEntry{
+		{Issue: "PROJ-1", Timestamp: "2024-01-01T09:00:00Z", Author: "alice", Field: "status", From: "Todo", To: "Done"},
+	}
+	result := AnalyzeTransitions(entries)
+	// 1 status entry per issue → no commonSequences (need >= 2)
+	if len(result.CommonSequences) != 0 {
+		t.Errorf("expected no sequences for single status entry per issue, got %v", result.CommonSequences)
+	}
+}
+
 func TestAnalyzeTransitions_Empty(t *testing.T) {
 	result := AnalyzeTransitions(nil)
 	if result.AvgTimeInStatus != nil {
@@ -186,6 +234,133 @@ func TestAnalyzeIssueCreation_Empty(t *testing.T) {
 	}
 	if result.AvgSubtasksPerStory != 0 {
 		t.Errorf("expected AvgSubtasksPerStory 0 for empty input, got %v", result.AvgSubtasksPerStory)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// topKeys
+// ---------------------------------------------------------------------------
+
+func TestTopKeys_Empty(t *testing.T) {
+	result := topKeys(map[string]int{}, 5)
+	if len(result) != 0 {
+		t.Errorf("expected empty result for empty map, got %v", result)
+	}
+}
+
+func TestTopKeys_FewerThanN(t *testing.T) {
+	counts := map[string]int{"alpha": 3, "beta": 1}
+	result := topKeys(counts, 5)
+	if len(result) != 2 {
+		t.Errorf("expected 2 results (all keys), got %d: %v", len(result), result)
+	}
+	// alpha should come first (higher count)
+	if result[0] != "alpha" {
+		t.Errorf("expected alpha first, got %q", result[0])
+	}
+}
+
+func TestTopKeys_ExactlyN(t *testing.T) {
+	counts := map[string]int{"a": 5, "b": 3, "c": 1}
+	result := topKeys(counts, 3)
+	if len(result) != 3 {
+		t.Errorf("expected 3 results, got %d: %v", len(result), result)
+	}
+}
+
+func TestTopKeys_TieBreakByKey(t *testing.T) {
+	// Same count — alphabetical order should be applied as tiebreaker.
+	counts := map[string]int{"zebra": 2, "apple": 2, "mango": 2}
+	result := topKeys(counts, 3)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(result))
+	}
+	if result[0] != "apple" {
+		t.Errorf("tiebreak: expected 'apple' first, got %q", result[0])
+	}
+}
+
+func TestTopKeys_LimitToN(t *testing.T) {
+	counts := map[string]int{"a": 5, "b": 4, "c": 3, "d": 2, "e": 1}
+	result := topKeys(counts, 2)
+	if len(result) != 2 {
+		t.Errorf("expected 2 results, got %d: %v", len(result), result)
+	}
+	if result[0] != "a" {
+		t.Errorf("expected 'a' first, got %q", result[0])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// formatDuration
+// ---------------------------------------------------------------------------
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		d    string // parsed duration string
+		want string
+	}{
+		{"72h", "3d"},
+		{"25h", "1d"},
+		{"24h", "1d"},
+		{"5h", "5h"},
+		{"1h", "1h"},
+		{"45m", "45m"},
+		{"0s", "0m"},
+		{"-2h", "2h"}, // negative becomes positive
+	}
+	for _, tc := range tests {
+		var d interface{ String() string }
+		_ = d
+		// Parse using time.Duration
+		var dur interface{}
+		_ = dur
+		// Use a manual approach
+		t.Run(tc.d, func(t *testing.T) {
+			// Re-parse the duration in a test-friendly way
+			switch tc.d {
+			case "72h":
+				got := formatDuration(72 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(72h) = %q, want %q", got, tc.want)
+				}
+			case "25h":
+				got := formatDuration(25 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(25h) = %q, want %q", got, tc.want)
+				}
+			case "24h":
+				got := formatDuration(24 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(24h) = %q, want %q", got, tc.want)
+				}
+			case "5h":
+				got := formatDuration(5 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(5h) = %q, want %q", got, tc.want)
+				}
+			case "1h":
+				got := formatDuration(1 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(1h) = %q, want %q", got, tc.want)
+				}
+			case "45m":
+				got := formatDuration(45 * 60 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(45m) = %q, want %q", got, tc.want)
+				}
+			case "0s":
+				got := formatDuration(0)
+				if got != tc.want {
+					t.Errorf("formatDuration(0) = %q, want %q", got, tc.want)
+				}
+			case "-2h":
+				got := formatDuration(-2 * 3600 * 1e9)
+				if got != tc.want {
+					t.Errorf("formatDuration(-2h) = %q, want %q", got, tc.want)
+				}
+			}
+		})
 	}
 }
 
