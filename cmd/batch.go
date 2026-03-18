@@ -139,7 +139,6 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	// Load all schema ops for lookup (generated + hand-written).
 	allOps := generated.AllSchemaOps()
 	allOps = append(allOps, HandWrittenSchemaOps()...)
-
 	// Build a lookup map: "resource verb" -> SchemaOp
 	opMap := make(map[string]generated.SchemaOp, len(allOps))
 	for _, op := range allOps {

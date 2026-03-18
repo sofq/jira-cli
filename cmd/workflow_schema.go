@@ -114,3 +114,23 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 		},
 	}
 }
+
+// WatchSchemaOps returns schema operations for the watch command.
+func WatchSchemaOps() []generated.SchemaOp {
+	return []generated.SchemaOp{
+		{
+			Resource: "watch",
+			Verb:     "watch",
+			Method:   "POST",
+			Path:     "/rest/api/3/search/jql",
+			Summary:  "Poll Jira for changes matching a JQL query and emit NDJSON events",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "jql", Required: false, Type: "string", Description: "JQL query to watch", In: "custom"},
+				{Name: "issue", Required: false, Type: "string", Description: "single issue key to watch (e.g. PROJ-123)", In: "custom"},
+				{Name: "interval", Required: false, Type: "string", Description: "poll interval (default 30s, e.g. 10s, 1m, 5m)", In: "custom"},
+				{Name: "max-events", Required: false, Type: "integer", Description: "stop after N events (default: unlimited)", In: "custom"},
+			},
+		},
+	}
+}

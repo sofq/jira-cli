@@ -166,6 +166,7 @@ func init() {
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)
+	rootCmd.AddCommand(watchCmd)
 
 	// Override cobra's default help output so that "jr" with no args and
 	// "jr help <resource>" emit JSON errors to stderr instead of plain text

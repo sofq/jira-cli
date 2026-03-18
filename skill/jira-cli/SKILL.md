@@ -121,6 +121,23 @@ jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
 jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 ```
 
+### Watch for changes (NDJSON stream)
+```bash
+# Poll a JQL query and emit events as NDJSON (one JSON object per line)
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
+
+# Watch with a preset for output shaping
+jr watch --jql "status changed" --interval 1m --preset triage
+
+# Watch a single issue
+jr watch --issue PROJ-123 --interval 10s
+
+# Stop after N events
+jr watch --jql "project = PROJ" --max-events 10
+```
+
+Events: `initial` (first poll), `created`, `updated`, `removed`. Use Ctrl-C to stop.
+
 ### List projects
 ```bash
 jr project search --jq '[.values[] | {key, name}]'

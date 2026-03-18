@@ -79,6 +79,34 @@ jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 Workflow commands save significant tokens compared to constructing raw JSON bodies. For example, `jr workflow create` replaces a multi-line `--body` JSON payload with simple flags.
 :::
 
+## Watch for Changes
+
+`jr watch` polls Jira on an interval and emits change events as NDJSON (one JSON object per line). This enables autonomous agents to monitor Jira without repeated manual searches.
+
+```bash
+# Poll a JQL query every 30 seconds
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
+
+# Watch a single issue
+jr watch --issue PROJ-123 --interval 10s
+
+# Use a preset for output shaping
+jr watch --jql "status changed" --interval 1m --preset triage
+
+# Stop after N events
+jr watch --jql "project = PROJ" --max-events 10
+```
+
+Event types:
+- `initial` — emitted on first poll for all matching issues
+- `created` — new issue appeared in results
+- `updated` — issue's `updated` timestamp changed
+- `removed` — issue no longer matches the query
+
+Each event is one JSON line: `{"type":"updated","issue":{...}}`
+
+Use Ctrl-C (SIGINT) to stop gracefully. Auth errors (exit code 2) cause immediate termination; transient errors retry with backoff.
+
 ## Token Efficiency
 
 Jira responses can be enormous. A single issue response can consume ~10,000 tokens. Several mechanisms solve this:

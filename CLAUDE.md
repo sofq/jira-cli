@@ -74,6 +74,12 @@ jr project search --jq '[.values[] | {key, name}]'
 
 # Batch operations
 echo '[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},{"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}]' | jr batch
+
+# Watch for changes (NDJSON stream)
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
+jr watch --jql "status changed" --interval 1m --preset triage
+jr watch --issue PROJ-123 --interval 10s          # watch a single issue
+jr watch --jql "project = PROJ" --max-events 10   # stop after 10 events
 ```
 
 ## Discovery

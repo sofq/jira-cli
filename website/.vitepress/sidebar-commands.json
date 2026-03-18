@@ -1,0 +1,338 @@
+[
+  {
+    "text": "announcementBanner",
+    "link": "/commands/announcementBanner"
+  },
+  {
+    "text": "app",
+    "link": "/commands/app"
+  },
+  {
+    "text": "application-properties",
+    "link": "/commands/application-properties"
+  },
+  {
+    "text": "applicationrole",
+    "link": "/commands/applicationrole"
+  },
+  {
+    "text": "atlassian-connect",
+    "link": "/commands/atlassian-connect"
+  },
+  {
+    "text": "attachment",
+    "link": "/commands/attachment"
+  },
+  {
+    "text": "auditing",
+    "link": "/commands/auditing"
+  },
+  {
+    "text": "avatar",
+    "link": "/commands/avatar"
+  },
+  {
+    "text": "batch",
+    "link": "/commands/batch"
+  },
+  {
+    "text": "bulk",
+    "link": "/commands/bulk"
+  },
+  {
+    "text": "changelog",
+    "link": "/commands/changelog"
+  },
+  {
+    "text": "classification-levels",
+    "link": "/commands/classification-levels"
+  },
+  {
+    "text": "comment",
+    "link": "/commands/comment"
+  },
+  {
+    "text": "component",
+    "link": "/commands/component"
+  },
+  {
+    "text": "config",
+    "link": "/commands/config"
+  },
+  {
+    "text": "configuration",
+    "link": "/commands/configuration"
+  },
+  {
+    "text": "configure",
+    "link": "/commands/configure"
+  },
+  {
+    "text": "customFieldOption",
+    "link": "/commands/customFieldOption"
+  },
+  {
+    "text": "dashboard",
+    "link": "/commands/dashboard"
+  },
+  {
+    "text": "data-policy",
+    "link": "/commands/data-policy"
+  },
+  {
+    "text": "events",
+    "link": "/commands/events"
+  },
+  {
+    "text": "expression",
+    "link": "/commands/expression"
+  },
+  {
+    "text": "field",
+    "link": "/commands/field"
+  },
+  {
+    "text": "fieldconfiguration",
+    "link": "/commands/fieldconfiguration"
+  },
+  {
+    "text": "fieldconfigurationscheme",
+    "link": "/commands/fieldconfigurationscheme"
+  },
+  {
+    "text": "filter",
+    "link": "/commands/filter"
+  },
+  {
+    "text": "forge",
+    "link": "/commands/forge"
+  },
+  {
+    "text": "group",
+    "link": "/commands/group"
+  },
+  {
+    "text": "groups",
+    "link": "/commands/groups"
+  },
+  {
+    "text": "groupuserpicker",
+    "link": "/commands/groupuserpicker"
+  },
+  {
+    "text": "instance",
+    "link": "/commands/instance"
+  },
+  {
+    "text": "internal",
+    "link": "/commands/internal"
+  },
+  {
+    "text": "issue",
+    "link": "/commands/issue"
+  },
+  {
+    "text": "issueLink",
+    "link": "/commands/issueLink"
+  },
+  {
+    "text": "issueLinkType",
+    "link": "/commands/issueLinkType"
+  },
+  {
+    "text": "issues",
+    "link": "/commands/issues"
+  },
+  {
+    "text": "issuesecurityschemes",
+    "link": "/commands/issuesecurityschemes"
+  },
+  {
+    "text": "issuetype",
+    "link": "/commands/issuetype"
+  },
+  {
+    "text": "issuetypescheme",
+    "link": "/commands/issuetypescheme"
+  },
+  {
+    "text": "issuetypescreenscheme",
+    "link": "/commands/issuetypescreenscheme"
+  },
+  {
+    "text": "jql",
+    "link": "/commands/jql"
+  },
+  {
+    "text": "label",
+    "link": "/commands/label"
+  },
+  {
+    "text": "license",
+    "link": "/commands/license"
+  },
+  {
+    "text": "mypermissions",
+    "link": "/commands/mypermissions"
+  },
+  {
+    "text": "mypreferences",
+    "link": "/commands/mypreferences"
+  },
+  {
+    "text": "myself",
+    "link": "/commands/myself"
+  },
+  {
+    "text": "notificationscheme",
+    "link": "/commands/notificationscheme"
+  },
+  {
+    "text": "permissions",
+    "link": "/commands/permissions"
+  },
+  {
+    "text": "permissionscheme",
+    "link": "/commands/permissionscheme"
+  },
+  {
+    "text": "plans",
+    "link": "/commands/plans"
+  },
+  {
+    "text": "preset",
+    "link": "/commands/preset"
+  },
+  {
+    "text": "priority",
+    "link": "/commands/priority"
+  },
+  {
+    "text": "priorityscheme",
+    "link": "/commands/priorityscheme"
+  },
+  {
+    "text": "project",
+    "link": "/commands/project"
+  },
+  {
+    "text": "project-template",
+    "link": "/commands/project-template"
+  },
+  {
+    "text": "projectCategory",
+    "link": "/commands/projectCategory"
+  },
+  {
+    "text": "projects",
+    "link": "/commands/projects"
+  },
+  {
+    "text": "projectvalidate",
+    "link": "/commands/projectvalidate"
+  },
+  {
+    "text": "raw",
+    "link": "/commands/raw"
+  },
+  {
+    "text": "redact",
+    "link": "/commands/redact"
+  },
+  {
+    "text": "resolution",
+    "link": "/commands/resolution"
+  },
+  {
+    "text": "role",
+    "link": "/commands/role"
+  },
+  {
+    "text": "schema",
+    "link": "/commands/schema"
+  },
+  {
+    "text": "screens",
+    "link": "/commands/screens"
+  },
+  {
+    "text": "screenscheme",
+    "link": "/commands/screenscheme"
+  },
+  {
+    "text": "search",
+    "link": "/commands/search"
+  },
+  {
+    "text": "securitylevel",
+    "link": "/commands/securitylevel"
+  },
+  {
+    "text": "serverInfo",
+    "link": "/commands/serverInfo"
+  },
+  {
+    "text": "settings",
+    "link": "/commands/settings"
+  },
+  {
+    "text": "status",
+    "link": "/commands/status"
+  },
+  {
+    "text": "statuscategory",
+    "link": "/commands/statuscategory"
+  },
+  {
+    "text": "statuses",
+    "link": "/commands/statuses"
+  },
+  {
+    "text": "task",
+    "link": "/commands/task"
+  },
+  {
+    "text": "uiModifications",
+    "link": "/commands/uiModifications"
+  },
+  {
+    "text": "universal_avatar",
+    "link": "/commands/universal_avatar"
+  },
+  {
+    "text": "user",
+    "link": "/commands/user"
+  },
+  {
+    "text": "users",
+    "link": "/commands/users"
+  },
+  {
+    "text": "version",
+    "link": "/commands/version"
+  },
+  {
+    "text": "watch",
+    "link": "/commands/watch"
+  },
+  {
+    "text": "webhook",
+    "link": "/commands/webhook"
+  },
+  {
+    "text": "workflow",
+    "link": "/commands/workflow"
+  },
+  {
+    "text": "workflows",
+    "link": "/commands/workflows"
+  },
+  {
+    "text": "workflowscheme",
+    "link": "/commands/workflowscheme"
+  },
+  {
+    "text": "worklog",
+    "link": "/commands/worklog"
+  }
+]

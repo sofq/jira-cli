@@ -166,6 +166,23 @@ jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
 jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 ```
 
+### Watch for changes (autonomous agents)
+
+Stream Jira changes as NDJSON for autonomous monitoring agents:
+
+```bash
+# Poll a JQL query every 30s, emit change events
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
+
+# Watch a single issue
+jr watch --issue PROJ-123 --interval 10s
+
+# Stop after 10 events, use a preset for output shaping
+jr watch --jql "assignee = currentUser()" --max-events 10 --preset triage
+```
+
+Events: `initial` (first poll), `created`, `updated`, `removed`. Graceful shutdown on Ctrl-C.
+
 ### Error handling for agents
 
 Every error is a JSON object on stderr with a typed `error_type` agents can branch on:
