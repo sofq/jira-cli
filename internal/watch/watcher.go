@@ -15,6 +15,9 @@ import (
 	"github.com/tidwall/pretty"
 )
 
+// maxBackoff is the ceiling for error backoff. Exported as var for testing.
+var maxBackoff = 5 * time.Minute
+
 // Options configures the watch loop.
 type Options struct {
 	JQL       string
@@ -96,8 +99,8 @@ func Run(ctx context.Context, c *client.Client, opts Options) int {
 				// Backoff: skip ticks on repeated errors to avoid flooding.
 				if consecutiveErrors > 1 {
 					backoff := time.Duration(consecutiveErrors) * opts.Interval
-					if backoff > 5*time.Minute {
-						backoff = 5 * time.Minute
+					if backoff > maxBackoff {
+						backoff = maxBackoff
 					}
 					select {
 					case <-ctx.Done():
