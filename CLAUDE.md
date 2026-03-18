@@ -36,13 +36,31 @@ jr workflow assign --issue PROJ-123 --to "me"
 # Unassign issue
 jr workflow assign --issue PROJ-123 --to "none"
 
+# Transition + optional assign in one call
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+
+# Add comment (plain text, auto-converted to ADF)
+jr workflow comment --issue PROJ-123 --text "This is done"
+
+# Create issue from flags (no raw JSON)
+jr workflow create --project PROJ --type Bug --summary "Login broken" --description "Steps..." --priority High --labels bug,urgent
+
+# Create issue link by type name
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+
+# Log work with human-friendly duration
+jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
+
+# Move issue to sprint by name
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
+
 # Edit issue (returns {} for 204 responses)
 jr issue edit --issueIdOrKey PROJ-123 --body '{"fields":{"summary":"Updated title"}}'
 
 # Delete issue
 jr issue delete --issueIdOrKey PROJ-123
 
-# Add comment
+# Add comment (raw API — prefer `workflow comment` above)
 jr issue add-comment --issueIdOrKey PROJ-123 --body '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"text":"A comment","type":"text"}]}]}}'
 
 # Raw API call (method is positional, not a flag; POST/PUT/PATCH require --body)
