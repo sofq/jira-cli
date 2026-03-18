@@ -48,7 +48,11 @@ func Build(extraction *Extraction, avatarCfg *config.AvatarConfig, opts BuildOpt
 	case "local":
 		return BuildLocal(extraction, overrides)
 	case "llm":
-		return nil, fmt.Errorf("llm engine not yet implemented")
+		llmCmd := opts.LLMCmd
+		if llmCmd == "" {
+			return nil, fmt.Errorf("llm engine requires --llm-cmd or avatar.llm_cmd in config")
+		}
+		return BuildLLM(extraction, llmCmd, overrides)
 	default:
 		return nil, fmt.Errorf("unknown engine %q: valid engines are \"local\" and \"llm\"", engine)
 	}

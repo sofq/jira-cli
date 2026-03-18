@@ -47,12 +47,21 @@ func ResolveUser(c *client.Client, userFlag string) (*JiraUser, error) {
 	return &users[0], nil
 }
 
+// escapeJQLString escapes a value for interpolation inside a JQL double-quoted string.
+// It escapes backslashes and double quotes to prevent JQL injection.
+func escapeJQLString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
+}
+
 // FetchUserComments fetches comments authored by accountID on issues updated
 // within the [from, to] date window.
 func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComment, error) {
+	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s" ORDER BY updated DESC`,
-		accountID, accountID, from, to,
+		aid, aid, from, to,
 	)
 	reqBody := fmt.Sprintf(`{"jql":%s,"fields":["comment"],"maxResults":50}`, mustJSONString(jql))
 
@@ -103,8 +112,9 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 
 // FetchUserIssues fetches issues reported by accountID created within [from, to].
 func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIssue, error) {
+	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(`reporter = "%s" AND created >= "%s" AND created <= "%s"`,
-		accountID, from, to)
+		aid, from, to)
 	reqBody := fmt.Sprintf(`{"jql":%s,"fields":["key","issuetype","subtasks","description"],"maxResults":50}`,
 		mustJSONString(jql))
 
@@ -146,14 +156,15 @@ func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIss
 // FetchUserChangelog fetches changelog entries authored by accountID on issues
 // updated within [from, to].
 func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]ChangelogEntry, error) {
+	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
-		accountID, accountID, from, to,
+		aid, aid, from, to,
 	)
-	reqBody := fmt.Sprintf(`{"jql":%s,"fields":["changelog"],"expand":["changelog"],"maxResults":50}`,
+	reqBody := fmt.Sprintf(`{"jql":%s,"maxResults":50}`,
 		mustJSONString(jql))
 
-	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql?expand=changelog",
 		strings.NewReader(reqBody))
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to fetch changelog (exit %d)", exitCode)

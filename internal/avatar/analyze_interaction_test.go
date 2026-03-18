@@ -34,18 +34,18 @@ func TestAnalyzeResponsePatterns(t *testing.T) {
 
 	got := AnalyzeResponsePatterns(comments, userID)
 
-	// 2 out of 3 replies are to own issues → ~66.67%
+	// 2 out of 3 replies are to own issues → ~0.667
 	if got.RepliesToOwnIssuesPct <= 0 {
 		t.Errorf("RepliesToOwnIssuesPct = %f, want > 0", got.RepliesToOwnIssuesPct)
 	}
-	// 1 out of 3 replies are to others' issues → ~33.33%
+	// 1 out of 3 replies are to others' issues → ~0.333
 	if got.RepliesToOthersPct <= 0 {
 		t.Errorf("RepliesToOthersPct = %f, want > 0", got.RepliesToOthersPct)
 	}
-	// sum should be 100
+	// sum should be 1.0 (fractions)
 	total := got.RepliesToOwnIssuesPct + got.RepliesToOthersPct
-	if total < 99.9 || total > 100.1 {
-		t.Errorf("pct total = %f, want ~100", total)
+	if total < 0.999 || total > 1.001 {
+		t.Errorf("pct total = %f, want ~1.0", total)
 	}
 	// median reply time should be non-empty
 	if got.MedianReplyTime == "" {

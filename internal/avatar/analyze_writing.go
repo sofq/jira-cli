@@ -301,17 +301,11 @@ func extractCommonPhrases(comments []string, maxPhrases int) []string {
 		for i := 0; i < len(words); i++ {
 			// 2-gram
 			if i+1 < len(words) {
-				ng := words[i] + " " + words[i+1]
-				if !seen[ng] {
-					seen[ng] = true
-				}
+				seen[words[i]+" "+words[i+1]] = true
 			}
 			// 3-gram
 			if i+2 < len(words) {
-				ng := words[i] + " " + words[i+1] + " " + words[i+2]
-				if !seen[ng] {
-					seen[ng] = true
-				}
+				seen[words[i]+" "+words[i+1]+" "+words[i+2]] = true
 			}
 		}
 		for ng := range seen {
@@ -361,15 +355,10 @@ func extractJargon(comments []string) []string {
 		words := strings.Fields(clean)
 		seen := make(map[string]bool)
 		for _, w := range words {
-			if len(w) <= 3 {
+			if len(w) <= 3 || stopWords[w] {
 				continue
 			}
-			if stopWords[w] {
-				continue
-			}
-			if !seen[w] {
-				seen[w] = true
-			}
+			seen[w] = true
 		}
 		for w := range seen {
 			freq[w]++

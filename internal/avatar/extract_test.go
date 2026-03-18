@@ -67,9 +67,6 @@ func TestDefaultExtractOptions(t *testing.T) {
 	if opts.UserFlag != "" {
 		t.Errorf("UserFlag = %q, want empty string", opts.UserFlag)
 	}
-	if opts.NoCache {
-		t.Errorf("NoCache = true, want false")
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +91,109 @@ func TestInsufficientDataError(t *testing.T) {
 	}
 	if !strings.Contains(msg, "10") {
 		t.Errorf("error message %q should contain required comments count (10)", msg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extract — JQL upper date bound includes today
+// ---------------------------------------------------------------------------
+
+func TestExtract_JQLUpperDateIncludesToday(t *testing.T) {
+	const accountID = "user-abc"
+
+	// Track the "to" dates sent in JQL queries.
+	var jqlQueries []string
+
+	makeADF := func(text string) interface{} {
+		return map[string]interface{}{
+			"type": "doc", "version": 1,
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "paragraph",
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": text},
+					},
+				},
+			},
+		}
+	}
+
+	// Build enough data to pass hard minimums.
+	comments := make([]interface{}, 15)
+	for i := range comments {
+		comments[i] = map[string]interface{}{
+			"author":  map[string]string{"accountId": accountID},
+			"created": "2026-03-18T10:00:00Z",
+			"body":    makeADF(fmt.Sprintf("Sample comment number %d for testing.", i+1)),
+		}
+	}
+	issues := make([]interface{}, 5)
+	for i := range issues {
+		issueComments := comments
+		if i > 0 {
+			issueComments = nil
+		}
+		issues[i] = map[string]interface{}{
+			"key": fmt.Sprintf("PROJ-%d", i+1),
+			"fields": map[string]interface{}{
+				"issuetype":   map[string]string{"name": "Task"},
+				"subtasks":    []interface{}{},
+				"description": makeADF("Description text."),
+				"comment":     map[string]interface{}{"comments": issueComments},
+			},
+			"changelog": map[string]interface{}{"histories": []interface{}{}},
+		}
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+		case "/rest/api/3/search/jql":
+			// Capture the JQL from the request body.
+			var body map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&body)
+			if jql, ok := body["jql"].(string); ok {
+				jqlQueries = append(jqlQueries, jql)
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(c, ExtractOptions{
+		MinComments: 1, MinUpdates: 1, MaxWindow: "2w",
+	})
+	if err != nil {
+		t.Fatalf("Extract returned error: %v", err)
+	}
+
+	// The upper date bound in JQL should be tomorrow (today + 1 day) to
+	// ensure issues updated/created today are included. Jira treats
+	// date-only strings as exclusive upper bounds.
+	today := time.Now().UTC().Format("2006-01-02")
+	tomorrow := time.Now().UTC().Add(24 * time.Hour).Format("2006-01-02")
+
+	for _, jql := range jqlQueries {
+		// Check both "updated <=" and "created <=" patterns.
+		for _, field := range []string{"updated", "created"} {
+			pattern := fmt.Sprintf(`%s <= "%s"`, field, today)
+			if strings.Contains(jql, pattern) {
+				t.Errorf("JQL uses today as upper bound for %s (would exclude today's items):\n%s", field, jql)
+			}
+		}
+		// At least one of updated/created should use tomorrow.
+		hasUpdatedTomorrow := strings.Contains(jql, fmt.Sprintf(`updated <= "%s"`, tomorrow))
+		hasCreatedTomorrow := strings.Contains(jql, fmt.Sprintf(`created <= "%s"`, tomorrow))
+		if !hasUpdatedTomorrow && !hasCreatedTomorrow {
+			t.Errorf("JQL should use tomorrow as upper bound, got:\n%s", jql)
+		}
 	}
 }
 

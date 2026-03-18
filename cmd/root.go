@@ -221,15 +221,15 @@ func init() {
 	// with hand-written ones while preserving generated subcommands.
 	generated.RegisterAll(rootCmd)
 
-	// Merge hand-written version/workflow with their generated subcommands.
+	// Merge hand-written version/workflow/avatar with their generated subcommands.
 	mergeCommand(rootCmd, versionCmd)
 	mergeCommand(rootCmd, workflowCmd)
+	mergeCommand(rootCmd, avatarCmd)
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(diffCmd)
-	rootCmd.AddCommand(avatarCmd)
 
 	// Override cobra's default help output so that "jr" with no args and
 	// "jr help <resource>" emit JSON errors to stderr instead of plain text

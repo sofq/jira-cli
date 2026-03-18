@@ -2,11 +2,13 @@ package avatar
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -30,13 +32,19 @@ func BuildLLM(extraction *Extraction, llmCmd string, overrides []string) (*Profi
 	}
 	cmd, args := fields[0], fields[1:]
 
-	// Execute the command with extraction JSON piped to stdin.
-	c := exec.Command(cmd, args...)
+	// Execute the command with a 5-minute timeout and extraction JSON on stdin.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	c := exec.CommandContext(ctx, cmd, args...)
 	c.Stdin = bytes.NewReader(extractionJSON)
 	var stdout bytes.Buffer
 	c.Stdout = &stdout
 
 	if err := c.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("llm command timed out after 5m")
+		}
 		return nil, fmt.Errorf("llm command failed: %w", err)
 	}
 

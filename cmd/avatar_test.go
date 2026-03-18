@@ -37,6 +37,31 @@ func setTempAvatarBase(t *testing.T, base string) {
 	os.Setenv("JR_AVATAR_BASE", base)
 }
 
+// TestAvatarSubcommands_RegisteredWithMerge verifies that the hand-written
+// avatar subcommands (extract, build, etc.) are accessible after merging with
+// the generated avatar command. This was a bug where the generated avatarCmd
+// from the OpenAPI spec shadowed the hand-written one, making custom
+// subcommands like "extract" unreachable.
+func TestAvatarSubcommands_RegisteredWithMerge(t *testing.T) {
+	// The root command is initialized via init(), so avatarCmd should already
+	// have both hand-written and generated subcommands merged.
+	wantSubs := []string{"extract", "build", "prompt", "show", "edit", "refresh", "status"}
+	gotSubs := make(map[string]bool)
+	for _, sub := range avatarCmd.Commands() {
+		gotSubs[sub.Name()] = true
+	}
+	for _, name := range wantSubs {
+		if !gotSubs[name] {
+			t.Errorf("avatar subcommand %q not found — mergeCommand may not be wiring custom subcommands", name)
+		}
+	}
+
+	// Also verify the generated subcommand is preserved.
+	if !gotSubs["get-all-system"] {
+		t.Error("generated subcommand \"get-all-system\" should be preserved after merge")
+	}
+}
+
 // TestAvatarStatusCmd_NoProfile verifies that `jr avatar status` outputs
 // {"exists":false} when no avatar data is present (empty avatars directory).
 func TestAvatarStatusCmd_NoProfile(t *testing.T) {

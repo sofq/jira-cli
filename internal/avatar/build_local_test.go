@@ -238,15 +238,15 @@ func TestBuild_UnknownEngine(t *testing.T) {
 	}
 }
 
-func TestBuild_LLMNotImplemented(t *testing.T) {
+func TestBuild_LLMRequiresCmd(t *testing.T) {
 	extraction := makeTestExtraction()
 	avatarCfg := &config.AvatarConfig{}
 
 	_, err := Build(extraction, avatarCfg, BuildOptions{Engine: "llm"})
 	if err == nil {
-		t.Fatal("expected error for llm engine (not yet implemented), got nil")
+		t.Fatal("expected error for llm engine without llm-cmd, got nil")
 	}
-	if !strings.Contains(err.Error(), "llm") {
-		t.Errorf("expected error to mention 'llm', got: %v", err)
+	if !strings.Contains(err.Error(), "llm-cmd") {
+		t.Errorf("expected error to mention 'llm-cmd', got: %v", err)
 	}
 }

@@ -44,11 +44,6 @@ func classifyComment(text string) string {
 	return "status_update"
 }
 
-// wordCount returns the number of whitespace-separated words in s.
-func selectWordCount(s string) int {
-	return len(strings.Fields(s))
-}
-
 // medianWordCount returns the median word count for a slice of strings.
 func medianWordCount(texts []string) int {
 	if len(texts) == 0 {
@@ -56,7 +51,7 @@ func medianWordCount(texts []string) int {
 	}
 	counts := make([]int, len(texts))
 	for i, t := range texts {
-		counts[i] = selectWordCount(t)
+		counts[i] = wordCount(t)
 	}
 	sort.Ints(counts)
 	mid := len(counts) / 2
@@ -106,9 +101,9 @@ func SelectCommentExamples(comments []RawComment, maxExamples int) []CommentExam
 		med := medianWordCount(texts)
 
 		best := grp[0]
-		bestDist := absInt(selectWordCount(grp[0].Text) - med)
+		bestDist := absInt(wordCount(grp[0].Text) - med)
 		for _, c := range grp[1:] {
-			d := absInt(selectWordCount(c.Text) - med)
+			d := absInt(wordCount(c.Text) - med)
 			if d < bestDist {
 				bestDist = d
 				best = c
@@ -177,9 +172,9 @@ func SelectDescriptionExamples(descriptions []CreatedIssue, maxExamples int) []D
 		med := medianWordCount(texts)
 
 		best := grp[0]
-		bestDist := absInt(selectWordCount(grp[0].Description) - med)
+		bestDist := absInt(wordCount(grp[0].Description) - med)
 		for _, d := range grp[1:] {
-			dist := absInt(selectWordCount(d.Description) - med)
+			dist := absInt(wordCount(d.Description) - med)
 			if dist < bestDist {
 				bestDist = dist
 				best = d

@@ -3,6 +3,7 @@ package avatar
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -128,14 +129,9 @@ func topIssueTypes(types map[string]float64, n int) []string {
 	for k, v := range types {
 		sorted = append(sorted, kv{k, v})
 	}
-	// simple selection — sort descending by value
-	for i := 0; i < len(sorted)-1; i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[j].val > sorted[i].val {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[j].val < sorted[i].val
+	})
 	var result []string
 	for i := 0; i < n && i < len(sorted); i++ {
 		result = append(result, sorted[i].key)
@@ -187,6 +183,7 @@ func buildInteractionSection(displayName string, ia InteractionAnalysis) (string
 	} else if rp.RepliesToOthersPct > 0.5 {
 		replyBias = fmt.Sprintf("%s frequently engages on others' issues (%.0f%%).", displayName, rp.RepliesToOthersPct*100)
 	}
+
 
 	collaborators := ""
 	if len(ia.MentionHabits.FrequentlyMentions) > 0 {

@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,7 +93,6 @@ func init() {
 	avatarExtractCmd.Flags().Int("min-comments", 50, "minimum number of comments to collect")
 	avatarExtractCmd.Flags().Int("min-updates", 30, "minimum number of updated issues to collect")
 	avatarExtractCmd.Flags().String("max-window", "6m", "maximum lookback window (e.g. 6m, 2w)")
-	avatarExtractCmd.Flags().Bool("no-cache", false, "bypass HTTP caches")
 
 	// build flags
 	avatarBuildCmd.Flags().String("user", "", "Jira user (empty = authenticated user; used to locate avatar dir)")
@@ -107,7 +105,6 @@ func init() {
 	avatarRefreshCmd.Flags().Int("min-comments", 50, "minimum number of comments to collect")
 	avatarRefreshCmd.Flags().Int("min-updates", 30, "minimum number of updated issues to collect")
 	avatarRefreshCmd.Flags().String("max-window", "6m", "maximum lookback window (e.g. 6m, 2w)")
-	avatarRefreshCmd.Flags().Bool("no-cache", false, "bypass HTTP caches")
 	avatarRefreshCmd.Flags().String("engine", "", "profile engine to use (local or llm; default: from config)")
 	avatarRefreshCmd.Flags().String("llm-cmd", "", "command to run for LLM engine")
 	avatarRefreshCmd.Flags().Bool("yes", false, "suppress confirmation prompts")
@@ -159,34 +156,6 @@ func loadAvatarConfig(profileName string) (*config.AvatarConfig, error) {
 	return p.Avatar, nil
 }
 
-// avatarSetupClient builds a client from the CLI flags for avatar subcommands.
-// This is used by extract/build/refresh which set up the client via
-// avatarCmd.PersistentPreRunE -> rootCmd.PersistentPreRunE.
-func avatarClientFromFlags(cmd *cobra.Command) (*client.Client, error) {
-	// Try getting from context (injected by PersistentPreRunE).
-	c, err := client.FromContext(cmd.Context())
-	if err != nil {
-		// Fallback: build minimal client from config.
-		profileName, _ := cmd.Flags().GetString("profile")
-		resolved, resolveErr := config.Resolve(config.DefaultPath(), profileName, &config.FlagOverrides{})
-		if resolveErr != nil {
-			return nil, fmt.Errorf("config error: %w", resolveErr)
-		}
-		if resolved.BaseURL == "" {
-			return nil, fmt.Errorf("base_url is not set; run `jr configure` first")
-		}
-		c = &client.Client{
-			BaseURL:    resolved.BaseURL,
-			Auth:       resolved.Auth,
-			HTTPClient: &http.Client{Timeout: 30 * time.Second},
-			Stdout:     os.Stdout,
-			Stderr:     os.Stderr,
-			Paginate:   true,
-		}
-	}
-	return c, nil
-}
-
 func runAvatarExtract(cmd *cobra.Command, args []string) error {
 	c, err := client.FromContext(cmd.Context())
 	if err != nil {
@@ -199,14 +168,12 @@ func runAvatarExtract(cmd *cobra.Command, args []string) error {
 	minComments, _ := cmd.Flags().GetInt("min-comments")
 	minUpdates, _ := cmd.Flags().GetInt("min-updates")
 	maxWindow, _ := cmd.Flags().GetString("max-window")
-	noCache, _ := cmd.Flags().GetBool("no-cache")
 
 	opts := avatar.ExtractOptions{
 		UserFlag:    userFlag,
 		MinComments: minComments,
 		MinUpdates:  minUpdates,
 		MaxWindow:   maxWindow,
-		NoCache:     noCache,
 	}
 
 	extraction, extractErr := avatar.Extract(c, opts)

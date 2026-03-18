@@ -52,8 +52,8 @@ func AnalyzeResponsePatterns(comments []CommentRecord, userID string) ResponsePa
 	total := float64(ownCount + othersCount)
 	ownPct, othersPct := 0.0, 0.0
 	if total > 0 {
-		ownPct = float64(ownCount) / total * 100
-		othersPct = float64(othersCount) / total * 100
+		ownPct = float64(ownCount) / total
+		othersPct = float64(othersCount) / total
 	}
 
 	medianDur := medianDuration(replyDurations)

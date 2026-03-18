@@ -164,6 +164,71 @@ func TestFetchUserComments(t *testing.T) {
 	}
 }
 
+func TestFetchUserChangelog_ExpandAsQueryParam(t *testing.T) {
+	const accountID = "abc123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Verify expand is passed as a query parameter, not in the body.
+		if got := r.URL.Query().Get("expand"); got != "changelog" {
+			t.Errorf("expected expand=changelog as query param, got %q", got)
+		}
+
+		// Verify expand is NOT in the request body (which the new
+		// /search/jql endpoint rejects with 400).
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if _, ok := body["expand"]; ok {
+			t.Error("expand should not be in the request body — the new /search/jql endpoint rejects it")
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"changelog": map[string]interface{}{
+						"histories": []interface{}{
+							map[string]interface{}{
+								"author":  map[string]string{"accountId": accountID},
+								"created": "2025-01-15T10:00:00Z",
+								"items": []interface{}{
+									map[string]interface{}{
+										"field":      "status",
+										"fromString": "To Do",
+										"toString":   "In Progress",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	entries, err := FetchUserChangelog(c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 changelog entry, got %d", len(entries))
+	}
+	if entries[0].Field != "status" {
+		t.Errorf("Field = %q, want %q", entries[0].Field, "status")
+	}
+	if entries[0].From != "To Do" {
+		t.Errorf("From = %q, want %q", entries[0].From, "To Do")
+	}
+	if entries[0].To != "In Progress" {
+		t.Errorf("To = %q, want %q", entries[0].To, "In Progress")
+	}
+}
+
 func TestExtractTextFromADF(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -18,7 +18,6 @@ type ExtractOptions struct {
 	MinComments int    // target minimum number of comments to collect
 	MinUpdates  int    // target minimum number of updated issues to collect
 	MaxWindow   string // maximum lookback window, e.g. "6m" or "2w"
-	NoCache     bool   // if true, bypass any HTTP caches
 }
 
 // InsufficientDataError is returned when the collected data does not meet the
@@ -101,7 +100,10 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 		from = now.Add(-window)
 
 		fromStr := from.Format("2006-01-02")
-		toStr := to.Format("2006-01-02")
+		// JQL date comparisons are exclusive for the upper bound when using
+		// date-only strings (no time component), so add one day to ensure
+		// issues updated today are included.
+		toStr := to.Add(24 * time.Hour).Format("2006-01-02")
 
 		rawComments, err = FetchUserComments(c, user.AccountID, fromStr, toStr)
 		if err != nil {
