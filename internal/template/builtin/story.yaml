@@ -1,0 +1,16 @@
+name: story
+issuetype: Story
+description: User story with acceptance criteria and optional story points
+variables:
+  - name: summary
+    required: true
+    description: Story summary
+  - name: description
+    description: Story description
+  - name: acceptance-criteria
+    description: Acceptance criteria for the story
+  - name: story-points
+    description: Story point estimate
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}{{if index . \"acceptance-criteria\"}}\n\nAcceptance Criteria:\n{{index . \"acceptance-criteria\"}}{{end}}"

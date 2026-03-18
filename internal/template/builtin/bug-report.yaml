@@ -1,0 +1,21 @@
+name: bug-report
+issuetype: Bug
+description: Bug report with structured sections for reproduction steps, expected and actual behavior
+variables:
+  - name: summary
+    required: true
+    description: Brief description of the bug
+  - name: description
+    description: Detailed bug description
+  - name: steps
+    description: Steps to reproduce the bug
+  - name: expected
+    description: Expected behavior
+  - name: actual
+    description: Actual behavior
+  - name: severity
+    description: "Bug severity (e.g. Highest, High, Medium, Low, Lowest)"
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}{{if .steps}}\n\nSteps to Reproduce:\n{{.steps}}{{end}}{{if .expected}}\n\nExpected:\n{{.expected}}{{end}}{{if .actual}}\n\nActual:\n{{.actual}}{{end}}"
+  priority: "{{.severity}}"

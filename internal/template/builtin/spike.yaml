@@ -1,0 +1,15 @@
+name: spike
+issuetype: Task
+description: Time-boxed research or investigation task
+variables:
+  - name: summary
+    required: true
+    description: Spike summary
+  - name: description
+    description: What needs to be investigated
+  - name: time-box
+    description: "Time-box duration (e.g. 2d, 1w)"
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}{{if index . \"time-box\"}}\n\nTime-box: {{index . \"time-box\"}}{{end}}"
+  labels: "spike"

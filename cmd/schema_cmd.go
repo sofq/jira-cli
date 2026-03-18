@@ -31,6 +31,7 @@ var schemaCmd = &cobra.Command{
 		allOps := generated.AllSchemaOps()
 		allOps = append(allOps, HandWrittenSchemaOps()...)
 		allOps = append(allOps, WatchSchemaOps()...)
+		allOps = append(allOps, TemplateSchemaOps()...)
 
 		if compactFlag || (len(args) == 0 && !listFlag) {
 			data, _ := marshalNoEscape(compactSchema(allOps))

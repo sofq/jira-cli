@@ -16,6 +16,7 @@ import (
 	"github.com/sofq/jira-cli/internal/duration"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
+	tmpl "github.com/sofq/jira-cli/internal/template"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )
@@ -139,6 +140,7 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	// Load all schema ops for lookup (generated + hand-written).
 	allOps := generated.AllSchemaOps()
 	allOps = append(allOps, HandWrittenSchemaOps()...)
+	allOps = append(allOps, TemplateSchemaOps()...)
 	// Build a lookup map: "resource verb" -> SchemaOp
 	opMap := make(map[string]generated.SchemaOp, len(allOps))
 	for _, op := range allOps {
@@ -243,6 +245,10 @@ func executeBatchOp(
 	// Hand-written commands have custom execution logic.
 	if strings.HasPrefix(bop.Command, "workflow ") {
 		exitCode := executeBatchWorkflow(cmd.Context(), opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+	}
+	if strings.HasPrefix(bop.Command, "template ") {
+		exitCode := executeBatchTemplate(cmd.Context(), opClient, bop)
 		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 	}
 
@@ -784,6 +790,104 @@ func buildBatchResult(index, exitCode int, stdoutBuf, stderrBuf *strings.Builder
 		ExitCode: jrerrors.ExitOK,
 		Data:     rawData,
 	}
+}
+
+// executeBatchTemplate runs template commands as a batch operation.
+func executeBatchTemplate(ctx context.Context, c *client.Client, bop BatchOp) int {
+	switch bop.Command {
+	case "template apply":
+		return batchTemplateApply(ctx, c, bop.Args)
+	default:
+		return batchValidationError(c, fmt.Sprintf("unknown template command %q in batch; only 'template apply' is supported", bop.Command))
+	}
+}
+
+// batchTemplateApply executes a template apply within a batch operation.
+func batchTemplateApply(ctx context.Context, c *client.Client, args map[string]string) int {
+	templateName := args["name"]
+	if templateName == "" {
+		return batchValidationError(c, "template apply requires a 'name' arg")
+	}
+	project := args["project"]
+	if project == "" {
+		return batchValidationError(c, "template apply requires a 'project' arg")
+	}
+
+	t, ok, err := tmpl.Lookup(templateName)
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: "failed to load templates: " + err.Error()}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitError
+	}
+	if !ok {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "not_found",
+			Message:   fmt.Sprintf("template %q not found", templateName),
+		}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitNotFound
+	}
+
+	// Build vars from args (anything that isn't name/project/assign).
+	vars := make(map[string]string)
+	for k, v := range args {
+		if k != "name" && k != "project" && k != "assign" {
+			vars[k] = v
+		}
+	}
+
+	rendered, err := tmpl.RenderFields(t, vars)
+	if err != nil {
+		return batchValidationError(c, err.Error())
+	}
+
+	fields := map[string]any{
+		"project":   map[string]string{"key": project},
+		"issuetype": map[string]string{"name": t.IssueType},
+	}
+	if v, ok := rendered["summary"]; ok {
+		fields["summary"] = v
+	}
+	if v, ok := rendered["description"]; ok {
+		fields["description"] = adf.FromText(v)
+	}
+	if v, ok := rendered["priority"]; ok {
+		fields["priority"] = map[string]string{"name": v}
+	}
+	if v, ok := rendered["labels"]; ok {
+		fields["labels"] = strings.Split(v, ",")
+	}
+	if v, ok := vars["parent"]; ok && v != "" {
+		fields["parent"] = map[string]string{"key": v}
+	}
+
+	if c.DryRun {
+		bodyPreview, _ := marshalNoEscape(map[string]any{"fields": fields})
+		out, _ := marshalNoEscape(map[string]any{
+			"method":   "POST",
+			"url":      c.BaseURL + "/rest/api/3/issue",
+			"template": templateName,
+			"body":     json.RawMessage(bodyPreview),
+		})
+		return c.WriteOutput(out)
+	}
+
+	if assign := args["assign"]; assign != "" {
+		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
+		if code != jrerrors.ExitOK {
+			return code
+		}
+		if !isUnassign {
+			fields["assignee"] = map[string]string{"accountId": accountID}
+		}
+	}
+
+	createBody, _ := json.Marshal(map[string]any{"fields": fields})
+	respBody, code := c.Fetch(ctx, "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+	return c.WriteOutput(respBody)
 }
 
 // errorResult constructs a BatchResult for an error condition.

@@ -1,0 +1,12 @@
+name: epic
+issuetype: Epic
+description: Epic for grouping related stories and tasks
+variables:
+  - name: summary
+    required: true
+    description: Epic summary
+  - name: description
+    description: Epic description
+fields:
+  summary: "{{.summary}}"
+  description: "{{.description}}"

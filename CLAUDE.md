@@ -80,6 +80,14 @@ jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
 jr watch --jql "status changed" --interval 1m --preset triage
 jr watch --issue PROJ-123 --interval 10s          # watch a single issue
 jr watch --jql "project = PROJ" --max-events 10   # stop after 10 events
+
+# Templates — create issues from predefined patterns
+jr template list                                   # list all templates
+jr template show bug-report                        # show template definition
+jr template apply bug-report --project PROJ --var summary="Login broken" --var severity=High
+jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=PROJ-100
+jr template create my-template                     # create empty template scaffold
+jr template create my-template --from PROJ-123     # create template from existing issue
 ```
 
 ## Discovery
@@ -91,6 +99,8 @@ jr schema --compact           # same as default (resource → verbs)
 jr schema issue               # all operations for 'issue'
 jr schema issue get           # full schema with flags for one operation
 jr preset list                # list available output presets
+jr template list              # list available issue templates
+jr template show <name>       # show a template's variables and fields
 ```
 
 ## Global Flags
