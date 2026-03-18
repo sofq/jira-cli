@@ -87,5 +87,18 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 				{Name: "type", Required: true, Type: "string", Description: "link type name (e.g. blocks, clones, relates to)", In: "custom"},
 			},
 		},
+		{
+			Resource: "workflow",
+			Verb:     "log-work",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/worklog",
+			Summary:  "Add a worklog entry with human-friendly duration (e.g. 2h 30m)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "time", Required: true, Type: "string", Description: "time spent (e.g. 2h 30m, 1d, 45m)", In: "custom"},
+				{Name: "comment", Required: false, Type: "string", Description: "optional worklog comment (plain text)", In: "custom"},
+			},
+		},
 	}
 }

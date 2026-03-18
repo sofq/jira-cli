@@ -778,6 +778,146 @@ func TestRunLink_TypeNotFound(t *testing.T) {
 	}
 }
 
+// newLogWorkCmd creates a workflow log-work command with flags and client context.
+func newLogWorkCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "log-work", RunE: runLogWork}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("time", "", "")
+	cmd.Flags().String("comment", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunLogWork_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "2h 30m")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected issue key in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "9000") {
+		t.Errorf("expected timeSpentSeconds=9000 in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunLogWork_Success(t *testing.T) {
+	var receivedBody []byte
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/worklog") {
+			var err error
+			receivedBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "2h 30m")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "logged") {
+		t.Errorf("expected 'logged' in output, got: %s", output)
+	}
+
+	body := string(receivedBody)
+	if !strings.Contains(body, "9000") {
+		t.Errorf("expected timeSpentSeconds=9000 in request body, got: %s", body)
+	}
+}
+
+func TestRunLogWork_WithComment(t *testing.T) {
+	var receivedBody []byte
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/worklog") {
+			var err error
+			receivedBody, err = io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10002"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "1h")
+	_ = cmd.Flags().Set("comment", "Fixed the bug")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	body := string(receivedBody)
+	if !strings.Contains(body, "comment") {
+		t.Errorf("expected 'comment' field in request body, got: %s", body)
+	}
+	if !strings.Contains(body, "Fixed the bug") {
+		t.Errorf("expected comment text in request body, got: %s", body)
+	}
+}
+
+func TestRunLogWork_InvalidDuration(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "invalid")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid duration")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
 func TestRunCreateIssue_NoClient(t *testing.T) {
 	cmd := &cobra.Command{Use: "create", RunE: runCreateIssue}
 	cmd.Flags().String("project", "", "")

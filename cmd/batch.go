@@ -13,6 +13,7 @@ import (
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/adf"
 	"github.com/sofq/jira-cli/internal/client"
+	"github.com/sofq/jira-cli/internal/duration"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/spf13/cobra"
@@ -349,6 +350,12 @@ func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) in
 			return batchValidationError(c, "workflow comment requires a 'text' arg")
 		}
 		return batchComment(ctx, c, issueKey, text)
+	case "workflow log-work":
+		timeStr := bop.Args["time"]
+		if timeStr == "" {
+			return batchValidationError(c, "workflow log-work requires a 'time' arg")
+		}
+		return batchLogWork(ctx, c, issueKey, timeStr, bop.Args["comment"])
 	default:
 		return batchValidationError(c, fmt.Sprintf("unknown workflow command %q", bop.Command))
 	}
@@ -612,6 +619,45 @@ func batchCreateIssue(ctx context.Context, c *client.Client, args map[string]str
 	}
 
 	return c.WriteOutput(respBody)
+}
+
+// batchLogWork executes a workflow log-work within a batch operation.
+func batchLogWork(ctx context.Context, c *client.Client, issueKey, timeStr, comment string) int {
+	seconds, err := duration.Parse(timeStr)
+	if err != nil {
+		return batchValidationError(c, "invalid duration: "+err.Error())
+	}
+
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]any{
+			"method":           "POST",
+			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+			"timeSpentSeconds": seconds,
+		})
+		return c.WriteOutput(out)
+	}
+
+	worklogBody := map[string]any{
+		"timeSpentSeconds": seconds,
+	}
+	if comment != "" {
+		worklogBody["comment"] = adf.FromText(comment)
+	}
+
+	body, _ := json.Marshal(worklogBody)
+	_, code := c.Fetch(ctx, "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+		bytes.NewReader(body))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "logged",
+		"issue":  issueKey,
+		"time":   timeStr,
+	})
+	return c.WriteOutput(out)
 }
 
 // stripVerboseLogs separates verbose log lines from error lines in captured stderr.

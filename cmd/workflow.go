@@ -11,6 +11,7 @@ import (
 
 	"github.com/sofq/jira-cli/internal/adf"
 	"github.com/sofq/jira-cli/internal/client"
+	"github.com/sofq/jira-cli/internal/duration"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
@@ -62,6 +63,12 @@ var linkCmd = &cobra.Command{
 	RunE:  runLink,
 }
 
+var logWorkCmd = &cobra.Command{
+	Use:   "log-work",
+	Short: "Add a worklog entry with human-friendly duration (e.g. 2h 30m)",
+	RunE:  runLogWork,
+}
+
 func init() {
 	transitionCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = transitionCmd.MarkFlagRequired("issue")
@@ -103,12 +110,19 @@ func init() {
 	linkCmd.Flags().String("type", "", "link type name (e.g. blocks, clones, relates to)")
 	_ = linkCmd.MarkFlagRequired("type")
 
+	logWorkCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
+	_ = logWorkCmd.MarkFlagRequired("issue")
+	logWorkCmd.Flags().String("time", "", "time spent (e.g. 2h 30m, 1d, 45m)")
+	_ = logWorkCmd.MarkFlagRequired("time")
+	logWorkCmd.Flags().String("comment", "", "optional worklog comment (plain text)")
+
 	workflowCmd.AddCommand(transitionCmd)
 	workflowCmd.AddCommand(assignCmd)
 	workflowCmd.AddCommand(commentCmd)
 	workflowCmd.AddCommand(createIssueCmd)
 	workflowCmd.AddCommand(moveCmd)
 	workflowCmd.AddCommand(linkCmd)
+	workflowCmd.AddCommand(logWorkCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -605,6 +619,67 @@ func runLink(cmd *cobra.Command, args []string) error {
 		"from":   from,
 		"to":     to,
 		"type":   resolvedType,
+	})
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+func runLogWork(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	issueKey, _ := cmd.Flags().GetString("issue")
+	timeStr, _ := cmd.Flags().GetString("time")
+	comment, _ := cmd.Flags().GetString("comment")
+
+	seconds, parseErr := duration.Parse(timeStr)
+	if parseErr != nil {
+		apiErr := &jrerrors.APIError{
+			ErrorType: "validation_error",
+			Message:   "invalid duration: " + parseErr.Error(),
+		}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
+	}
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]any{
+			"method":           "POST",
+			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+			"timeSpentSeconds": seconds,
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	worklogBody := map[string]any{
+		"timeSpentSeconds": seconds,
+	}
+	if comment != "" {
+		worklogBody["comment"] = adf.FromText(comment)
+	}
+
+	body, _ := json.Marshal(worklogBody)
+	_, exitCode := c.Fetch(cmd.Context(), "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+		bytes.NewReader(body))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "logged",
+		"issue":  issueKey,
+		"time":   timeStr,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
