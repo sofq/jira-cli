@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +21,11 @@ import (
 var validTemplateName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 
 //go:embed builtin/*.yaml
-var builtinFS embed.FS
+var embeddedFS embed.FS
+
+// builtinFS is the filesystem used for loading builtin templates.
+// It is a var so tests can override it to inject errors.
+var builtinFS fs.FS = embeddedFS
 
 // Variable defines a template variable with metadata.
 type Variable struct {
@@ -52,7 +57,7 @@ var userTemplatesDir = func() string {
 
 // loadBuiltinTemplates reads all built-in templates from the embedded FS.
 func loadBuiltinTemplates() (map[string]*Template, error) {
-	entries, err := builtinFS.ReadDir("builtin")
+	entries, err := fs.ReadDir(builtinFS, "builtin")
 	if err != nil {
 		return nil, fmt.Errorf("reading builtin templates: %w", err)
 	}
@@ -62,7 +67,7 @@ func loadBuiltinTemplates() (map[string]*Template, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
 			continue
 		}
-		data, err := builtinFS.ReadFile("builtin/" + entry.Name())
+		data, err := fs.ReadFile(builtinFS, "builtin/"+entry.Name())
 		if err != nil {
 			return nil, fmt.Errorf("reading builtin/%s: %w", entry.Name(), err)
 		}

@@ -2,9 +2,11 @@ package audit_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sofq/jira-cli/internal/audit"
@@ -177,4 +179,83 @@ func TestLogger_DoubleClose(t *testing.T) {
 	l.Close()
 	// Second close should not panic.
 	l.Close()
+}
+
+// TestLogger_ConcurrentLog exercises the logger's mutex by writing from 50
+// goroutines simultaneously. Every entry must appear in the log file without
+// corruption or data races (run with -race to verify).
+// TestNewLogger_OpenFileError verifies that NewLogger returns an error when
+// MkdirAll succeeds but OpenFile fails (e.g. path is a directory).
+func TestNewLogger_OpenFileError(t *testing.T) {
+	dir := t.TempDir()
+	// Create a directory at the path where the file should be.
+	filePath := filepath.Join(dir, "audit.log")
+	if err := os.Mkdir(filePath, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	_, err := audit.NewLogger(filePath)
+	if err == nil {
+		t.Error("expected error when path is a directory, not a file")
+	}
+}
+
+// TestDefaultPath_FallbackOnConfigDirError verifies that DefaultPath falls
+// back to ~/.config when os.UserConfigDir fails (HOME unset).
+func TestDefaultPath_FallbackOnConfigDirError(t *testing.T) {
+	// Unset HOME and related env vars to force os.UserConfigDir to fail.
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	// On macOS, os.UserConfigDir uses $HOME/Library/Application Support
+	// and os.UserHomeDir also uses $HOME, so both will fail.
+
+	p := audit.DefaultPath()
+	if p == "" {
+		t.Error("DefaultPath() returned empty string even with HOME unset")
+	}
+	// Should still end with audit.log.
+	if !strings.HasSuffix(p, "audit.log") {
+		t.Errorf("DefaultPath() = %q, want suffix 'audit.log'", p)
+	}
+}
+
+func TestLogger_ConcurrentLog(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	l, err := audit.NewLogger(path)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+
+	const n = 50
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			l.Log(audit.Entry{Operation: fmt.Sprintf("op-%d", idx)})
+		}(i)
+	}
+	wg.Wait()
+	l.Close()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != n {
+		t.Errorf("expected %d log lines, got %d", n, len(lines))
+	}
+
+	// Each line must be valid JSON with a non-empty operation field.
+	for i, line := range lines {
+		var entry audit.Entry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Errorf("line %d is not valid JSON: %v — %s", i, err, line)
+		}
+		if entry.Operation == "" {
+			t.Errorf("line %d has empty Operation field", i)
+		}
+	}
 }

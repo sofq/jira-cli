@@ -225,3 +225,51 @@ func TestList_MalformedUserPresets(t *testing.T) {
 		t.Error("expected error for malformed presets file, got nil")
 	}
 }
+
+// TestLoadUserPresets_NonExistentError verifies that loadUserPresets (via
+// Lookup) propagates errors that are not os.ErrNotExist. Pointing
+// userPresetsPath at a directory causes os.ReadFile to fail with "is a
+// directory", which is not ErrNotExist and must be returned as an error.
+func TestLoadUserPresets_NonExistentError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// tmpDir itself is a directory — ReadFile on a directory returns an error
+	// that is NOT os.ErrNotExist on all major platforms.
+	orig := userPresetsPath
+	userPresetsPath = func() string { return tmpDir }
+	t.Cleanup(func() { userPresetsPath = orig })
+
+	_, _, err := Lookup("agent")
+	if err == nil {
+		t.Fatal("expected error when presets path points to a directory, got nil")
+	}
+}
+
+// TestUserPresetsPath_Default exercises the default userPresetsPath function
+// closure to ensure it returns a reasonable path.
+func TestUserPresetsPath_Default(t *testing.T) {
+	p := userPresetsPath()
+	if p == "" {
+		t.Error("default userPresetsPath() returned empty string")
+	}
+	if !filepath.IsAbs(p) {
+		t.Errorf("expected absolute path, got %q", p)
+	}
+	if filepath.Base(p) != "presets.json" {
+		t.Errorf("expected filename 'presets.json', got %q", filepath.Base(p))
+	}
+}
+
+// TestUserPresetsPath_FallbackOnConfigDirError exercises the fallback path
+// in userPresetsPath when os.UserConfigDir fails.
+func TestUserPresetsPath_FallbackOnConfigDirError(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	p := userPresetsPath()
+	if p == "" {
+		t.Error("userPresetsPath() returned empty even with HOME unset")
+	}
+	if filepath.Base(p) != "presets.json" {
+		t.Errorf("expected filename 'presets.json', got %q", filepath.Base(p))
+	}
+}

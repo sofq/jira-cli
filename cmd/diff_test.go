@@ -286,3 +286,128 @@ func TestDiffSchemaOps(t *testing.T) {
 		t.Errorf("expected resource=diff verb=diff, got %s %s", op.Resource, op.Verb)
 	}
 }
+
+func TestRunDiff_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "diff", RunE: runDiff}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("since", "", "")
+	cmd.Flags().String("field", "", "")
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	cmd.SetContext(context.Background())
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+func TestRunDiff_InvalidSince(t *testing.T) {
+	changelogResp := map[string]any{
+		"values": []map[string]any{
+			{
+				"created": "2026-01-15T10:30:00Z",
+				"author":  map[string]string{"emailAddress": "user@example.com"},
+				"items": []map[string]string{
+					{"field": "status", "fromString": "To Do", "toString": "In Progress"},
+				},
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(changelogResp)
+	}))
+	defer srv.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(srv.URL, &stdout, &stderr)
+
+	cmd := newDiffCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("since", "notaduration")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid --since value")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+// TestRunDiff_DryRunWriteOutputFails covers the DryRun branch where WriteOutput
+// fails due to an invalid JQ filter (diff.go line 57-58).
+func TestRunDiff_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newDiffCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails due to invalid JQ filter")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunDiff_WriteOutputFails covers the final WriteOutput failure after
+// a successful changelog fetch (diff.go line 84-85).
+func TestRunDiff_WriteOutputFails(t *testing.T) {
+	changelogResp := map[string]any{
+		"values": []map[string]any{
+			{
+				"created": "2026-03-01T10:00:00Z",
+				"author":  map[string]string{"emailAddress": "user@example.com"},
+				"items": []map[string]string{
+					{"field": "status", "fromString": "To Do", "toString": "In Progress"},
+				},
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(changelogResp)
+	}))
+	defer srv.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(srv.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newDiffCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-123")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when WriteOutput fails due to invalid JQ filter")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}

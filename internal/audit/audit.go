@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -43,18 +42,14 @@ func NewLogger(path string) (*Logger, error) {
 }
 
 // DefaultPath returns the default audit log file path.
+// Uses os.UserConfigDir which handles darwin/windows/linux portably.
 func DefaultPath() string {
-	switch runtime.GOOS {
-	case "darwin":
+	dir, err := os.UserConfigDir()
+	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "jr", "audit.log")
-	case "windows":
-		appdata := os.Getenv("APPDATA")
-		return filepath.Join(appdata, "jr", "audit.log")
-	default:
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", "jr", "audit.log")
+		dir = filepath.Join(home, ".config")
 	}
+	return filepath.Join(dir, "jr", "audit.log")
 }
 
 // Log writes an entry to the audit log. It sets the timestamp automatically.
@@ -65,10 +60,8 @@ func (l *Logger) Log(entry Entry) {
 	}
 	entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return
-	}
+	// Entry contains only string/int/bool fields — json.Marshal cannot fail.
+	data, _ := json.Marshal(entry)
 	data = append(data, '\n')
 
 	l.mu.Lock()

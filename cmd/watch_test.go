@@ -285,3 +285,32 @@ func TestWatchSchemaOps(t *testing.T) {
 		t.Errorf("expected resource=watch verb=watch, got %s %s", op.Resource, op.Verb)
 	}
 }
+
+// TestRunWatch_RunSucceeds exercises the runWatch success path (line 82: return nil)
+// by routing a single-event watch through the full runWatch function.
+func TestRunWatch_RunSucceeds(t *testing.T) {
+	issue := map[string]any{
+		"key":    "TEST-1",
+		"fields": map[string]any{"summary": "Hello", "updated": "2026-01-01T00:00:00Z"},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"issues": []any{issue}})
+	}))
+	defer srv.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(srv.URL, &stdout, &stderr)
+
+	cmd := newWatchCmd(c)
+	_ = cmd.Flags().Set("jql", "project = TEST")
+	_ = cmd.Flags().Set("max-events", "1")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("expected runWatch to return nil on success, got: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "TEST-1") {
+		t.Errorf("expected TEST-1 in output, got: %s", stdout.String())
+	}
+}

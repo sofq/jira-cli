@@ -1436,3 +1436,1076 @@ func TestRunSprint_PostFails(t *testing.T) {
 		t.Fatal("expected error when POST sprint issue returns 500")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Gap 1: runAssign — normal-assign PUT fails after /myself succeeds
+// ---------------------------------------------------------------------------
+
+func TestRunAssign_NormalAssignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when PUT assignee returns 500")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 2: runComment — POST /comment fails with 500
+// ---------------------------------------------------------------------------
+
+func TestRunComment_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCommentCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("text", "This should fail")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST comment returns 500")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 3: runCreateIssue — POST /issue fails with 500
+// ---------------------------------------------------------------------------
+
+func TestRunCreateIssue_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST issue returns 500")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 4: runCreateIssue — resolveAssignee fails (GET /myself returns 500)
+// ---------------------------------------------------------------------------
+
+func TestRunCreateIssue_ResolveAssigneeFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return 500 for everything, including /myself, to make resolveAssignee fail.
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"message":"server error"}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+	_ = cmd.Flags().Set("assign", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when resolveAssignee fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 5: resolveSprint — malformed JSON for /rest/agile/1.0/board response
+// ---------------------------------------------------------------------------
+
+func TestResolveSprint_MalformedBoardsJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			// Return invalid JSON to trigger the unmarshal error path.
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "not valid json {{{")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when boards response is malformed JSON")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Gap 6: resolveSprint — sprint endpoint returns invalid JSON (skip, not_found)
+// ---------------------------------------------------------------------------
+
+func TestResolveSprint_SprintEndpointMalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			// Return a valid board so the loop runs.
+			fmt.Fprintln(w, `{"values":[{"id":42,"name":"Test Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			// Return garbage JSON for the sprint endpoint — should be skipped.
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "garbage {{{")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected not_found error when sprint endpoint returns malformed JSON")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitNotFound {
+		t.Errorf("expected ExitNotFound (%d), got %d", jrerrors.ExitNotFound, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveTransition — malformed JSON from GET /transitions
+// ---------------------------------------------------------------------------
+
+func TestResolveTransition_MalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "not json")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newTransitionCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when transitions response is malformed JSON")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runTransition — GET transitions OK but POST transitions returns 500
+// ---------------------------------------------------------------------------
+
+func TestRunTransition_PostFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"errorMessages":["fail"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	cmd := newTransitionCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST transitions returns 500")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveAssignee "me" — malformed JSON from GET /myself
+// ---------------------------------------------------------------------------
+
+func TestResolveAssignee_MalformedMyselfJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/myself") {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "not json")
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when /myself response is malformed JSON")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got ExitOK")
+	}
+}
+
+func TestRunTransition_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newTransitionCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunMove_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "In Progress")
+	// No --assign flag so the assign branch is skipped.
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunAssign_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"abc123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunComment_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/comment") {
+			fmt.Fprintln(w, `{"id":"10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newCommentCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("text", "hello")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunLink_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/issueLinkType") {
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/issueLink") {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "TEST-1")
+	_ = cmd.Flags().Set("to", "TEST-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunLogWork_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/worklog") {
+			fmt.Fprintln(w, `{"id":"10001","timeSpentSeconds":3600}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("time", "1h")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+func TestRunSprint_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/rest/agile/1.0/board") && !strings.Contains(r.URL.Path, "/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":1}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":42,"name":"Sprint 5","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "TEST-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runMove — remaining branch coverage
+// ---------------------------------------------------------------------------
+
+// TestRunMove_DryRunWriteOutputFails covers the DryRun branch in runMove where
+// WriteOutput fails (workflow.go line 336-337).
+func TestRunMove_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+	_ = cmd.Flags().Set("assign", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunMove_PostTransitionFails covers the POST /transitions failure path
+// in runMove after a successful transition resolution (workflow.go line 351-352).
+func TestRunMove_PostTransitionFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when POST transitions returns 403")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunMove_AssignResolveError covers the resolveAssignee failure path in
+// runMove after a successful transition (workflow.go line 363-364).
+func TestRunMove_AssignResolveError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.URL.Path == "/rest/api/3/user/search" {
+			// Empty results — user not found.
+			fmt.Fprintln(w, `[]`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+	_ = cmd.Flags().Set("assign", "unknown@user.com")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when resolveAssignee returns not found")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunMove_UnassignPUTFails covers the unassign PUT failure path in runMove
+// (workflow.go line 372-373).
+func TestRunMove_UnassignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newMoveCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+	_ = cmd.Flags().Set("assign", "none")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when unassign PUT returns 500")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runAssign — remaining branch coverage
+// ---------------------------------------------------------------------------
+
+// TestRunAssign_DryRunWriteOutputFails covers the DryRun branch in runAssign
+// where WriteOutput fails (workflow.go line 413-414).
+func TestRunAssign_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "me")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunAssign_UnassignPUTFails covers the unassign PUT failure path in
+// runAssign (workflow.go line 436-437).
+func TestRunAssign_UnassignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "none")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when unassign PUT returns 403")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// TestRunCreateIssue_WriteOutputFails covers the WriteOutput failure path in runCreateIssue.
+func TestRunCreateIssue_WriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/rest/api/3/issue") {
+			fmt.Fprintln(w, `{"id":"10001","key":"TEST-1","self":"http://example.com/issue/10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "TEST")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Login broken")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error from WriteOutput failure")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runTransition — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunTransition_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runTransition (workflow.go line 282-283).
+func TestRunTransition_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newTransitionCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Done")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runCreateIssue — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunCreateIssue_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runCreateIssue (workflow.go line 504-505).
+func TestRunCreateIssue_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newCreateIssueCmd(c)
+	_ = cmd.Flags().Set("project", "PROJ")
+	_ = cmd.Flags().Set("type", "Bug")
+	_ = cmd.Flags().Set("summary", "Test issue")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runLink — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunLink_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runLink (workflow.go line 608-609).
+func TestRunLink_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newLinkCmd(c)
+	_ = cmd.Flags().Set("from", "PROJ-1")
+	_ = cmd.Flags().Set("to", "PROJ-2")
+	_ = cmd.Flags().Set("type", "blocks")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runLogWork — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunLogWork_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runLogWork (workflow.go line 670-671).
+func TestRunLogWork_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newLogWorkCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("time", "1h")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveSprint — substring match path
+// ---------------------------------------------------------------------------
+
+// TestResolveSprint_SubstringMatch covers the substring match return path
+// in resolveSprint (workflow.go line 772-773) where the sprint name does not
+// exactly match but contains the search string.
+func TestResolveSprint_SubstringMatch(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			fmt.Fprintln(w, `{"values":[{"id":1,"name":"My Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/sprint") {
+			// Sprint name is "Team Sprint 7" — searching for "sprint 7" is a substring match.
+			fmt.Fprintln(w, `{"values":[{"id":77,"name":"Team Sprint 7","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/77/issue") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "sprint 7") // substring of "Team Sprint 7"
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "sprint_set") {
+		t.Errorf("expected 'sprint_set' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Team Sprint 7") {
+		t.Errorf("expected resolved sprint name in output, got: %s", output)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runSprint — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunSprint_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runSprint (workflow.go line 802-803).
+func TestRunSprint_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 5")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runComment — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunAssign_UnassignWriteOutputFails covers the WriteOutput failure after a
+// successful unassign PUT in runAssign (workflow.go line 436-437).
+func TestRunAssign_UnassignWriteOutputFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newAssignCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "none")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when unassign WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveSprint — skip board when sprint endpoint fails
+// ---------------------------------------------------------------------------
+
+// TestResolveSprint_SkipsFailingBoard covers the path in resolveSprint where a
+// board's sprint endpoint returns an error and the board is skipped
+// (workflow.go line 739-741).
+func TestResolveSprint_SkipsFailingBoard(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/agile/1.0/board" {
+			// Two boards: board 1 has a broken sprint endpoint, board 2 succeeds.
+			fmt.Fprintln(w, `{"values":[{"id":1,"name":"Broken Board"},{"id":2,"name":"Good Board"}]}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/board/1/sprint") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"no sprint support"}`)
+			return
+		}
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/board/2/sprint") {
+			fmt.Fprintln(w, `{"values":[{"id":99,"name":"Sprint 9","state":"active"}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/sprint/99/issue") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newSprintCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("to", "Sprint 9")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v; stderr: %s", err, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "sprint_set") {
+		t.Errorf("expected 'sprint_set' in output, got: %s", output)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runComment — DryRun WriteOutput fail
+// ---------------------------------------------------------------------------
+
+// TestRunComment_DryRunWriteOutputFails covers the DryRun WriteOutput failure
+// in runComment (workflow.go line 850-851).
+func TestRunComment_DryRunWriteOutputFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+	c.JQFilter = ".[[[invalid"
+
+	cmd := newCommentCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("text", "test comment")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when DryRun WriteOutput fails")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code == jrerrors.ExitOK {
+		t.Errorf("expected non-zero exit code, got %d", aw.Code)
+	}
+}

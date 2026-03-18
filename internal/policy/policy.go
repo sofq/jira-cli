@@ -55,21 +55,20 @@ func (p *Policy) Check(operation string) error {
 		return nil
 	}
 
-	switch p.mode {
-	case "allow":
+	// mode is always "allow" or "deny" — set exclusively by NewFromConfig.
+	if p.mode == "allow" {
 		for _, pattern := range p.allowedOps {
 			if matched, _ := path.Match(pattern, operation); matched {
 				return nil
 			}
 		}
 		return &DeniedError{Operation: operation, Reason: "not in allowed_operations"}
-	case "deny":
-		for _, pattern := range p.deniedOps {
-			if matched, _ := path.Match(pattern, operation); matched {
-				return &DeniedError{Operation: operation, Reason: "matched denied_operations pattern: " + pattern}
-			}
+	}
+	// mode == "deny"
+	for _, pattern := range p.deniedOps {
+		if matched, _ := path.Match(pattern, operation); matched {
+			return &DeniedError{Operation: operation, Reason: "matched denied_operations pattern: " + pattern}
 		}
-		return nil
 	}
 	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -390,5 +392,116 @@ func TestRawCmd_DryRunPostWithBody(t *testing.T) {
 	output := stdout.String()
 	if !strings.Contains(output, "summary") {
 		t.Errorf("expected body in dry-run output, got: %s", output)
+	}
+}
+
+func TestRawCmd_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	cmd.SetContext(t.Context())
+
+	err := runRaw(cmd, []string{"GET", "/test"})
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+// TestRawCmd_FileBody exercises the @filename body reader path, including the
+// deferred file close (line 123-124 in raw.go).
+func TestRawCmd_FileBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	// Write a temp JSON file to use as body.
+	tmpFile := filepath.Join(t.TempDir(), "body.json")
+	os.WriteFile(tmpFile, []byte(`{"key":"value"}`), 0o644)
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	_ = cmd.Flags().Set("body", "@"+tmpFile)
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"POST", "/test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "ok") {
+		t.Errorf("expected ok in output, got: %s", stdout.String())
+	}
+}
+
+// TestRawCmd_DoFailure exercises the c.Do error return path (lines 155-157).
+func TestRawCmd_DoFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, `{"errorMessages":["server error"]}`)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	cmd.SetContext(ctx)
+
+	err := runRaw(cmd, []string{"GET", "/test"})
+	if err == nil {
+		t.Fatal("expected error when server returns 500")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code == 0 {
+		t.Error("expected non-zero exit code")
+	}
+}
+
+func TestRawCmd_PolicyDenied(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://localhost", &stdout, &stderr)
+
+	// Set a policy that denies all operations.
+	p, err := newTestDenyPolicy()
+	if err != nil {
+		t.Fatalf("failed to create deny policy: %v", err)
+	}
+	c.Policy = p
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	cmd.SetContext(ctx)
+
+	err = runRaw(cmd, []string{"GET", "/test"})
+	if err == nil {
+		t.Fatal("expected error when policy denies operation")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit %d, got %d", jrerrors.ExitValidation, aw.Code)
 	}
 }

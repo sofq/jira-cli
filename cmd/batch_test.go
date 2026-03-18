@@ -3253,3 +3253,744 @@ func TestBatchMove_DryRun_WithAssign_Output(t *testing.T) {
 		t.Error("expected 'assign' field in dry-run output")
 	}
 }
+
+// newBatchCmd creates a cobra command wired to runBatch for testing.
+func newBatchCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "batch", RunE: runBatch}
+	cmd.Flags().String("input", "", "")
+	cmd.Flags().Int("max-batch", 50, "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+func TestRunBatch_InvalidJSON(t *testing.T) {
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte("not valid json"), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON input")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+func TestRunBatch_NullInput(t *testing.T) {
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte("null"), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for null JSON input")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+func TestRunBatch_ExceedsMaxBatch(t *testing.T) {
+	ops := `[
+		{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"}},
+		{"command":"issue get","args":{"issueIdOrKey":"PROJ-2"}},
+		{"command":"issue get","args":{"issueIdOrKey":"PROJ-3"}}
+	]`
+
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte(ops), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+	_ = cmd.Flags().Set("max-batch", "2")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when batch exceeds max-batch limit")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected exit code %d, got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+func TestRunBatch_InvalidGlobalJQFilter(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","fields":{"summary":"Test"}}`)
+	}))
+	defer ts.Close()
+
+	ops := `[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"}}]`
+
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte(ops), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.JQFilter = ".[invalid jq expression!!!"
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid global jq filter")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runBatch — --input pointing to nonexistent file via newBatchCmd
+// ---------------------------------------------------------------------------
+
+func TestRunBatch_InputFileNotFound(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", "/nonexistent/file.json")
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error for nonexistent input file")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation (%d), got %d", jrerrors.ExitValidation, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runBatch — empty array [] succeeds with zero-result output
+// ---------------------------------------------------------------------------
+
+func TestRunBatch_EmptyArrayViaNewBatchCmd(t *testing.T) {
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "empty.json")
+	if err := os.WriteFile(inputFile, []byte("[]"), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	captured := captureStdout(t, func() {
+		if err := cmd.RunE(cmd, nil); err != nil {
+			t.Fatalf("unexpected error for empty batch: %v", err)
+		}
+	})
+
+	got := strings.TrimSpace(captured)
+	if got != "[]" {
+		t.Errorf("expected '[]' for empty batch, got: %s", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runBatch — no client in context
+// ---------------------------------------------------------------------------
+
+// TestRunBatch_NoClient covers the runBatch path where there is no client in
+// the context (batch.go line 70-77).
+func TestRunBatch_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "batch", RunE: runBatch}
+	cmd.Flags().String("input", "", "")
+	cmd.Flags().Int("max-batch", 50, "")
+	cmd.SetContext(context.Background()) // no client
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+	}
+	if aw.Code != jrerrors.ExitError {
+		t.Errorf("expected ExitError (%d), got %d", jrerrors.ExitError, aw.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// executeBatchOp — template and diff routing
+// ---------------------------------------------------------------------------
+
+// TestExecuteBatchOp_TemplateDryRun covers the template prefix routing in
+// executeBatchOp (batch.go line 284-287) via a dry-run apply.
+func TestExecuteBatchOp_TemplateDryRun(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	allOps = append(allOps, TemplateSchemaOps()...)
+	allOps = append(allOps, DiffSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp, len(allOps))
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.SetContext(client.NewContext(context.Background(), c))
+
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "template apply",
+		Args:    map[string]string{"name": "bug-report", "project": "PROJ", "summary": "Test"},
+	}, opMap)
+	if result.ExitCode != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0 for dry-run template apply, got %d; error: %s", result.ExitCode, string(result.Error))
+	}
+}
+
+// TestExecuteBatchOp_DiffDryRun covers the diff command routing in
+// executeBatchOp (batch.go line 288-291) via a dry-run diff.
+func TestExecuteBatchOp_DiffDryRun(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	allOps = append(allOps, TemplateSchemaOps()...)
+	allOps = append(allOps, DiffSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp, len(allOps))
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.SetContext(client.NewContext(context.Background(), c))
+
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "diff diff",
+		Args:    map[string]string{"issue": "PROJ-1"},
+	}, opMap)
+	if result.ExitCode != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0 for dry-run diff, got %d; error: %s", result.ExitCode, string(result.Error))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// executeBatchWorkflow — missing "to" for transition and assign
+// ---------------------------------------------------------------------------
+
+// TestExecuteBatchWorkflow_TransitionMissingTo covers the missing "to" arg
+// validation in executeBatchWorkflow for workflow transition (batch.go line 374-376).
+func TestExecuteBatchWorkflow_TransitionMissingTo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow transition",
+		Args:    map[string]string{"issue": "PROJ-1"},
+		// missing "to"
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected ExitValidation (%d), got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'to'") {
+		t.Errorf("expected 'to' in error, got: %s", stderr.String())
+	}
+}
+
+// TestExecuteBatchWorkflow_AssignMissingTo covers the missing "to" arg
+// validation in executeBatchWorkflow for workflow assign (batch.go line 386-388).
+func TestExecuteBatchWorkflow_AssignMissingTo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow assign",
+		Args:    map[string]string{"issue": "PROJ-1"},
+		// missing "to"
+	})
+	if code != jrerrors.ExitValidation {
+		t.Fatalf("expected ExitValidation (%d), got %d", jrerrors.ExitValidation, code)
+	}
+	if !strings.Contains(stderr.String(), "'to'") {
+		t.Errorf("expected 'to' in error, got: %s", stderr.String())
+	}
+}
+
+// TestExecuteBatchWorkflow_LinkSuccess covers the batchLink call path in
+// executeBatchWorkflow when all required link args are provided (batch.go line 363).
+func TestExecuteBatchWorkflow_LinkSuccess(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && r.URL.Path == "/rest/api/3/issueLinkType" {
+			fmt.Fprintln(w, `{"issueLinkTypes":[{"id":"10","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issueLink" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow link",
+		Args:    map[string]string{"from": "PROJ-1", "to": "PROJ-2", "type": "blocks"},
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0 for link, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "linked") {
+		t.Errorf("expected 'linked' in output, got: %s", stdout.String())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// batchMove — POST transitions fail and unassign PUT fail
+// ---------------------------------------------------------------------------
+
+// TestBatchMove_PostTransitionFails covers the batchMove path where POST
+// /transitions returns an error (batch.go line 469-471).
+func TestBatchMove_PostTransitionFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "PROJ-1", "Done", "")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when POST transitions returns 403")
+	}
+}
+
+// TestBatchMove_UnassignPUTFails covers the batchMove unassign branch where
+// the PUT /assignee call returns an error (batch.go line 490-492).
+func TestBatchMove_UnassignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "PROJ-1", "Done", "none")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when unassign PUT returns 500")
+	}
+}
+
+// TestBatchMove_AssignPUTFails covers the batchMove non-unassign assign branch
+// where the PUT /assignee call returns an error (batch.go line 499-501).
+func TestBatchMove_AssignPUTFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" && strings.Contains(r.URL.Path, "/transitions") {
+			fmt.Fprintln(w, `{"transitions":[{"id":"11","name":"Done","to":{"name":"Done"}}]}`)
+			return
+		}
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/transitions") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"user123"}`)
+			return
+		}
+		if r.Method == "PUT" && strings.Contains(r.URL.Path, "/assignee") {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, `{"message":"forbidden"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchMove(t.Context(), c, "PROJ-1", "Done", "me")
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when assign PUT returns 403")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// batchCreateIssue — resolveAssignee error
+// ---------------------------------------------------------------------------
+
+// TestBatchCreateIssue_AssignResolveError covers the batchCreateIssue path
+// where resolveAssignee returns an error (batch.go line 656-658).
+func TestBatchCreateIssue_AssignResolveError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/user/search" {
+			// Empty results — user not found.
+			fmt.Fprintln(w, `[]`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := executeBatchWorkflow(t.Context(), c, BatchOp{
+		Command: "workflow create",
+		Args: map[string]string{
+			"project": "PROJ",
+			"type":    "Bug",
+			"summary": "Test issue",
+			"assign":  "unknown@user.com",
+		},
+	})
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when resolveAssignee fails")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// batchTemplateApply — optional fields (description, priority) and assign
+// ---------------------------------------------------------------------------
+
+// TestBatchTemplateApply_WithDescriptionAndPriority covers the optional fields
+// (description, priority) in batchTemplateApply (batch.go lines 889-894).
+func TestBatchTemplateApply_WithDescriptionAndPriority(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			fields, _ := body["fields"].(map[string]any)
+			if fields["description"] == nil {
+				t.Error("expected description field to be set")
+			}
+			if fields["priority"] == nil {
+				t.Error("expected priority field to be set")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10005","key":"PROJ-55"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	// The "bug-report" template maps its "priority" field from the "severity" variable.
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":        "bug-report",
+		"project":     "PROJ",
+		"summary":     "A bug",
+		"description": "Steps to reproduce",
+		"severity":    "High",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestBatchTemplateApply_AssignResolveError covers the resolveAssignee error
+// path in batchTemplateApply (batch.go line 915-917).
+func TestBatchTemplateApply_AssignResolveError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/user/search" {
+			fmt.Fprintln(w, `[]`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "A bug",
+		"assign":  "unknown@user.com",
+	})
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when assign resolve fails")
+	}
+}
+
+// TestBatchTemplateApply_WithAssignSuccess covers the assign path in
+// batchTemplateApply when the assignee resolves successfully (batch.go lines 913-920).
+func TestBatchTemplateApply_WithAssignSuccess(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/myself") {
+			fmt.Fprintln(w, `{"accountId":"me123"}`)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			fields, _ := body["fields"].(map[string]any)
+			if fields["assignee"] == nil {
+				t.Error("expected assignee field to be set")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10006","key":"PROJ-56"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "A bug with assignee",
+		"assign":  "me",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestBatchTemplateApply_CreateFails covers the POST /issue failure in
+// batchTemplateApply (batch.go line 925-927).
+func TestBatchTemplateApply_CreateFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, `{"message":"server error"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "bug-report",
+		"project": "PROJ",
+		"summary": "A bug",
+	})
+	if code == jrerrors.ExitOK {
+		t.Fatal("expected non-zero exit when POST issue returns 500")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// runBatch — pretty output and max exit propagation
+// ---------------------------------------------------------------------------
+
+// TestExecuteBatchOp_WorkflowRouting covers the workflow prefix routing in
+// executeBatchOp (batch.go line 280-283) by calling it with a dry-run workflow command.
+func TestExecuteBatchOp_WorkflowRouting(t *testing.T) {
+	allOps := generated.AllSchemaOps()
+	allOps = append(allOps, HandWrittenSchemaOps()...)
+	allOps = append(allOps, TemplateSchemaOps()...)
+	allOps = append(allOps, DiffSchemaOps()...)
+	opMap := make(map[string]generated.SchemaOp, len(allOps))
+	for _, op := range allOps {
+		opMap[op.Resource+" "+op.Verb] = op
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := &cobra.Command{Use: "batch"}
+	cmd.SetContext(client.NewContext(context.Background(), c))
+
+	result := executeBatchOp(cmd, c, 0, BatchOp{
+		Command: "workflow transition",
+		Args:    map[string]string{"issue": "PROJ-1", "to": "Done"},
+	}, opMap)
+	if result.ExitCode != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0 for dry-run workflow transition, got %d; error: %s", result.ExitCode, string(result.Error))
+	}
+}
+
+// TestBatchTemplateApply_WithLabels covers the labels field rendering in
+// batchTemplateApply (batch.go line 895-897) using the spike template which
+// always renders a "labels" field.
+func TestBatchTemplateApply_WithLabels(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/rest/api/3/issue" {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			fields, _ := body["fields"].(map[string]any)
+			if fields["labels"] == nil {
+				t.Error("expected labels field to be set for spike template")
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10007","key":"PROJ-57"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	// The "spike" template always renders labels: "spike".
+	code := batchTemplateApply(t.Context(), c, map[string]string{
+		"name":    "spike",
+		"project": "PROJ",
+		"summary": "Investigate auth performance",
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+}
+
+// TestRunBatch_Pretty covers the --pretty flag path in runBatch.
+func TestRunBatch_Pretty(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"key":"PROJ-1","fields":{"summary":"Test"}}`)
+	}))
+	defer ts.Close()
+
+	ops := `[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"}}]`
+
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte(ops), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	c.Pretty = true
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	captured := captureStdout(t, func() {
+		if err := cmd.RunE(cmd, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	// Pretty output should be indented.
+	if !strings.Contains(captured, "\n") {
+		t.Errorf("expected pretty-printed output with newlines, got: %s", captured)
+	}
+}
+
+// TestRunBatch_MaxExitPropagated covers the path in runBatch where the highest
+// exit code from batch operations is returned.
+func TestRunBatch_MaxExitPropagated(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, `{"errorMessages":["not found"]}`)
+	}))
+	defer ts.Close()
+
+	ops := `[{"command":"issue get","args":{"issueIdOrKey":"PROJ-999"}}]`
+
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, []byte(ops), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+
+	captured := captureStdout(t, func() {
+		err := cmd.RunE(cmd, nil)
+		if err == nil {
+			t.Fatal("expected error when batch op has non-zero exit")
+		}
+		aw, ok := err.(*jrerrors.AlreadyWrittenError)
+		if !ok {
+			t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
+		}
+		if aw.Code == jrerrors.ExitOK {
+			t.Errorf("expected non-zero exit code propagated, got %d", aw.Code)
+		}
+	})
+
+	// Output should still be written even on partial failure.
+	if !strings.Contains(captured, "[") {
+		t.Errorf("expected JSON array output, got: %s", captured)
+	}
+}

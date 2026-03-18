@@ -312,6 +312,17 @@ func TestParseSince(t *testing.T) {
 			},
 		},
 		{
+			// ISO datetime without timezone (layout "2006-01-02T15:04:05").
+			name:  "ISO datetime no TZ",
+			input: "2026-01-15T10:30:00",
+			check: func(t *testing.T, got time.Time) {
+				want := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+				if !got.Equal(want) {
+					t.Errorf("got %v, want %v", got, want)
+				}
+			},
+		},
+		{
 			name:    "invalid string",
 			input:   "not-valid",
 			wantErr: true,
@@ -337,6 +348,90 @@ func TestParseSince(t *testing.T) {
 			}
 			if tt.check != nil {
 				tt.check(t, got)
+			}
+		})
+	}
+}
+
+// TestParseSince_ZeroNow verifies that parseSince falls back to time.Now()
+// when the now parameter is the zero value.
+func TestParseSince_ZeroNow(t *testing.T) {
+	before := time.Now()
+	got, err := parseSince("2h", time.Time{})
+	after := time.Now()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// got should be approximately 2 hours before now; verify the bounds.
+	lowerBound := before.Add(-2*time.Hour - time.Second)
+	upperBound := after.Add(-2 * time.Hour)
+	// The result must be after lowerBound and not after upperBound+1s to
+	// account for execution time between before/after measurements.
+	upperBoundWithSlack := after.Add(-2*time.Hour + time.Second)
+	if got.Before(lowerBound) || got.After(upperBoundWithSlack) {
+		t.Errorf("parseSince(\"2h\", zero) = %v, want ~2h before now (window: %v .. %v)",
+			got, lowerBound, upperBound)
+	}
+}
+
+// TestParse_UnparseableTimestampSkipped verifies that entries with timestamps
+// that cannot be parsed by parseJiraTime are silently skipped (via continue)
+// when a Since filter is active, while valid entries are still returned.
+func TestParse_UnparseableTimestampSkipped(t *testing.T) {
+	raw := `{
+		"values": [
+			{
+				"created": "not-a-date",
+				"author": {"emailAddress": "bad@example.com"},
+				"items": [{"field": "status", "fromString": "A", "toString": "B"}]
+			},
+			{
+				"created": "2026-01-15T10:30:00Z",
+				"author": {"emailAddress": "good@example.com"},
+				"items": [{"field": "status", "fromString": "B", "toString": "C"}]
+			}
+		]
+	}`
+
+	result, err := Parse("PROJ-1", []byte(raw), Options{Since: "2025-01-01"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The entry with an unparseable timestamp must be skipped.
+	if len(result.Changes) != 1 {
+		t.Fatalf("expected 1 change (bad timestamp skipped), got %d", len(result.Changes))
+	}
+	if result.Changes[0].Author != "good@example.com" {
+		t.Errorf("expected good@example.com, got %q", result.Changes[0].Author)
+	}
+}
+
+// TestParseJiraTime_Formats exercises all timestamp formats that parseJiraTime
+// must accept, including the millisecond-offset format that Jira uses in
+// practice, and verifies that a completely unparseable string returns an error.
+func TestParseJiraTime_Formats(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"RFC3339", "2026-01-15T10:30:00Z", false},
+		// Millisecond with numeric timezone offset — layout "2006-01-02T15:04:05.000-0700".
+		{"MillisOffset", "2026-01-15T10:30:00.000+0900", false},
+		// Millisecond with literal Z suffix — layout "2006-01-02T15:04:05.000Z".
+		{"MillisZ", "2026-01-15T10:30:00.000Z", false},
+		// Plain seconds with Z — layout "2006-01-02T15:04:05Z".
+		{"SecondsZ", "2026-01-15T10:30:00Z", false},
+		{"Invalid", "not-a-timestamp", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseJiraTime(tt.input)
+			if tt.wantErr && err == nil {
+				t.Errorf("parseJiraTime(%q) expected error, got nil", tt.input)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("parseJiraTime(%q) unexpected error: %v", tt.input, err)
 			}
 		})
 	}
