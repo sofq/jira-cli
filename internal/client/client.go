@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sofq/jira-cli/internal/audit"
 	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
+	"github.com/sofq/jira-cli/internal/policy"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )
@@ -37,6 +39,12 @@ type Client struct {
 	Pretty     bool      // pretty-print JSON
 	Fields     string        // --fields comma-separated field names for GET
 	CacheTTL   time.Duration // --cache duration; 0 means no caching
+
+	// Security fields
+	AuditLogger *audit.Logger  // nil means no audit logging
+	Profile     string         // profile name for audit entries
+	Operation   string         // "resource verb" for audit entries
+	Policy      *policy.Policy // nil means unrestricted
 }
 
 // NewContext stores the client in the given context and returns the new context.
@@ -126,6 +134,8 @@ func (c *Client) fetchOAuth2Token() (string, error) {
 // from BaseURL+path+query, applies auth, handles pagination, jq filtering, and
 // pretty-printing. Errors are written as structured JSON to Stderr.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body io.Reader) int {
+	origPath := path
+
 	// Append --fields as query param for GET requests.
 	if c.Fields != "" && method == "GET" {
 		if query == nil {
@@ -168,7 +178,9 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		enc := json.NewEncoder(&buf)
 		enc.SetEscapeHTML(false)
 		_ = enc.Encode(dryOut)
-		return c.WriteOutput(bytes.TrimRight(buf.Bytes(), "\n"))
+		exitCode := c.WriteOutput(bytes.TrimRight(buf.Bytes(), "\n"))
+		c.auditLog(method, origPath, 0, exitCode)
+		return exitCode
 	}
 
 	// Pagination only for GET requests.
@@ -248,6 +260,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	if resp.StatusCode >= 400 {
 		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
+		c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
 		return apiErr.ExitCode()
 	}
 
@@ -263,7 +276,9 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		}
 	}
 
-	return c.WriteOutput(respBody)
+	exitCode := c.WriteOutput(respBody)
+	c.auditLog(method, path, resp.StatusCode, exitCode)
+	return exitCode
 }
 
 // paginatedPage represents Jira's standard paginated response envelope.
@@ -563,6 +578,22 @@ func (c *Client) VerboseLog(fields map[string]any) {
 	fmt.Fprintf(c.Stderr, "%s\n", data)
 }
 
+// auditLog writes an audit entry if an AuditLogger is configured.
+func (c *Client) auditLog(method, path string, status, exitCode int) {
+	if c.AuditLogger == nil {
+		return
+	}
+	c.AuditLogger.Log(audit.Entry{
+		Profile:   c.Profile,
+		Operation: c.Operation,
+		Method:    method,
+		Path:      path,
+		Status:    status,
+		Exit:      exitCode,
+		DryRun:    c.DryRun,
+	})
+}
+
 // Fetch performs an HTTP request and returns the raw response body and an exit code.
 // Unlike Do, it does not write to Stdout — callers handle the body themselves.
 // This is used by workflow commands and batch operations that need the raw response.
@@ -615,8 +646,10 @@ func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader)
 	if resp.StatusCode >= 400 {
 		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
 		apiErr.WriteJSON(c.Stderr)
+		c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
 		return nil, apiErr.ExitCode()
 	}
+	c.auditLog(method, path, resp.StatusCode, jrerrors.ExitOK)
 	return respBody, jrerrors.ExitOK
 }
 

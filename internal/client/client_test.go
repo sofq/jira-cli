@@ -14,6 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"path/filepath"
+
+	"github.com/sofq/jira-cli/internal/audit"
 	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
@@ -2368,3 +2371,101 @@ func TestFetchPage_TransportError(t *testing.T) {
 
 // Ensure net package is used (via hijackBodyDropServer using http.Hijacker interface).
 var _ net.Conn
+
+func TestDo_AuditLogging(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{"ok":true}`))
+	defer te.Close()
+
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.log")
+	logger, err := audit.NewLogger(auditPath)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	te.Client.AuditLogger = logger
+	te.Client.Profile = "test-profile"
+	te.Client.Operation = "issue get"
+
+	code := te.Client.Do(context.Background(), "GET", "/rest/api/3/issue/TEST-1", nil, nil)
+	if code != 0 {
+		t.Fatalf("Do: exit %d", code)
+	}
+	logger.Close()
+
+	data, _ := os.ReadFile(auditPath)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 audit line, got %d", len(lines))
+	}
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &entry); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if entry["profile"] != "test-profile" {
+		t.Errorf("profile = %v, want test-profile", entry["profile"])
+	}
+	if entry["op"] != "issue get" {
+		t.Errorf("op = %v, want issue get", entry["op"])
+	}
+	if entry["method"] != "GET" {
+		t.Errorf("method = %v, want GET", entry["method"])
+	}
+}
+
+func TestFetch_AuditLogging(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{"ok":true}`))
+	defer te.Close()
+
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.log")
+	logger, err := audit.NewLogger(auditPath)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	te.Client.AuditLogger = logger
+	te.Client.Profile = "test-profile"
+	te.Client.Operation = "workflow transition"
+
+	_, code := te.Client.Fetch(context.Background(), "POST", "/rest/api/3/issue/TEST-1/transitions", nil)
+	if code != 0 {
+		t.Fatalf("Fetch: exit %d", code)
+	}
+	logger.Close()
+
+	data, _ := os.ReadFile(auditPath)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 audit line, got %d", len(lines))
+	}
+}
+
+func TestDo_DryRun_AuditLogging(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.log")
+	logger, err := audit.NewLogger(auditPath)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	te.Client.AuditLogger = logger
+	te.Client.DryRun = true
+	te.Client.Operation = "issue delete"
+
+	te.Client.Do(context.Background(), "DELETE", "/rest/api/3/issue/TEST-1", nil, nil)
+	logger.Close()
+
+	data, _ := os.ReadFile(auditPath)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 audit line for dry-run, got %d", len(lines))
+	}
+
+	var entry map[string]interface{}
+	json.Unmarshal([]byte(lines[0]), &entry)
+	if entry["dry_run"] != true {
+		t.Error("expected dry_run=true in audit entry")
+	}
+}
