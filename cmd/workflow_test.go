@@ -27,6 +27,9 @@ func TestHandWrittenSchemaOps_ContainsTransitionAndAssign(t *testing.T) {
 	if !found["workflow assign"] {
 		t.Error("HandWrittenSchemaOps missing 'workflow assign'")
 	}
+	if !found["workflow comment"] {
+		t.Error("HandWrittenSchemaOps missing 'workflow comment'")
+	}
 }
 
 // newTransitionCmd creates a workflow transition command with flags and client context.
@@ -43,6 +46,15 @@ func newAssignCmd(c *client.Client) *cobra.Command {
 	cmd := &cobra.Command{Use: "assign", RunE: runAssign}
 	cmd.Flags().String("issue", "", "")
 	cmd.Flags().String("to", "", "")
+	cmd.SetContext(client.NewContext(context.Background(), c))
+	return cmd
+}
+
+// newCommentCmd creates a workflow comment command with flags and client context.
+func newCommentCmd(c *client.Client) *cobra.Command {
+	cmd := &cobra.Command{Use: "comment", RunE: runComment}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("text", "", "")
 	cmd.SetContext(client.NewContext(context.Background(), c))
 	return cmd
 }
@@ -338,5 +350,70 @@ func TestRunAssign_UnassignHTTPError(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	if err == nil {
 		t.Fatal("expected error when PUT assignee fails")
+	}
+}
+
+func TestRunComment_DryRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://unused", &stdout, &stderr)
+	c.DryRun = true
+
+	cmd := newCommentCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("text", "This is done")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "POST") {
+		t.Errorf("expected POST in dry-run output, got: %s", output)
+	}
+	if !strings.Contains(output, "PROJ-1") {
+		t.Errorf("expected issue key in dry-run output, got: %s", output)
+	}
+}
+
+func TestRunComment_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" && strings.Contains(r.URL.Path, "/comment") {
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprintln(w, `{"id":"10001"}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+
+	cmd := newCommentCmd(c)
+	_ = cmd.Flags().Set("issue", "PROJ-1")
+	_ = cmd.Flags().Set("text", "This is done")
+
+	err := cmd.RunE(cmd, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "commented") {
+		t.Errorf("expected 'commented' in output, got: %s", output)
+	}
+}
+
+func TestRunComment_NoClient(t *testing.T) {
+	cmd := &cobra.Command{Use: "comment", RunE: runComment}
+	cmd.Flags().String("issue", "", "")
+	cmd.Flags().String("text", "", "")
+	cmd.SetContext(context.Background()) // context without client
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when no client in context")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sofq/jira-cli/cmd/generated"
+	"github.com/sofq/jira-cli/internal/adf"
 	"github.com/sofq/jira-cli/internal/client"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
@@ -240,7 +241,7 @@ func executeBatchOp(
 	}
 
 	// Hand-written commands have custom execution logic.
-	if bop.Command == "workflow transition" || bop.Command == "workflow assign" {
+	if strings.HasPrefix(bop.Command, "workflow ") {
 		exitCode := executeBatchWorkflow(cmd.Context(), opClient, bop)
 		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 	}
@@ -287,24 +288,45 @@ func executeBatchOp(
 	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 }
 
-// executeBatchWorkflow runs workflow transition or assign as a batch operation.
+// batchValidationError writes a validation error to the client's stderr and returns ExitValidation.
+func batchValidationError(c *client.Client, message string) int {
+	apiErr := &jrerrors.APIError{
+		ErrorType: "validation_error",
+		Message:   message,
+	}
+	apiErr.WriteJSON(c.Stderr)
+	return jrerrors.ExitValidation
+}
+
+// executeBatchWorkflow runs workflow commands (transition, assign, comment) as a batch operation.
 func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) int {
 	issueKey := bop.Args["issue"]
-	to := bop.Args["to"]
+	if issueKey == "" {
+		return batchValidationError(c, "workflow commands require an 'issue' arg")
+	}
 
-	if issueKey == "" || to == "" {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "validation_error",
-			Message:   "workflow commands require 'issue' and 'to' args",
+	switch bop.Command {
+	case "workflow transition":
+		to := bop.Args["to"]
+		if to == "" {
+			return batchValidationError(c, "workflow transition requires a 'to' arg")
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitValidation
-	}
-
-	if bop.Command == "workflow transition" {
 		return batchTransition(ctx, c, issueKey, to)
+	case "workflow assign":
+		to := bop.Args["to"]
+		if to == "" {
+			return batchValidationError(c, "workflow assign requires a 'to' arg")
+		}
+		return batchAssign(ctx, c, issueKey, to)
+	case "workflow comment":
+		text := bop.Args["text"]
+		if text == "" {
+			return batchValidationError(c, "workflow comment requires a 'text' arg")
+		}
+		return batchComment(ctx, c, issueKey, text)
+	default:
+		return batchValidationError(c, fmt.Sprintf("unknown workflow command %q", bop.Command))
 	}
-	return batchAssign(ctx, c, issueKey, to)
 }
 
 // batchTransition executes a workflow transition within a batch operation.
@@ -376,6 +398,32 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	}
 
 	out, _ := marshalNoEscape(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
+	return c.WriteOutput(out)
+}
+
+// batchComment executes a workflow comment within a batch operation.
+func batchComment(ctx context.Context, c *client.Client, issueKey, text string) int {
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+			"note":   fmt.Sprintf("would add comment to %s", issueKey),
+		})
+		return c.WriteOutput(out)
+	}
+
+	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
+	_, code := c.Fetch(ctx, "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+		bytes.NewReader(commentBody))
+	if code != jrerrors.ExitOK {
+		return code
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "commented",
+		"issue":  issueKey,
+	})
 	return c.WriteOutput(out)
 }
 

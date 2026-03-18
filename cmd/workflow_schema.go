@@ -31,5 +31,17 @@ func HandWrittenSchemaOps() []generated.SchemaOp {
 				{Name: "to", Required: true, Type: "string", Description: "assignee: display name, email, 'me', 'none', or 'unassign'", In: "custom"},
 			},
 		},
+		{
+			Resource: "workflow",
+			Verb:     "comment",
+			Method:   "POST",
+			Path:     "/rest/api/3/issue/{issueIdOrKey}/comment",
+			Summary:  "Add a plain-text comment to an issue (converted to ADF automatically)",
+			HasBody:  false,
+			Flags: []generated.SchemaFlag{
+				{Name: "issue", Required: true, Type: "string", Description: "issue key (e.g. PROJ-123)", In: "custom"},
+				{Name: "text", Required: true, Type: "string", Description: "comment text (plain text, converted to ADF)", In: "custom"},
+			},
+		},
 	}
 }

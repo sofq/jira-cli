@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sofq/jira-cli/internal/adf"
 	"github.com/sofq/jira-cli/internal/client"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
@@ -16,7 +17,7 @@ import (
 
 var workflowCmd = &cobra.Command{
 	Use:   "workflow",
-	Short: "High-level workflow commands (transition, assign)",
+	Short: "High-level workflow commands (transition, assign, comment)",
 }
 
 var transitionCmd = &cobra.Command{
@@ -33,6 +34,13 @@ var assignCmd = &cobra.Command{
 	RunE:  runAssign,
 }
 
+var commentCmd = &cobra.Command{
+	Use:   "comment",
+	Short: "Add a plain-text comment to an issue",
+	Long:  "Posts a comment to a Jira issue. The --text value is converted to Atlassian Document Format automatically.",
+	RunE:  runComment,
+}
+
 func init() {
 	transitionCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
 	_ = transitionCmd.MarkFlagRequired("issue")
@@ -44,8 +52,14 @@ func init() {
 	assignCmd.Flags().String("to", "", "assignee: display name, email, 'me', 'none', or 'unassign'")
 	_ = assignCmd.MarkFlagRequired("to")
 
+	commentCmd.Flags().String("issue", "", "issue key (e.g. PROJ-123)")
+	_ = commentCmd.MarkFlagRequired("issue")
+	commentCmd.Flags().String("text", "", "comment text (plain text, converted to ADF)")
+	_ = commentCmd.MarkFlagRequired("text")
+
 	workflowCmd.AddCommand(transitionCmd)
 	workflowCmd.AddCommand(assignCmd)
+	workflowCmd.AddCommand(commentCmd)
 }
 
 // transitionMatch holds a matched transition's ID and name.
@@ -280,6 +294,48 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"status": "assigned",
 		"issue":  issueKey,
 		"to":     to,
+	})
+	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
+}
+
+func runComment(cmd *cobra.Command, args []string) error {
+	c, err := client.FromContext(cmd.Context())
+	if err != nil {
+		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: err.Error()}
+		apiErr.WriteJSON(os.Stderr)
+		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	issueKey, _ := cmd.Flags().GetString("issue")
+	text, _ := cmd.Flags().GetString("text")
+
+	// Respect --dry-run: emit the request details without executing.
+	if c.DryRun {
+		out, _ := marshalNoEscape(map[string]string{
+			"method": "POST",
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+			"note":   fmt.Sprintf("would add comment to %s", issueKey),
+		})
+		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
+			return &jrerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	}
+
+	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
+	_, exitCode := c.Fetch(cmd.Context(), "POST",
+		fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+		bytes.NewReader(commentBody))
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+
+	out, _ := marshalNoEscape(map[string]string{
+		"status": "commented",
+		"issue":  issueKey,
 	})
 	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
