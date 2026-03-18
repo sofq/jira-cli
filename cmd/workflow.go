@@ -147,7 +147,7 @@ type transitionMatch struct {
 // Returns the matched transition or writes an error to c.Stderr and returns a non-zero exit code.
 func resolveTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) (*transitionMatch, int) {
 	transitionsBody, exitCode := c.Fetch(ctx, "GET",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey), nil)
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)), nil)
 	if exitCode != jrerrors.ExitOK {
 		return nil, exitCode
 	}
@@ -276,7 +276,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
@@ -293,7 +293,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	// Execute transition. Use c.Fetch to avoid c.Do() writing "{}" to stdout.
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, exitCode = c.Fetch(cmd.Context(), "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
@@ -326,7 +326,7 @@ func runMove(cmd *cobra.Command, args []string) error {
 	if c.DryRun {
 		dryOut := map[string]any{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		}
 		if assign != "" {
@@ -346,7 +346,7 @@ func runMove(cmd *cobra.Command, args []string) error {
 
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, exitCode = c.Fetch(cmd.Context(), "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
@@ -367,7 +367,7 @@ func runMove(cmd *cobra.Command, args []string) error {
 		if isUnassign {
 			assignBody := `{"accountId":null}`
 			_, code = c.Fetch(cmd.Context(), "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				strings.NewReader(assignBody))
 			if code != jrerrors.ExitOK {
 				return &jrerrors.AlreadyWrittenError{Code: code}
@@ -376,7 +376,7 @@ func runMove(cmd *cobra.Command, args []string) error {
 		} else {
 			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 			_, code = c.Fetch(cmd.Context(), "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				bytes.NewReader(marshaledAssign))
 			if code != jrerrors.ExitOK {
 				return &jrerrors.AlreadyWrittenError{Code: code}
@@ -407,7 +407,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "PUT",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
@@ -424,7 +424,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	if isUnassign {
 		assignBody := `{"accountId":null}`
 		_, exitCode := c.Fetch(cmd.Context(), "PUT",
-			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			strings.NewReader(assignBody))
 		if exitCode != jrerrors.ExitOK {
 			return &jrerrors.AlreadyWrittenError{Code: exitCode}
@@ -441,7 +441,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	_, exitCode = c.Fetch(cmd.Context(), "PUT",
-		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 		bytes.NewReader(marshaledAssign))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
@@ -664,7 +664,7 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]any{
 			"method":           "POST",
-			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 			"timeSpentSeconds": seconds,
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
@@ -682,7 +682,7 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 
 	body, _ := json.Marshal(worklogBody)
 	_, exitCode := c.Fetch(cmd.Context(), "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 		bytes.NewReader(body))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}
@@ -844,7 +844,7 @@ func runComment(cmd *cobra.Command, args []string) error {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would add comment to %s", issueKey),
 		})
 		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
@@ -855,7 +855,7 @@ func runComment(cmd *cobra.Command, args []string) error {
 
 	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
 	_, exitCode := c.Fetch(cmd.Context(), "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 		bytes.NewReader(commentBody))
 	if exitCode != jrerrors.ExitOK {
 		return &jrerrors.AlreadyWrittenError{Code: exitCode}

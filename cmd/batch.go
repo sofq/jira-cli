@@ -372,7 +372,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
 		return c.WriteOutput(out)
@@ -385,7 +385,7 @@ func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus s
 
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, code = c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
 	if code != jrerrors.ExitOK {
 		return code
@@ -404,7 +404,7 @@ func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign
 	if c.DryRun {
 		dryOut := map[string]any{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		}
 		if assign != "" {
@@ -421,7 +421,7 @@ func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign
 
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
 	_, code = c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
 	if code != jrerrors.ExitOK {
 		return code
@@ -442,7 +442,7 @@ func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign
 		if isUnassign {
 			assignBody := `{"accountId":null}`
 			_, code = c.Fetch(ctx, "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				strings.NewReader(assignBody))
 			if code != jrerrors.ExitOK {
 				return code
@@ -451,7 +451,7 @@ func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign
 		} else {
 			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 			_, code = c.Fetch(ctx, "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				bytes.NewReader(marshaledAssign))
 			if code != jrerrors.ExitOK {
 				return code
@@ -469,7 +469,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "PUT",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
 		return c.WriteOutput(out)
@@ -483,7 +483,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 	if isUnassign {
 		assignBody := `{"accountId":null}`
 		_, code := c.Fetch(ctx, "PUT",
-			fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+			fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			strings.NewReader(assignBody))
 		if code != jrerrors.ExitOK {
 			return code
@@ -494,7 +494,7 @@ func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
 	_, code = c.Fetch(ctx, "PUT",
-		fmt.Sprintf("/rest/api/3/issue/%s/assignee", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 		bytes.NewReader(marshaledAssign))
 	if code != jrerrors.ExitOK {
 		return code
@@ -509,7 +509,7 @@ func batchComment(ctx context.Context, c *client.Client, issueKey, text string) 
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would add comment to %s", issueKey),
 		})
 		return c.WriteOutput(out)
@@ -517,7 +517,7 @@ func batchComment(ctx context.Context, c *client.Client, issueKey, text string) 
 
 	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
 	_, code := c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/comment", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 		bytes.NewReader(commentBody))
 	if code != jrerrors.ExitOK {
 		return code
@@ -669,7 +669,7 @@ func batchLogWork(ctx context.Context, c *client.Client, issueKey, timeStr, comm
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]any{
 			"method":           "POST",
-			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 			"timeSpentSeconds": seconds,
 		})
 		return c.WriteOutput(out)
@@ -684,7 +684,7 @@ func batchLogWork(ctx context.Context, c *client.Client, issueKey, timeStr, comm
 
 	body, _ := json.Marshal(worklogBody)
 	_, code := c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/worklog", issueKey),
+		fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 		bytes.NewReader(body))
 	if code != jrerrors.ExitOK {
 		return code

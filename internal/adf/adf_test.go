@@ -2,6 +2,7 @@ package adf
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -12,13 +13,13 @@ func TestFromText_SingleLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(data)
-	if !contains(s, `"type":"doc"`) {
+	if !strings.Contains(s, `"type":"doc"`) {
 		t.Errorf("expected doc type, got: %s", s)
 	}
-	if !contains(s, `"version":1`) {
+	if !strings.Contains(s, `"version":1`) {
 		t.Errorf("expected version 1, got: %s", s)
 	}
-	if !contains(s, `"Hello world"`) {
+	if !strings.Contains(s, `"Hello world"`) {
 		t.Errorf("expected text content, got: %s", s)
 	}
 }
@@ -48,15 +49,3 @@ func TestFromText_RoundTrip(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && containsHelper(s, substr)
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
