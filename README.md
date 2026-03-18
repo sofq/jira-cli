@@ -1,394 +1,158 @@
-# jr — Jira CLI built for AI agents
+<p align="center">
+  <h1 align="center">jr</h1>
+  <p align="center"><strong>The Jira CLI that speaks JSON — built for AI agents</strong></p>
+</p>
 
-[![CI](https://github.com/sofq/jira-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/sofq/jira-cli/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/sofq/jira-cli/graph/badge.svg)](https://codecov.io/gh/sofq/jira-cli)
-[![Security](https://github.com/sofq/jira-cli/actions/workflows/security.yml/badge.svg)](https://github.com/sofq/jira-cli/actions/workflows/security.yml)
-[![Release](https://github.com/sofq/jira-cli/actions/workflows/release.yml/badge.svg)](https://github.com/sofq/jira-cli/releases)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://www.npmjs.com/package/jira-jr"><img src="https://img.shields.io/npm/v/jira-jr?style=for-the-badge&logo=npm&logoColor=white&color=CB3837" alt="npm"></a>
+  <a href="https://github.com/sofq/jira-cli/releases"><img src="https://img.shields.io/github/v/release/sofq/jira-cli?style=for-the-badge&logo=github&logoColor=white&color=181717" alt="GitHub Release"></a>
+  <a href="https://github.com/sofq/jira-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/sofq/jira-cli/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI" alt="CI"></a>
+  <a href="https://codecov.io/gh/sofq/jira-cli"><img src="https://img.shields.io/codecov/c/github/sofq/jira-cli?style=for-the-badge&logo=codecov&logoColor=white" alt="codecov"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="License"></a>
+</p>
 
-**jr** gives AI agents (Claude Code, Cursor, Copilot, custom agents) reliable access to Jira. Every command returns structured JSON on stdout, errors as JSON on stderr, and semantic exit codes — so agents can parse, branch, and retry without guessing.
+<br>
 
-```bash
-# An agent can search, filter, and get exactly the tokens it needs
-jr search search-and-reconsile-issues-using-jql \
-  --jql "project = PROJ AND status = 'In Progress'" \
-  --fields key,summary,status \
-  --jq '[.issues[] | {key, summary: .fields.summary, status: .fields.status.name}]'
-```
+> Pure JSON stdout. Structured errors on stderr. Semantic exit codes. 600+ auto-generated commands from the Jira OpenAPI spec. Zero prompts, zero interactivity — just pipe and parse.
 
-## Why another Jira CLI?
-
-Most CLIs are built for humans — they print tables, prompt for input, and bury errors in prose. Agents need something different:
-
-| What agents need | What jr does |
-|-----------------|-------------|
-| Parseable output | Pure JSON on stdout, always |
-| Machine-readable errors | Structured JSON on stderr with `error_type`, `status`, `retry_after` |
-| Predictable exit codes | 0-7, each mapped to a specific failure class |
-| Token efficiency | `--preset`, `--jq`, and `--fields` to minimize response size |
-| No interactivity | Flag-driven, zero prompts, stdin/stdout clean |
-| Batch operations | `jr batch` executes N operations in one process |
-| Self-description | `jr schema` lets agents discover commands at runtime |
+---
 
 ## Install
 
-### Homebrew
-
 ```bash
-brew install sofq/tap/jr
+brew install sofq/tap/jr          # macOS / Linux
+npm install -g jira-jr            # Node
+pip install jira-jr               # Python
+scoop bucket add sofq https://github.com/sofq/scoop-bucket && scoop install jr  # Windows
+go install github.com/sofq/jira-cli@latest                                      # Go
 ```
-
-### npm
-
-```bash
-npm install -g jira-jr
-```
-
-### pip / uv
-
-```bash
-pip install jira-jr
-# or
-uv tool install jira-jr
-```
-
-### Scoop (Windows)
-
-```bash
-scoop bucket add sofq https://github.com/sofq/scoop-bucket
-scoop install jr
-```
-
-### Go
-
-```bash
-go install github.com/sofq/jira-cli@latest
-```
-
-### Docker
-
-```bash
-docker run --rm ghcr.io/sofq/jr version
-```
-
-### Binary
-
-Download from [GitHub Releases](https://github.com/sofq/jira-cli/releases).
 
 ## Quick start
 
 ```bash
-# 1. Configure (flag-driven, no prompts)
 jr configure --base-url https://yourorg.atlassian.net --token YOUR_API_TOKEN
+jr issue get --issueIdOrKey PROJ-123 --preset agent
+```
 
-# 2. Get an issue
-jr issue get --issueIdOrKey PROJ-123
+## Why agents love jr
 
-# 3. Filter to just what you need (saves agent context tokens)
-jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status --jq '{key: .key, summary: .fields.summary}'
+### Self-describing — no hardcoded command lists
+
+```bash
+jr schema                  # all resources and verbs
+jr schema issue get        # full flags for one operation
+```
+
+### Token-efficient — 10K tokens → 50
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 \
+  --fields key,summary --jq '{key: .key, summary: .fields.summary}'
+```
+
+`--preset`, `--fields`, and `--jq` stack so agents only consume what they need.
+
+### Workflow commands — no Jira internals
+
+Agents don't need to resolve transition IDs, account IDs, or sprint IDs:
+
+```bash
+jr workflow move --issue PROJ-123 --to "In Progress" --assign me
+jr workflow comment --issue PROJ-123 --text "Fixed in latest deploy"
+jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
+jr workflow log-work --issue PROJ-123 --time "2h 30m"
+jr workflow sprint --issue PROJ-123 --to "Sprint 5"
+```
+
+### Batch — N operations, one process
+
+```bash
+echo '[
+  {"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},
+  {"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}
+]' | jr batch
+```
+
+### Watch — NDJSON event stream
+
+```bash
+jr watch --jql "project = PROJ" --interval 30s --max-events 10
+```
+
+Events: `initial`, `created`, `updated`, `removed`.
+
+### Templates — structured issue creation
+
+```bash
+jr template apply bug-report --project PROJ --var summary="Login broken" --var severity=High
+jr template create my-template --from PROJ-123
+```
+
+Built-in: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`.
+
+### Diff — structured changelog
+
+```bash
+jr diff --issue PROJ-123 --since 2h --field status
+```
+
+### Error contract agents can branch on
+
+```json
+{"error_type":"rate_limited","status":429,"retry_after":30}
+```
+
+| Exit | Meaning | Agent action |
+|------|---------|-------------|
+| 0 | OK | Parse stdout |
+| 2 | Auth failed | Re-authenticate |
+| 3 | Not found | Check issue key |
+| 5 | Rate limited | Wait `retry_after` |
+| 7 | Server error | Retry with backoff |
+
+### Raw escape hatch
+
+```bash
+jr raw GET /rest/api/3/myself
+jr raw POST /rest/api/3/search/jql --body '{"jql":"project=PROJ"}'
 ```
 
 ## Agent integration
 
-### Claude Code skill
-
-A [Claude Code skill](skill/jira-cli/SKILL.md) is included in this repo. Copy it to your project or global skills directory to give Claude Code full knowledge of `jr` commands, patterns, and troubleshooting:
+### Claude Code skill (included)
 
 ```bash
-# Project-level
-cp -r skill/jira-cli .claude/skills/
-
-# Global (all projects)
-cp -r skill/jira-cli ~/.claude/skills/
+cp -r skill/jira-cli ~/.claude/skills/    # global
 ```
 
-### For Claude Code / Cursor / AI coding agents
+### Any agent
 
-Or simply add to your agent's instructions:
+Add to your agent's instructions:
 
 ```
 Use `jr` for all Jira operations. Output is always JSON.
-Use `jr schema` to discover available commands.
-Use --jq to filter responses and reduce token usage.
+Use `jr schema` to discover commands. Use --jq to reduce tokens.
 ```
-
-### Discover commands at runtime
-
-Agents don't need hardcoded command lists — they can discover everything:
-
-```bash
-jr schema                     # resource → verbs mapping (default, token-efficient)
-jr schema --list              # all resource names only
-jr schema issue               # all operations for 'issue' with flags
-jr schema issue get           # full schema for one operation
-```
-
-### Batch operations (one process, N calls)
-
-Agents can combine multiple operations to reduce subprocess overhead:
-
-```bash
-echo '[
-  {"command": "issue get", "args": {"issueIdOrKey": "PROJ-1"}, "jq": ".key"},
-  {"command": "issue get", "args": {"issueIdOrKey": "PROJ-2"}, "jq": ".key"},
-  {"command": "project search", "args": {}, "jq": "[.values[].key]"}
-]' | jr batch
-# → [{"index":0,"exit_code":0,"data":"PROJ-1"}, ...]
-```
-
-### Workflow commands (agents don't need to know Jira internals)
-
-High-level commands that resolve IDs automatically — agents don't need to look up transition IDs, account IDs, sprint IDs, or link type IDs:
-
-```bash
-# Transition by status name (resolves transition ID automatically)
-jr workflow transition --issue PROJ-123 --to "Done"
-
-# Assign by name or "me" (resolves account ID automatically)
-jr workflow assign --issue PROJ-123 --to "me"
-
-# Transition + assign in one step
-jr workflow move --issue PROJ-123 --to "In Progress" --assign me
-
-# Add a plain-text comment (auto-converted to ADF)
-jr workflow comment --issue PROJ-123 --text "Fixed in latest deploy"
-
-# Create issue from flags (no raw JSON needed)
-jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
-
-# Link issues by type name
-jr workflow link --from PROJ-1 --to PROJ-2 --type blocks
-
-# Log work with human-friendly duration
-jr workflow log-work --issue PROJ-123 --time "2h 30m" --comment "Debugging"
-
-# Move issue to sprint by name
-jr workflow sprint --issue PROJ-123 --to "Sprint 5"
-```
-
-### Watch for changes (autonomous agents)
-
-Stream Jira changes as NDJSON for autonomous monitoring agents:
-
-```bash
-# Poll a JQL query every 30s, emit change events
-jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
-
-# Watch a single issue
-jr watch --issue PROJ-123 --interval 10s
-
-# Stop after 10 events, use a preset for output shaping
-jr watch --jql "assignee = currentUser()" --max-events 10 --preset triage
-```
-
-Events: `initial` (first poll), `created`, `updated`, `removed`. Graceful shutdown on Ctrl-C.
-
-### Issue templates (standardized creation)
-
-Pre-built and user-defined templates for common issue creation patterns — agents don't need to construct field JSON:
-
-```bash
-# List available templates
-jr template list
-
-# Show a template's variables and fields
-jr template show bug-report
-
-# Create an issue from a template
-jr template apply bug-report --project PROJ \
-  --var summary="Login broken" --var severity=High --var steps="1. Click login"
-
-# Create a template from an existing issue
-jr template create my-template --from PROJ-123
-```
-
-Built-in templates: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`. User-defined templates are stored in `~/.config/jr/templates/`.
-
-### Diff / Changelog
-
-Show what changed on an issue as structured JSON — useful for monitoring agents and audit workflows.
-
-```bash
-# All changes
-jr diff --issue PROJ-123
-
-# Changes in last 2 hours
-jr diff --issue PROJ-123 --since 2h
-
-# Changes since a specific date
-jr diff --issue PROJ-123 --since 2025-01-01
-
-# Only status changes
-jr diff --issue PROJ-123 --field status
-```
-
-Output:
-
-```json
-{
-  "issue": "PROJ-123",
-  "changes": [
-    {
-      "timestamp": "2025-03-18T10:30:00Z",
-      "author": "john@example.com",
-      "field": "status",
-      "from": "To Do",
-      "to": "In Progress"
-    }
-  ]
-}
-```
-
-### Error handling for agents
-
-Every error is a JSON object on stderr with a typed `error_type` agents can branch on:
-
-```json
-{
-  "error_type": "rate_limited",
-  "status": 429,
-  "message": "...",
-  "hint": "You are being rate limited. Wait before retrying.",
-  "retry_after": 30,
-  "request": {"method": "GET", "path": "/rest/api/3/issue/X-1"}
-}
-```
-
-| Exit code | Meaning | Agent action |
-|-----------|---------|-------------|
-| 0 | Success | Parse stdout |
-| 1 | General error | Log and report |
-| 2 | Auth failed | Re-authenticate |
-| 3 | Not found | Check issue key |
-| 4 | Validation error | Fix request body |
-| 5 | Rate limited | Wait `retry_after` seconds |
-| 6 | Conflict | Retry or resolve |
-| 7 | Server error | Retry with backoff |
-
-### Token efficiency
-
-Jira responses can be 10K+ tokens for a single issue. jr helps agents stay within context budgets:
-
-```bash
-# Full response: ~10,000 tokens
-jr issue get --issueIdOrKey PROJ-123
-
-# With --preset: agent-friendly field set
-jr issue get --issueIdOrKey PROJ-123 --preset agent
-
-# With --fields: ~500 tokens
-jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
-
-# With --fields + --jq: ~50 tokens
-jr issue get --issueIdOrKey PROJ-123 --fields key,summary --jq '{key: .key, summary: .fields.summary}'
-
-# Cache read-heavy data to avoid redundant API calls
-jr project search --cache 5m --jq '[.values[].key]'
-```
-
-## 600+ commands, auto-generated
-
-Commands are generated from the [official Jira OpenAPI v3 spec](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/). A daily CI job detects spec drift and opens PRs automatically — so jr stays in sync with Jira's API.
-
-```bash
-jr issue get --issueIdOrKey PROJ-1
-jr issue create-issue --body '{"fields":{...}}'
-jr project search --jq '[.values[] | {key, name}]'
-jr search search-and-reconsile-issues-using-jql --jql "assignee = currentUser()"
-jr raw GET /rest/api/3/myself              # escape hatch for any endpoint
-jr raw POST /path --body '{"key":"val"}'  # POST/PUT/PATCH require --body
-echo '{}' | jr raw POST /path --body -    # read body from stdin with --body -
-```
-
-## Configuration
-
-Resolved in priority order: **CLI flags > env vars > config file**
-
-```bash
-# Env vars (great for CI/agents)
-export JR_BASE_URL=https://yourorg.atlassian.net
-export JR_AUTH_TOKEN=your-api-token
-
-# Config file (supports named profiles)
-jr configure --base-url https://work.atlassian.net --token TOKEN --profile work
-jr issue get --profile work --issueIdOrKey PROJ-1
-jr configure --profile work --delete   # remove a profile
-
-# Auth types: basic (default), bearer, oauth2
-jr configure --base-url https://yourorg.atlassian.net --auth-type bearer --token TOKEN
-```
-
-## Global flags
-
-| Flag | Description |
-|------|-------------|
-| `--preset <name>` | Named output preset (`agent`, `detail`, `triage`, `board`) |
-| `--jq <expr>` | jq filter applied to response |
-| `--fields <list>` | Comma-separated fields to return (GET only) |
-| `--cache <duration>` | Cache GET responses (e.g. `5m`, `1h`) |
-| `--pretty` | Pretty-print JSON output |
-| `--no-paginate` | Disable automatic pagination |
-| `--dry-run` | Print request as JSON without executing |
-| `--verbose` | Log HTTP details to stderr as JSON |
-| `--timeout <duration>` | HTTP request timeout (default `30s`) |
-| `--profile <name>` | Use a named config profile |
-| `--audit` | Enable audit logging for this invocation |
-| `--audit-file <path>` | Audit log file path (implies `--audit`) |
 
 ## Security
 
-### Operation policy (per profile)
-
-Restrict which operations a profile can execute via `allowed_operations` or `denied_operations` in the config file:
+**Operation policies** — restrict per profile with glob patterns:
 
 ```json
-{
-  "profiles": {
-    "agent": {
-      "base_url": "https://yourorg.atlassian.net",
-      "auth": {"type": "basic", "token": "..."},
-      "allowed_operations": ["issue get", "search *", "workflow *"]
-    },
-    "readonly": {
-      "base_url": "https://yourorg.atlassian.net",
-      "auth": {"type": "basic", "token": "..."},
-      "denied_operations": ["* delete*", "bulk *", "raw *"]
-    }
-  }
-}
+{"allowed_operations": ["issue get", "search *", "workflow *"]}
 ```
 
-- Use one or the other, not both. Patterns use glob matching (`*` = any sequence).
-- `allowed_operations`: implicit deny-all, only matching ops run.
-- `denied_operations`: implicit allow-all, only matching ops blocked.
+**Audit logging** — JSONL to `~/.config/jr/audit.log` via `--audit` flag or per-profile config.
 
-### Batch limits
-
-Default max batch size is 50. Override with `--max-batch N` on the `batch` command.
-
-### Audit logging
-
-Enable per-profile (`"audit_log": true` in config) or per-invocation (`--audit` flag).
-Logs to `~/.config/jr/audit.log` (JSONL format). Override path with `--audit-file`.
+**Batch limits** — default 50, override with `--max-batch N`.
 
 ## Development
 
 ```bash
-make generate    # regenerate commands from OpenAPI spec
-make build       # build binary
-make test        # run all tests (unit + conformance + e2e)
-make lint        # run golangci-lint
-make spec-update # fetch latest Jira OpenAPI spec
+make generate    # regenerate from OpenAPI spec
+make build && make test && make lint
 ```
-
-## Acknowledgments
-
-jr is built on these excellent libraries:
-
-- [cobra](https://github.com/spf13/cobra) — CLI framework
-- [libopenapi](https://github.com/pb33f/libopenapi) — OpenAPI spec parsing that powers auto-generated commands
-- [gojq](https://github.com/itchyny/gojq) — Pure Go jq implementation for the `--jq` flag
-- [Restish](https://github.com/rest-sh/restish) — Inspiration for the "CLI generated from OpenAPI" approach
 
 ## License
 
