@@ -61,6 +61,10 @@ func readCacheFile(path string) oauth2CacheFile {
 	return f
 }
 
+// openTempFile creates a temp file for atomic writes. Tests can override this
+// to return a file whose Write or Close will fail.
+var openTempFile = os.CreateTemp
+
 // writeCacheFile serialises f and atomically replaces the cache file at path.
 // Atomic replacement (write to temp + rename) prevents a concurrent reader
 // from seeing a partially-written file.
@@ -70,7 +74,7 @@ func writeCacheFile(path string, f oauth2CacheFile) error {
 	data, _ := json.Marshal(f)
 	// Write to a unique temp file in the same directory then rename for atomicity.
 	// Using os.CreateTemp avoids torn writes when multiple jr processes run concurrently.
-	tmp, err := os.CreateTemp(filepath.Dir(path), "oauth2_tokens_*.json")
+	tmp, err := openTempFile(filepath.Dir(path), "oauth2_tokens_*.json")
 	if err != nil {
 		return err
 	}

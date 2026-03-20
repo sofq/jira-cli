@@ -830,6 +830,38 @@ func (e *fakeDirEntry) IsDir() bool                { return false }
 func (e *fakeDirEntry) Type() fs.FileMode          { return 0 }
 func (e *fakeDirEntry) Info() (fs.FileInfo, error)  { return nil, nil }
 
+// TestSave_OverwriteWriteError verifies that Save with overwrite=true propagates
+// errors from os.WriteFile when the directory is read-only.
+func TestSave_OverwriteWriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	tmpl := &Template{
+		Name:      "test",
+		IssueType: "Task",
+		Fields:    map[string]string{"summary": "{{.summary}}"},
+	}
+
+	// First save succeeds (creates the file and directory).
+	_, err := Save(tmpl, false)
+	if err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+
+	// Make the directory read-only so overwrite WriteFile fails.
+	if err := os.Chmod(tmpDir, 0o444); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0o755) })
+
+	_, err = Save(tmpl, true)
+	if err == nil {
+		t.Fatal("expected error writing to read-only directory with overwrite, got nil")
+	}
+}
+
 // TestLoadBuiltinTemplates_ReadFileErrorFromFS verifies that loadBuiltinTemplates
 // returns an error when a builtin .yaml file is listed in the directory but
 // cannot be read (fs.ReadFile fails).

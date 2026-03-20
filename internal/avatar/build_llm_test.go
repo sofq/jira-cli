@@ -256,6 +256,18 @@ func TestBuildLLM_CommandKilled(t *testing.T) {
 	}
 }
 
+// TestBuildLLM_UnclosedQuoteInCmd verifies that BuildLLM returns an error
+// when the llmCmd string has an unclosed quote (shellSplit error branch).
+func TestBuildLLM_UnclosedQuoteInCmd(t *testing.T) {
+	_, err := avatar.BuildLLM(minimalExtraction(), `cmd "unclosed`, nil)
+	if err == nil {
+		t.Fatal("expected error for unclosed quote in llmCmd, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid llmCmd") {
+		t.Errorf("expected 'invalid llmCmd' in error, got: %v", err)
+	}
+}
+
 // TestBuildLLM_OverridesApplied verifies that key=value overrides are stored
 // in profile.Overrides after a successful build.
 func TestBuildLLM_OverridesApplied(t *testing.T) {

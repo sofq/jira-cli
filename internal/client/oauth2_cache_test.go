@@ -189,6 +189,35 @@ func TestReadCacheFile_CorruptJSON(t *testing.T) {
 	}
 }
 
+// TestWriteCacheFile_TmpWriteError verifies that writeCacheFile returns an
+// error when tmp.Write fails (read-only file descriptor).
+func TestWriteCacheFile_TmpWriteError(t *testing.T) {
+	dir := t.TempDir()
+	targetPath := filepath.Join(dir, "cache.json")
+
+	orig := openTempFile
+	openTempFile = func(dir, pattern string) (*os.File, error) {
+		// Create a real temp file for its name, then reopen read-only.
+		realTmp, err := os.CreateTemp(dir, pattern)
+		if err != nil {
+			return nil, err
+		}
+		tmpName := realTmp.Name()
+		realTmp.Close()
+		ro, err := os.Open(tmpName)
+		if err != nil {
+			return nil, err
+		}
+		return ro, nil
+	}
+	defer func() { openTempFile = orig }()
+
+	err := writeCacheFile(targetPath, oauth2CacheFile{"k": {Token: "t", ExpiresAt: time.Now().Add(time.Hour)}})
+	if err == nil {
+		t.Fatal("expected error from Write to read-only fd, got nil")
+	}
+}
+
 // TestOAuth2Cache_TTLClamping verifies that when expiresIn-60 <= 0, the TTL is
 // clamped to 1 second so the token is still written and retrievable immediately.
 // With expiresIn=30, ttl = 30-60 = -30 which clamps to 1s.
