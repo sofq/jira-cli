@@ -63,6 +63,7 @@ var rootCmd = &cobra.Command{
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		outputFormat, _ := cmd.Flags().GetString("format")
+		retryCount, _ := cmd.Flags().GetInt("retry")
 
 		// Expand --preset into --fields and --jq defaults.
 		// Explicit --fields or --jq flags take precedence over preset values.
@@ -188,6 +189,7 @@ var rootCmd = &cobra.Command{
 			Fields:      fields,
 			CacheTTL:    cacheTTL,
 			Format:      outputFormat,
+			MaxRetries:  retryCount,
 			AuditLogger: auditLogger,
 			Profile:     resolved.ProfileName,
 			Operation:   operation,
@@ -217,6 +219,7 @@ func init() {
 	pf.String("preset", "", "named output preset (expands to --fields and --jq defaults)")
 	pf.Bool("audit", false, "enable audit logging for this invocation")
 	pf.String("audit-file", "", "path to audit log file (implies --audit)")
+	pf.Int("retry", 0, "number of retries for transient errors (429, 5xx)")
 	pf.String("format", "", "additional output format written to stderr: table or csv")
 
 	// Override --version template to output JSON.

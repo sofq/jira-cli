@@ -18,6 +18,7 @@ import (
 	"github.com/sofq/jira-cli/internal/format"
 	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/sofq/jira-cli/internal/policy"
+	"github.com/sofq/jira-cli/internal/retry"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )
@@ -41,6 +42,7 @@ type Client struct {
 	Fields     string        // --fields comma-separated field names for GET
 	CacheTTL   time.Duration // --cache duration; 0 means no caching
 	Format     string        // --format additional output format to stderr: "table" or "csv"
+	MaxRetries int           // 0 = no retries (default)
 
 	// Security fields
 	AuditLogger *audit.Logger  // nil means no audit logging
@@ -215,6 +217,7 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 }
 
 // doOnce performs a single HTTP request and writes the response to Stdout.
+// When MaxRetries > 0, transient errors (429, 5xx) are retried with exponential backoff.
 func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body io.Reader) int {
 	// Cache check for GET requests.
 	// Use explicit --cache TTL when set; fall back to metadata preset TTL for
@@ -233,69 +236,150 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-
-	req.Header.Set("Accept", "application/json")
+	// Buffer the request body so it can be re-read on retries.
+	var bodyBytes []byte
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if err := c.ApplyAuth(req); err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "auth_error",
-			Status:    0,
-			Message:   err.Error(),
-			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Status:    0,
+				Message:   "reading request body: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitError
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitAuth
 	}
 
-	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   err.Error(),
+	// attemptRequest performs one HTTP round-trip.
+	attemptRequest := func() ([]byte, int, int, time.Duration, bool) {
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-	defer resp.Body.Close()
 
-	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   "reading response body: " + err.Error(),
+		req, err := http.NewRequestWithContext(ctx, method, rawURL, reqBody)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
+
+		req.Header.Set("Accept", "application/json")
+		if reqBody != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		if err := c.ApplyAuth(req); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "auth_error",
+				Message:   err.Error(),
+				Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitAuth, 0, false
+		}
+
+		c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
+		}
+		defer resp.Body.Close()
+
+		c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "reading response body: " + err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
+		}
+
+		if resp.StatusCode >= 400 {
+			if c.MaxRetries > 0 && retry.ShouldRetryStatus(resp.StatusCode) {
+				var retryAfter time.Duration
+				if resp.StatusCode == http.StatusTooManyRequests {
+					if ra := resp.Header.Get("Retry-After"); ra != "" {
+						if secs, parseErr := time.ParseDuration(ra + "s"); parseErr == nil {
+							retryAfter = secs
+						}
+					}
+				}
+				return respBody, resp.StatusCode, jrerrors.ExitRateLimit, retryAfter, true
+			}
+			apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
+			apiErr.WriteJSON(c.Stderr)
+			c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
+			return nil, resp.StatusCode, apiErr.ExitCode(), 0, false
+		}
+
+		return respBody, resp.StatusCode, jrerrors.ExitOK, 0, false
 	}
 
-	// HTTP error (>=400): write structured error to stderr.
-	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
-		apiErr.WriteJSON(c.Stderr)
-		c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
-		return apiErr.ExitCode()
+	if c.MaxRetries > 0 {
+		var finalBody []byte
+		var finalStatus int
+		var finalCode int
+
+		retryErr := retry.Do(func() error {
+			respBody, status, code, retryAfter, isRetryable := attemptRequest()
+			if isRetryable {
+				return &retry.RetryableError{
+					Err:        fmt.Errorf("HTTP %d", status),
+					RetryAfter: retryAfter,
+				}
+			}
+			finalBody = respBody
+			finalStatus = status
+			finalCode = code
+			return nil
+		}, retry.Config{
+			MaxRetries: c.MaxRetries,
+			BaseDelay:  time.Second,
+		})
+
+		if retryErr != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "rate_limited",
+				Message:   retryErr.Error(),
+				Hint:      fmt.Sprintf("Request failed after %d retries", c.MaxRetries),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			c.auditLog(method, path, 0, jrerrors.ExitRateLimit)
+			return jrerrors.ExitRateLimit
+		}
+
+		if finalCode != jrerrors.ExitOK {
+			return finalCode
+		}
+
+		if len(finalBody) == 0 || finalStatus == http.StatusNoContent {
+			finalBody = []byte("{}")
+		}
+
+		if cacheKey != "" {
+			if err := cache.Set(cacheKey, finalBody); err != nil {
+				c.VerboseLog(map[string]any{"type": "warning", "message": "cache write failed: " + err.Error()})
+			}
+		}
+
+		exitCode := c.WriteOutput(finalBody)
+		c.auditLog(method, path, finalStatus, exitCode)
+		return exitCode
+	}
+
+	// No retry path: single attempt.
+	respBody, status, code, _, _ := attemptRequest()
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	// HTTP 204 No Content — emit empty JSON object to maintain JSON-only contract.
-	if len(respBody) == 0 || resp.StatusCode == http.StatusNoContent {
+	if len(respBody) == 0 || status == http.StatusNoContent {
 		respBody = []byte("{}")
 	}
 
@@ -307,7 +391,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 
 	exitCode := c.WriteOutput(respBody)
-	c.auditLog(method, path, resp.StatusCode, exitCode)
+	c.auditLog(method, path, status, exitCode)
 	return exitCode
 }
 
