@@ -149,6 +149,32 @@ func TestOAuth2Cache_AtomicWrite(t *testing.T) {
 	}
 }
 
+// TestWriteCacheFile_WriteError verifies that writeCacheFile returns an error
+// when the parent directory does not exist.
+func TestWriteCacheFile_WriteError(t *testing.T) {
+	badPath := filepath.Join(t.TempDir(), "nonexistent", "subdir", "cache.json")
+	err := writeCacheFile(badPath, oauth2CacheFile{"k": {Token: "t", ExpiresAt: time.Now().Add(time.Hour)}})
+	if err == nil {
+		t.Fatal("expected error writing to non-existent dir, got nil")
+	}
+}
+
+// TestWriteCacheFile_RenameError verifies that writeCacheFile returns an error
+// when the tmp file cannot be renamed (destination is a directory).
+func TestWriteCacheFile_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	// Create a directory where the final cache file should go so that rename
+	// from the .tmp file to the target path fails (can't rename file over dir).
+	targetPath := filepath.Join(dir, "cache.json")
+	if err := os.Mkdir(targetPath, 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	err := writeCacheFile(targetPath, oauth2CacheFile{"k": {Token: "t", ExpiresAt: time.Now().Add(time.Hour)}})
+	if err == nil {
+		t.Fatal("expected error when rename target is a directory, got nil")
+	}
+}
+
 // TestOAuth2Cache_TTLClamping verifies that when expiresIn-60 <= 0, the TTL is
 // clamped to 1 second so the token is still written and retrievable immediately.
 // With expiresIn=30, ttl = 30-60 = -30 which clamps to 1s.

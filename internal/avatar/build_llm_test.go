@@ -3,6 +3,7 @@ package avatar_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sofq/jira-cli/internal/avatar"
@@ -226,6 +227,32 @@ func TestBuildLLM_InvalidOverride(t *testing.T) {
 	_, err := avatar.BuildLLM(minimalExtraction(), script, []string{"no-equals-sign"})
 	if err == nil {
 		t.Error("expected error for override without '=', got nil")
+	}
+}
+
+// TestBuildLLM_CommandKilled verifies that BuildLLM returns an error (not a
+// timeout error) when the command exits with a non-zero status due to a signal.
+// This exercises the c.Run() error path when ctx.Err() is NOT DeadlineExceeded.
+//
+// Note: the context.DeadlineExceeded branch inside BuildLLM (the "timed out
+// after 5m" message) cannot be reached in a unit test without waiting 5 minutes
+// or refactoring BuildLLM to accept an injectable context. The two observable
+// error paths are: (a) command not found, and (b) command exits with error —
+// both of which flow through the non-deadline branch tested here.
+func TestBuildLLM_CommandKilled(t *testing.T) {
+	dir := t.TempDir()
+	// Script that exits with a non-zero status to simulate a runtime failure.
+	script := filepath.Join(dir, "fail.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	_, err := avatar.BuildLLM(minimalExtraction(), script, nil)
+	if err == nil {
+		t.Fatal("expected error for script that exits 1, got nil")
+	}
+	if !strings.Contains(err.Error(), "llm command failed") {
+		t.Errorf("expected error to contain 'llm command failed', got: %v", err)
 	}
 }
 

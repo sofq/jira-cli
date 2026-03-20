@@ -532,6 +532,93 @@ func TestBuild_EngineFromConfig(t *testing.T) {
 	}
 }
 
+// TestBuildLocal_ReplyBias_OwnIssues verifies the first reply-bias branch:
+// when RepliesToOwnIssuesPct > 0.5, the interaction text mentions own issues.
+func TestBuildLocal_ReplyBias_OwnIssues(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "ownuser",
+			DisplayName: "Own User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime:       "1h",
+				RepliesToOwnIssuesPct: 0.8,
+				RepliesToOthersPct:    0.2,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "own issues") {
+		t.Errorf("expected 'own issues' in Interaction for RepliesToOwnIssuesPct=0.8, got: %s",
+			profile.StyleGuide.Interaction)
+	}
+}
+
+// TestBuildLocal_ReplyBias_OthersIssues verifies the second reply-bias branch:
+// when RepliesToOthersPct > 0.5, the interaction text mentions others' issues.
+func TestBuildLocal_ReplyBias_OthersIssues(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "engager",
+			DisplayName: "Engager User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime:       "2h",
+				RepliesToOwnIssuesPct: 0.2,
+				RepliesToOthersPct:    0.9,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "Engager User") {
+		t.Errorf("expected display name in Interaction section, got: %s", profile.StyleGuide.Interaction)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "90") {
+		t.Errorf("expected percentage '90' in Interaction for RepliesToOthersPct=0.9, got: %s",
+			profile.StyleGuide.Interaction)
+	}
+}
+
+// TestBuildLocal_ReplyBias_Neither verifies that when neither pct > 0.5,
+// no reply-bias sentence is emitted.
+func TestBuildLocal_ReplyBias_Neither(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{
+			User:        "balanced",
+			DisplayName: "Balanced User",
+		},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{
+				MedianReplyTime:       "3h",
+				RepliesToOwnIssuesPct: 0.5,
+				RepliesToOthersPct:    0.5,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	// Neither branch triggers — Balanced User should appear (from MedianReplyTime line)
+	// but neither "own issues" nor "others' issues" phrasing should appear.
+	if strings.Contains(profile.StyleGuide.Interaction, "own issues") {
+		t.Errorf("did not expect 'own issues' when RepliesToOwnIssuesPct=0.5: %s",
+			profile.StyleGuide.Interaction)
+	}
+	if strings.Contains(profile.StyleGuide.Interaction, "others' issues") {
+		t.Errorf("did not expect 'others' issues' when RepliesToOthersPct=0.5: %s",
+			profile.StyleGuide.Interaction)
+	}
+}
+
 func TestBuild_LLMRequiresCmd(t *testing.T) {
 	extraction := makeTestExtraction()
 	avatarCfg := &config.AvatarConfig{}

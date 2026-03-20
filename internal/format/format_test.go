@@ -242,3 +242,58 @@ func TestCSV_NonObjectElementsInArray(t *testing.T) {
 		t.Errorf("expected 'Bob' in output:\n%s", got)
 	}
 }
+
+func TestCSV_MixedTypes(t *testing.T) {
+	// Rows with nested objects, arrays, null values, and booleans.
+	input := []byte(`[
+		{"key":"A","nested":{"x":1},"tags":["go","test"],"active":true,"score":null},
+		{"key":"B","nested":{"x":2},"tags":["alpha"],"active":false,"score":42}
+	]`)
+	out, err := format.CSV(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "key") {
+		t.Errorf("expected 'key' column in output:\n%s", got)
+	}
+	if !strings.Contains(got, "A") {
+		t.Errorf("expected 'A' in output:\n%s", got)
+	}
+	if !strings.Contains(got, "B") {
+		t.Errorf("expected 'B' in output:\n%s", got)
+	}
+	// Nested object should be stringified (contains JSON-encoded form).
+	if !strings.Contains(got, "x") {
+		t.Errorf("expected nested key 'x' stringified in output:\n%s", got)
+	}
+	// Array should be stringified.
+	if !strings.Contains(got, "go") {
+		t.Errorf("expected array element 'go' stringified in output:\n%s", got)
+	}
+}
+
+func TestCSV_NonObjectRows(t *testing.T) {
+	// Array containing non-object primitives mixed with one real object.
+	// Non-objects produce empty data rows (unmarshal fails, row stays blank).
+	// The important invariants: no error is returned, the header reflects only
+	// the keys of the object rows, and "value" appears somewhere in the output.
+	input := []byte(`[42, true, null, "just a string", {"col":"value"}]`)
+	out, err := format.CSV(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(out)
+	lines := strings.Split(got, "\n")
+	if len(lines) < 1 {
+		t.Fatalf("expected at least 1 line, got 0")
+	}
+	// Header must contain the key from the object row.
+	if lines[0] != "col" {
+		t.Errorf("expected header 'col', got: %q", lines[0])
+	}
+	// The value from the object row must appear somewhere.
+	if !strings.Contains(got, "value") {
+		t.Errorf("expected 'value' somewhere in output:\n%s", got)
+	}
+}

@@ -405,6 +405,27 @@ func TestExtractJargon_DifferentFrequencies(t *testing.T) {
 	}
 }
 
+// TestAnalyzeComments_HeadingDetection verifies that comments containing markdown
+// headings (# H1, ## H2, ### H3) are correctly detected by the heading regex,
+// causing Formatting.UsesHeadings to be non-zero.
+func TestAnalyzeComments_HeadingDetection(t *testing.T) {
+	comments := []string{
+		"# Top-level heading\nSome content under this heading.",
+		"## Section heading\nMore details here.",
+		"### Sub-section\nFinal notes.",
+		"No heading at all in this comment.",
+	}
+	got := AnalyzeComments(comments)
+	if got.Formatting.UsesHeadings == 0 {
+		t.Errorf("UsesHeadings = 0, expected non-zero for comments with markdown headings")
+	}
+	// 3 out of 4 comments have headings → ratio should be 0.75.
+	want := 0.75
+	if got.Formatting.UsesHeadings != want {
+		t.Errorf("UsesHeadings = %f, want %f", got.Formatting.UsesHeadings, want)
+	}
+}
+
 // TestDetectSignOffs verifies that common sign-off patterns at end of comments are detected.
 func TestDetectSignOffs(t *testing.T) {
 	comments := []string{
