@@ -15,6 +15,7 @@ import (
 	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/format"
 	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/sofq/jira-cli/internal/policy"
 	"github.com/spf13/cobra"
@@ -39,6 +40,7 @@ type Client struct {
 	Pretty     bool      // pretty-print JSON
 	Fields     string        // --fields comma-separated field names for GET
 	CacheTTL   time.Duration // --cache duration; 0 means no caching
+	Format     string        // --format additional output format to stderr: "table" or "csv"
 
 	// Security fields
 	AuditLogger *audit.Logger  // nil means no audit logging
@@ -99,8 +101,17 @@ func (c *Client) ApplyAuth(req *http.Request) error {
 	return nil
 }
 
-// fetchOAuth2Token performs a client_credentials grant and returns the access token.
+// fetchOAuth2Token performs a client_credentials grant and returns the access
+// token.  It checks the file-based cache before making a network request and
+// stores a successful response back into the cache.
 func (c *Client) fetchOAuth2Token() (string, error) {
+	cacheKey := oauth2CacheKey(c.Auth.TokenURL, c.Auth.ClientID)
+
+	// Cache hit — return without a network call.
+	if tok, ok := getToken(cacheKey); ok {
+		return tok, nil
+	}
+
 	data := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {c.Auth.ClientID},
@@ -123,10 +134,21 @@ func (c *Client) fetchOAuth2Token() (string, error) {
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return "", fmt.Errorf("oauth2 token response decode failed: %w", err)
 	}
+
+	expiresIn := tokenResp.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 3600
+	}
+
+	// Best-effort cache write — a write failure must not prevent the request
+	// from succeeding.
+	_ = setToken(cacheKey, tokenResp.AccessToken, expiresIn)
+
 	return tokenResp.AccessToken, nil
 }
 
@@ -195,10 +217,16 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 // doOnce performs a single HTTP request and writes the response to Stdout.
 func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body io.Reader) int {
 	// Cache check for GET requests.
+	// Use explicit --cache TTL when set; fall back to metadata preset TTL for
+	// well-known low-churn endpoints (e.g. /rest/api/3/project).
 	var cacheKey string
-	if c.CacheTTL > 0 && method == "GET" {
+	cacheTTL := c.CacheTTL
+	if cacheTTL == 0 && method == "GET" {
+		cacheTTL = cache.MetadataTTL(path)
+	}
+	if cacheTTL > 0 && method == "GET" {
 		cacheKey = cache.Key(method, rawURL, c.cacheAuthContext())
-		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
+		if data, ok := cache.Get(cacheKey, cacheTTL); ok {
 			exitCode := c.WriteOutput(data)
 			c.auditLog(method, path, 0, exitCode)
 			return exitCode
@@ -659,6 +687,9 @@ func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader)
 
 // WriteOutput applies optional JQ filtering and pretty-printing, then writes
 // the final JSON bytes to Stdout. Returns an exit code.
+//
+// If Format is set ("table" or "csv"), the formatted output is also written to
+// Stderr so that the JSON-only stdout contract is preserved.
 func (c *Client) WriteOutput(data []byte) int {
 	// Apply JQ filter.
 	if c.JQFilter != "" {
@@ -680,6 +711,30 @@ func (c *Client) WriteOutput(data []byte) int {
 		data = pretty.Pretty(data)
 	}
 
+	// JSON always goes to stdout.
 	fmt.Fprintf(c.Stdout, "%s\n", strings.TrimRight(string(data), "\n"))
+
+	// Apply additional format and write to stderr (preserves JSON stdout contract).
+	if c.Format != "" {
+		var (
+			formatted []byte
+			err       error
+		)
+		switch strings.ToLower(c.Format) {
+		case "table":
+			formatted, err = format.Table(data)
+		case "csv":
+			formatted, err = format.CSV(data)
+		default:
+			err = fmt.Errorf("unknown format %q: supported values are \"table\" and \"csv\"", c.Format)
+		}
+		if err != nil {
+			// Format errors are non-fatal: warn on stderr as plain text.
+			fmt.Fprintf(c.Stderr, "format warning: %s\n", err.Error())
+		} else if len(formatted) > 0 {
+			fmt.Fprintf(c.Stderr, "%s\n", formatted)
+		}
+	}
+
 	return jrerrors.ExitOK
 }

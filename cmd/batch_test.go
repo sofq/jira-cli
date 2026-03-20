@@ -3285,6 +3285,7 @@ func newBatchCmd(c *client.Client) *cobra.Command {
 	cmd := &cobra.Command{Use: "batch", RunE: runBatch}
 	cmd.Flags().String("input", "", "")
 	cmd.Flags().Int("max-batch", 50, "")
+	cmd.Flags().Int("parallel", 0, "")
 	cmd.SetContext(client.NewContext(context.Background(), c))
 	return cmd
 }
@@ -4049,4 +4050,99 @@ func TestBatchTemplateApply_LookupError(t *testing.T) {
 	if code != jrerrors.ExitError {
 		t.Errorf("expected ExitError for lookup failure, got %d", code)
 	}
+}
+
+// TestRunBatch_Parallel verifies that --parallel produces the same results as
+// sequential execution and preserves index ordering in the output array.
+func TestRunBatch_Parallel(t *testing.T) {
+	// Set up a test server that returns the issue key as JSON.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract the issue key from the path, e.g. /rest/api/3/issue/PROJ-1
+		parts := strings.Split(r.URL.Path, "/")
+		key := parts[len(parts)-1]
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"key":%q,"fields":{}}`, key)
+	}))
+	defer ts.Close()
+
+	// Build a batch with several issue-get operations.
+	keys := []string{"PROJ-1", "PROJ-2", "PROJ-3", "PROJ-4", "PROJ-5"}
+	type batchEntry struct {
+		Command string            `json:"command"`
+		Args    map[string]string `json:"args"`
+	}
+	entries := make([]batchEntry, len(keys))
+	for i, k := range keys {
+		entries[i] = batchEntry{Command: "issue get", Args: map[string]string{"issueIdOrKey": k}}
+	}
+	opsJSON, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatalf("failed to marshal ops: %v", err)
+	}
+
+	tmp := t.TempDir()
+	inputFile := filepath.Join(tmp, "ops.json")
+	if err := os.WriteFile(inputFile, opsJSON, 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	// Run sequential first to get the reference output.
+	seqOut := runBatchWithParallel(t, ts.URL, inputFile, 0)
+
+	// Run parallel with concurrency = 3 and compare.
+	parOut := runBatchWithParallel(t, ts.URL, inputFile, 3)
+
+	var seqResults, parResults []BatchResult
+	if err := json.Unmarshal([]byte(strings.TrimSpace(seqOut)), &seqResults); err != nil {
+		t.Fatalf("sequential output not valid JSON: %s", seqOut)
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(parOut)), &parResults); err != nil {
+		t.Fatalf("parallel output not valid JSON: %s", parOut)
+	}
+
+	if len(seqResults) != len(keys) {
+		t.Fatalf("expected %d sequential results, got %d", len(keys), len(seqResults))
+	}
+	if len(parResults) != len(keys) {
+		t.Fatalf("expected %d parallel results, got %d", len(keys), len(parResults))
+	}
+
+	// Verify index ordering and exit codes match.
+	for i := range seqResults {
+		if seqResults[i].Index != i {
+			t.Errorf("sequential result[%d] has wrong index %d", i, seqResults[i].Index)
+		}
+		if parResults[i].Index != i {
+			t.Errorf("parallel result[%d] has wrong index %d", i, parResults[i].Index)
+		}
+		if seqResults[i].ExitCode != parResults[i].ExitCode {
+			t.Errorf("result[%d] exit_code mismatch: sequential=%d parallel=%d",
+				i, seqResults[i].ExitCode, parResults[i].ExitCode)
+		}
+		// Both should have non-empty data containing the expected key.
+		if !strings.Contains(string(parResults[i].Data), keys[i]) {
+			t.Errorf("parallel result[%d] data does not contain key %q: %s",
+				i, keys[i], parResults[i].Data)
+		}
+	}
+}
+
+// runBatchWithParallel is a helper that runs the batch command with the given
+// parallelism level and returns the captured stdout.
+func runBatchWithParallel(t *testing.T, serverURL, inputFile string, parallel int) string {
+	t.Helper()
+	var clientStdout, clientStderr bytes.Buffer
+	c := newTestClient(serverURL, &clientStdout, &clientStderr)
+
+	cmd := newBatchCmd(c)
+	_ = cmd.Flags().Set("input", inputFile)
+	if parallel > 0 {
+		_ = cmd.Flags().Set("parallel", fmt.Sprintf("%d", parallel))
+	}
+
+	return captureStdout(t, func() {
+		if err := cmd.RunE(cmd, nil); err != nil {
+			t.Logf("runBatch returned error (may be non-fatal): %v", err)
+		}
+	})
 }

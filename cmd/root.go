@@ -26,6 +26,8 @@ var skipClientCommands = map[string]bool{
 	"help":       true,
 	"schema":     true,
 	"preset":     true,
+	"doctor":     true,
+	"explain":    true,
 }
 
 var rootCmd = &cobra.Command{
@@ -60,6 +62,7 @@ var rootCmd = &cobra.Command{
 		fields, _ := cmd.Flags().GetString("fields")
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
+		outputFormat, _ := cmd.Flags().GetString("format")
 
 		// Expand --preset into --fields and --jq defaults.
 		// Explicit --fields or --jq flags take precedence over preset values.
@@ -184,6 +187,7 @@ var rootCmd = &cobra.Command{
 			Pretty:      pretty,
 			Fields:      fields,
 			CacheTTL:    cacheTTL,
+			Format:      outputFormat,
 			AuditLogger: auditLogger,
 			Profile:     resolved.ProfileName,
 			Operation:   operation,
@@ -213,6 +217,7 @@ func init() {
 	pf.String("preset", "", "named output preset (expands to --fields and --jq defaults)")
 	pf.Bool("audit", false, "enable audit logging for this invocation")
 	pf.String("audit-file", "", "path to audit log file (implies --audit)")
+	pf.String("format", "", "additional output format written to stderr: table or csv")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")

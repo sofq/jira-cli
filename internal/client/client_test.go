@@ -1991,6 +1991,11 @@ func TestFetchPage_ConnectionError_Pagination(t *testing.T) {
 
 // TestFetchPage_AuthError covers line 520-529: auth fails on a pagination page fetch.
 func TestFetchPage_AuthError(t *testing.T) {
+	// Disable the OAuth2 file cache for this test by redirecting to /dev/null.
+	// This ensures every fetchOAuth2Token call hits the token server so the
+	// second call can return an empty token and trigger the auth error.
+	client.SetOAuth2CacheFileForTest(t, os.DevNull)
+
 	callCount := 0
 	var tokenCallCount int
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
