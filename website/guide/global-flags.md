@@ -20,6 +20,10 @@ All persistent flags listed here can be used with any `jr` command. They control
 | `--verbose` | | `bool` | `false` | Log HTTP request/response details to stderr |
 | `--dry-run` | | `bool` | `false` | Print the request as JSON without executing it |
 | `--timeout` | | `duration` | `30s` | HTTP request timeout |
+| `--retry` | | `int` | `0` | Retry transient errors (429, 5xx) with exponential backoff |
+| `--parallel` | | `int` | `0` | Concurrent operations in batch (default 0 = sequential) |
+| `--format` | | `string` | `""` | Additional output format to stderr: `table` or `csv` |
+| `--max-batch` | | `int` | `50` | Max operations per batch (batch command only) |
 | `--audit` | | `bool` | `false` | Enable audit logging for this invocation |
 | `--audit-file` | | `string` | `""` | Path to audit log file (implies `--audit`) |
 
@@ -279,6 +283,77 @@ jr search search-and-reconsile-issues-using-jql \
 # Short timeout for quick checks
 jr raw GET /rest/api/3/myself --timeout 5s
 ```
+
+### `--retry`
+
+**Type:** `int`
+**Default:** `0` (no retry)
+
+Retry transient errors (HTTP 429 and 5xx) with exponential backoff. The value specifies the maximum number of retry attempts. Works with any command.
+
+```bash
+# Retry up to 3 times on transient failures
+jr issue get --issueIdOrKey PROJ-123 --retry 3
+
+# Combine with timeout
+jr search search-and-reconsile-issues-using-jql \
+  --jql "project = PROJ" --retry 5 --timeout 1m
+```
+
+::: tip
+Use `--retry` for agent workflows to handle intermittent 429 (rate limited) or 503 (service unavailable) responses automatically, without implementing custom backoff logic.
+:::
+
+---
+
+### `--parallel`
+
+**Type:** `int`
+**Default:** `0` (sequential)
+
+Set the number of concurrent operations when using `jr batch`. A value of `0` means operations run sequentially. Only applies to the `batch` command.
+
+```bash
+# Run up to 5 batch operations concurrently
+echo '[...]' | jr batch --parallel 5
+```
+
+---
+
+### `--format`
+
+**Type:** `string`
+**Default:** `""` (no additional output)
+
+Render output as a human-readable table or CSV to stderr, in addition to the standard JSON on stdout. Accepted values: `table`, `csv`.
+
+```bash
+# Human-readable table on stderr, JSON still on stdout
+jr project search --format table
+
+# CSV on stderr
+jr project search --format csv
+```
+
+::: tip
+Since the formatted output goes to stderr and JSON goes to stdout, you can redirect them independently. Agents can parse stdout while displaying the table to a user.
+:::
+
+---
+
+### `--max-batch`
+
+**Type:** `int`
+**Default:** `50`
+
+Maximum number of operations allowed in a single `jr batch` call. Override this to increase or decrease the limit. Only applies to the `batch` command.
+
+```bash
+# Allow up to 100 operations in one batch
+echo '[...]' | jr batch --max-batch 100
+```
+
+---
 
 ### `--audit`
 

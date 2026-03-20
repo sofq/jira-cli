@@ -95,6 +95,15 @@ jr diff --issue PROJ-123 --since 2h                # changes in last 2 hours
 jr diff --issue PROJ-123 --since 2025-01-01        # changes since date
 jr diff --issue PROJ-123 --field status            # only status changes
 
+# Avatar — user style profiling
+jr avatar extract                                  # extract Jira activity data for current user
+jr avatar build                                    # build profile from extracted data
+jr avatar prompt                                   # output profile as agent-consumable prompt text
+jr avatar show                                     # display the current profile (YAML)
+jr avatar edit                                     # open profile in $EDITOR
+jr avatar refresh                                  # re-extract and rebuild in one step
+jr avatar status                                   # show extraction/build status
+
 # Full issue context in one call (issue + comments + changelog)
 jr context PROJ-123
 jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
@@ -135,6 +144,8 @@ jr preset list                # list available output presets
 jr template list              # list available issue templates
 jr template show <name>       # show a template's variables and fields
 jr diff --issue <key>         # show changelog for an issue
+jr avatar status              # check avatar profile status
+jr avatar prompt              # get avatar profile for agent use
 ```
 
 ## Global Flags

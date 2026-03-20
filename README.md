@@ -71,7 +71,7 @@ jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 echo '[
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}
-]' | jr batch
+]' | jr batch --parallel 5
 ```
 
 ### Watch — NDJSON event stream
@@ -96,6 +96,46 @@ Built-in: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`.
 ```bash
 jr diff --issue PROJ-123 --since 2h --field status
 ```
+
+### Context — full issue in one call
+
+```bash
+jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
+```
+
+Issue fields + comments + changelog in a single invocation.
+
+### Pipe — chain commands
+
+```bash
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ'" "issue get"
+jr pipe "project search" "project get" --extract "[.values[].key]" --inject projectIdOrKey --parallel 5
+```
+
+### Retry & resilience
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 --retry 3      # exponential backoff on 429/5xx
+jr project search --format table                     # human-readable table on stderr
+jr project search --format csv                       # CSV on stderr, JSON on stdout
+```
+
+### Doctor & Explain
+
+```bash
+jr doctor                                            # check config, auth, connectivity
+jr explain '{"error_type":"auth_failed","status":401,"message":"..."}'  # remediation advice
+```
+
+### Avatar — user style profiling
+
+```bash
+jr avatar extract && jr avatar build    # analyze Jira activity
+jr avatar prompt                        # output profile for agent consumption
+jr avatar show                          # display profile
+```
+
+Analyzes writing patterns, workflow habits, and interactions to build behavioral profiles.
 
 ### Error contract agents can branch on
 

@@ -173,6 +173,71 @@ jr diff --issue PROJ-123 --since 2025-01-01
 jr diff --issue PROJ-123 --field status
 ```
 
+### Context — full issue context in one call
+```bash
+# Fetches issue fields, comments, and changelog in a single CLI invocation
+jr context PROJ-123
+jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
+```
+
+### Doctor — health check
+```bash
+# Check config, auth, and connectivity
+jr doctor
+jr doctor --profile staging
+```
+
+Output is JSON: `{"status":"healthy","checks":[{"name":"config","status":"pass","message":"..."},...]}`
+
+### Explain — error remediation
+```bash
+# Parse a jr error JSON and get remediation advice
+jr explain '{"error_type":"auth_failed","status":401,"message":"..."}'
+echo '{"error_type":"rate_limited",...}' | jr explain
+```
+
+Output is JSON with causes, fixes, retryable flag, and exit code.
+
+### Pipe — command chaining
+```bash
+# Execute source, extract values, run target for each value
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ'" "issue get"
+jr pipe "project search" "project get" --extract "[.values[].key]" --inject projectIdOrKey
+jr pipe "search ..." "workflow transition --to Done" --parallel 5
+```
+
+### Retry — automatic retry with backoff
+```bash
+# Retry transient errors (429, 5xx) with exponential backoff
+jr issue get --issueIdOrKey PROJ-123 --retry 3
+```
+
+### Parallel batch
+```bash
+# Run batch operations concurrently
+echo '[...]' | jr batch --parallel 5
+```
+
+### Table/CSV output
+```bash
+# Human-readable output to stderr (JSON still goes to stdout)
+jr project search --format table
+jr project search --format csv
+```
+
+### Avatar — user style profiling
+```bash
+jr avatar extract     # extract Jira activity data for current user
+jr avatar build       # build profile from extracted data
+jr avatar prompt      # output profile as agent-consumable prompt text
+jr avatar show        # display the current profile (YAML)
+jr avatar edit        # open profile in $EDITOR
+jr avatar refresh     # re-extract and rebuild in one step
+jr avatar status      # show extraction/build status
+```
+
+Avatar analyzes Jira activity (writing patterns, workflow habits, interactions) to build behavioral profiles that agents can use to adapt to the user's working style.
+
 ### List projects
 ```bash
 jr project search --jq '[.values[] | {key, name}]'
@@ -277,6 +342,10 @@ Example error output:
 | `--profile <name>` | use a named config profile |
 | `--audit` | enable audit logging for this invocation |
 | `--audit-file <path>` | audit log file path (implies --audit) |
+| `--max-batch <N>` | max operations per batch (default 50, batch command only) |
+| `--retry <N>` | retry transient errors (429, 5xx) with exponential backoff |
+| `--parallel <N>` | concurrent operations in batch (default 0 = sequential) |
+| `--format <type>` | additional output format to stderr: `table` or `csv` |
 
 ## Security
 
