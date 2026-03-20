@@ -148,3 +148,42 @@ func TestOAuth2Cache_AtomicWrite(t *testing.T) {
 		t.Fatalf("expected .tmp file to be removed after atomic write, stat err: %v", err)
 	}
 }
+
+// TestOAuth2Cache_TTLClamping verifies that when expiresIn-60 <= 0, the TTL is
+// clamped to 1 second so the token is still written and retrievable immediately.
+// With expiresIn=30, ttl = 30-60 = -30 which clamps to 1s.
+func TestOAuth2Cache_TTLClamping(t *testing.T) {
+	redirectCacheDir(t)
+
+	const key = "clamped-key"
+	const token = "short-lived-token"
+
+	// expiresIn=30 → ttl = 30-60 = -30 → clamped to 1s.
+	if err := setToken(key, token, 30); err != nil {
+		t.Fatalf("setToken with expiresIn=30: %v", err)
+	}
+
+	// Token should be retrievable immediately (TTL=1s has not elapsed yet).
+	got, ok := getToken(key)
+	if !ok {
+		t.Fatal("expected cache hit immediately after setToken with clamped TTL, got miss")
+	}
+	if got != token {
+		t.Fatalf("expected token %q, got %q", token, got)
+	}
+
+	// Verify the expiry is within a reasonable window: between now and now+2s.
+	path := oauth2CacheFilePath()
+	f := readCacheFile(path)
+	entry, ok := f[key]
+	if !ok {
+		t.Fatal("expected entry in cache file")
+	}
+	now := time.Now()
+	if entry.ExpiresAt.Before(now) {
+		t.Errorf("expected ExpiresAt to be in the future, got %v (now=%v)", entry.ExpiresAt, now)
+	}
+	if entry.ExpiresAt.After(now.Add(2 * time.Second)) {
+		t.Errorf("expected ExpiresAt to be within ~1s from now, got %v (now=%v)", entry.ExpiresAt, now)
+	}
+}

@@ -117,6 +117,37 @@ func TestAnalyzeTransitions_Empty(t *testing.T) {
 	}
 }
 
+// TestAnalyzeTransitions_DifferentSequenceFrequencies exercises the sort
+// comparison body inside AnalyzeTransitions where seqList[i].count >
+// seqList[j].count evaluates to true (i.e. two sequences have different counts).
+// We produce two distinct sequences: one appearing twice and one appearing once,
+// so the sort must order them by count descending.
+func TestAnalyzeTransitions_DifferentSequenceFrequencies(t *testing.T) {
+	entries := []ChangelogEntry{
+		// PROJ-1: Todo -> In Progress -> Done  (sequence A, count 1)
+		{Issue: "PROJ-1", Timestamp: "2024-01-01T09:00:00Z", Author: "alice", Field: "status", From: "Todo", To: "In Progress"},
+		{Issue: "PROJ-1", Timestamp: "2024-01-03T09:00:00Z", Author: "alice", Field: "status", From: "In Progress", To: "Done"},
+		// PROJ-2: Todo -> In Progress -> Done  (sequence A again, count 2)
+		{Issue: "PROJ-2", Timestamp: "2024-01-01T10:00:00Z", Author: "alice", Field: "status", From: "Todo", To: "In Progress"},
+		{Issue: "PROJ-2", Timestamp: "2024-01-02T10:00:00Z", Author: "alice", Field: "status", From: "In Progress", To: "Done"},
+		// PROJ-3: Open -> Review -> Closed  (sequence B, count 1)
+		{Issue: "PROJ-3", Timestamp: "2024-01-05T09:00:00Z", Author: "alice", Field: "status", From: "Open", To: "Review"},
+		{Issue: "PROJ-3", Timestamp: "2024-01-06T09:00:00Z", Author: "alice", Field: "status", From: "Review", To: "Closed"},
+	}
+
+	result := AnalyzeTransitions(entries)
+
+	// There should be at least one sequence in commonSequences.
+	if len(result.CommonSequences) == 0 {
+		t.Fatal("expected at least one common sequence")
+	}
+	// The first sequence should be the higher-frequency one (Todo->In Progress->Done).
+	first := result.CommonSequences[0]
+	if len(first) < 3 || first[0] != "Todo" || first[1] != "In Progress" || first[2] != "Done" {
+		t.Errorf("expected highest-frequency sequence [Todo In Progress Done] first, got %v", first)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestAnalyzeFieldPreferences
 // ---------------------------------------------------------------------------

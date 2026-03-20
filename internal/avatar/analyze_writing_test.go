@@ -341,6 +341,70 @@ func TestExtractCommonPhrases_MaxCap(t *testing.T) {
 	}
 }
 
+// TestAnalyzeComments_MediumLength covers the default/medium branch (21-79 words)
+// in the length distribution switch inside AnalyzeComments.
+func TestAnalyzeComments_MediumLength(t *testing.T) {
+	// Build a comment with 40 words — falls in the medium bucket (21-79).
+	words := make([]string, 40)
+	for i := range words {
+		words[i] = "word"
+	}
+	mediumComment := strings.Join(words, " ")
+	got := AnalyzeComments([]string{mediumComment})
+	if got.LengthDist.MediumPct != 1.0 {
+		t.Errorf("LengthDist.MediumPct = %f, want 1.0 for 40-word comment", got.LengthDist.MediumPct)
+	}
+	if got.LengthDist.ShortPct != 0 {
+		t.Errorf("LengthDist.ShortPct = %f, want 0", got.LengthDist.ShortPct)
+	}
+	if got.LengthDist.LongPct != 0 {
+		t.Errorf("LengthDist.LongPct = %f, want 0", got.LengthDist.LongPct)
+	}
+}
+
+// TestExtractJargon_DifferentFrequencies covers the sort comparison branch in
+// extractJargon where two candidates have different counts (count != count),
+// triggering the return inside the if block.
+func TestExtractJargon_DifferentFrequencies(t *testing.T) {
+	// "kubernetes" appears in 4 comments (count=4); "deployment" appears in 3 (count=3).
+	// Both exceed the threshold of 3, so both are candidates. The sort will compare
+	// their counts, which differ — exercising the inner return branch.
+	comments := []string{
+		"kubernetes deployment config",
+		"kubernetes deployment setup",
+		"kubernetes cluster setup",
+		"kubernetes networking issue",
+	}
+	jargon := extractJargon(comments)
+	if len(jargon) == 0 {
+		t.Fatal("expected jargon words, got none")
+	}
+	// kubernetes appears 4 times, deployment appears 2 times (below threshold of 3),
+	// so only kubernetes should appear. Let's use a case where both exceed threshold.
+	// Re-create with deployment in 3 comments and kubernetes in 4.
+	comments2 := []string{
+		"kubernetes deployment config",
+		"kubernetes deployment setup",
+		"kubernetes deployment service",
+		"kubernetes networking issue",
+	}
+	jargon2 := extractJargon(comments2)
+	found := make(map[string]bool)
+	for _, j := range jargon2 {
+		found[j] = true
+	}
+	if !found["kubernetes"] {
+		t.Errorf("expected 'kubernetes' in jargon, got %v", jargon2)
+	}
+	if !found["deployment"] {
+		t.Errorf("expected 'deployment' in jargon (appears 3 times), got %v", jargon2)
+	}
+	// kubernetes (count=4) must come before deployment (count=3) in sorted order.
+	if len(jargon2) >= 2 && jargon2[0] != "kubernetes" {
+		t.Errorf("expected 'kubernetes' first (higher frequency), got %q", jargon2[0])
+	}
+}
+
 // TestDetectSignOffs verifies that common sign-off patterns at end of comments are detected.
 func TestDetectSignOffs(t *testing.T) {
 	comments := []string{

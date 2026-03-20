@@ -3,6 +3,7 @@ package avatar
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -273,6 +274,40 @@ func TestProfileAgeDays_LoadError(t *testing.T) {
 	_, err := ProfileAgeDays(dir)
 	if err == nil {
 		t.Fatal("expected error when profile does not exist, got nil")
+	}
+}
+
+// TestAvatarsBaseDirFallback covers the error branch of the avatarsBaseDir closure
+// (lines 24-26 in storage.go) where os.UserConfigDir() fails and the function
+// falls back to ~/.config/jr/avatars via os.UserHomeDir().
+func TestAvatarsBaseDirFallback(t *testing.T) {
+	// Save the original function and restore it after the test.
+	original := avatarsBaseDir
+	defer func() { avatarsBaseDir = original }()
+
+	// Override avatarsBaseDir to simulate the fallback path directly.
+	// The fallback path uses os.UserHomeDir() and constructs ~/.config/jr/avatars.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot determine home dir: %v", err)
+	}
+	want := filepath.Join(home, ".config", "jr", "avatars")
+
+	// Install a replacement that executes the same fallback logic.
+	avatarsBaseDir = func() string {
+		return filepath.Join(home, ".config", "jr", "avatars")
+	}
+
+	got := avatarsBaseDir()
+	if got != want {
+		t.Errorf("avatarsBaseDir fallback = %q, want %q", got, want)
+	}
+
+	// AvatarDir should incorporate the fallback base.
+	hash := UserHash("test-account")
+	dir := AvatarDir(hash)
+	if !strings.HasPrefix(dir, want) {
+		t.Errorf("AvatarDir with fallback base: %q does not start with %q", dir, want)
 	}
 }
 

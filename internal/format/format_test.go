@@ -208,3 +208,37 @@ func TestCSV_HeadersSortedAlphabetically(t *testing.T) {
 		t.Errorf("expected header 'a,m,z', got: %q", lines[0])
 	}
 }
+
+func TestTable_NonObjectElementsInArray(t *testing.T) {
+	input := []byte(`[1, "hello", {"name":"Alice","score":99}]`)
+	out, err := format.Table(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "name") {
+		t.Errorf("expected 'name' column header in output:\n%s", got)
+	}
+	if !strings.Contains(got, "Alice") {
+		t.Errorf("expected 'Alice' in output:\n%s", got)
+	}
+}
+
+func TestCSV_NonObjectElementsInArray(t *testing.T) {
+	input := []byte(`[1, "hello", {"name":"Bob","score":42}]`)
+	out, err := format.CSV(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(out)
+	lines := strings.Split(got, "\n")
+	if len(lines) < 1 {
+		t.Fatalf("expected at least 1 line, got 0")
+	}
+	if lines[0] != "name,score" {
+		t.Errorf("expected header 'name,score', got: %q", lines[0])
+	}
+	if !strings.Contains(got, "Bob") {
+		t.Errorf("expected 'Bob' in output:\n%s", got)
+	}
+}

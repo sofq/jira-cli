@@ -88,6 +88,33 @@ func TestDo_RespectsRetryAfter(t *testing.T) {
 	}
 }
 
+func TestRetryableError_Error(t *testing.T) {
+	re := &RetryableError{Err: errors.New("something went wrong")}
+	if got := re.Error(); got != "something went wrong" {
+		t.Errorf("Error() = %q, want %q", got, "something went wrong")
+	}
+}
+
+func TestRetryableError_Unwrap(t *testing.T) {
+	inner := errors.New("inner error")
+	re := &RetryableError{Err: inner}
+	if got := re.Unwrap(); got != inner {
+		t.Errorf("Unwrap() = %v, want %v", got, inner)
+	}
+}
+
+func TestBackoff_CapsAtMaxDelay(t *testing.T) {
+	base := time.Millisecond
+	max := 4 * time.Millisecond
+	// attempt=10 → base * 2^10 = 1024ms, far above max of 4ms
+	got := backoff(10, base, max)
+	lo := time.Duration(float64(max) * 0.75)
+	hi := time.Duration(float64(max) * 1.25)
+	if got < lo || got > hi {
+		t.Errorf("backoff with capped delay = %v, want in [%v, %v]", got, lo, hi)
+	}
+}
+
 func TestShouldRetryStatus(t *testing.T) {
 	tests := []struct {
 		status int
