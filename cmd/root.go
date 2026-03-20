@@ -199,6 +199,14 @@ var rootCmd = &cobra.Command{
 		cmd.SetContext(client.NewContext(cmd.Context(), c))
 		return nil
 	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		// Close the audit logger if one was opened during PersistentPreRunE.
+		c, err := client.FromContext(cmd.Context())
+		if err == nil && c.AuditLogger != nil {
+			c.AuditLogger.Close()
+		}
+		return nil
+	},
 }
 
 func init() {

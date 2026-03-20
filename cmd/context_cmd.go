@@ -68,5 +68,8 @@ func runContext(cmd *cobra.Command, args []string) error {
 	_ = enc.Encode(result)
 
 	exitCode := c.WriteOutput(bytes.TrimRight(buf.Bytes(), "\n"))
-	return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if exitCode != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	}
+	return nil
 }

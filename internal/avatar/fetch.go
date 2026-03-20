@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/sofq/jira-cli/internal/client"
@@ -32,7 +33,7 @@ func ResolveUser(c *client.Client, userFlag string) (*JiraUser, error) {
 		return &user, nil
 	}
 
-	path := "/rest/api/3/user/search?query=" + userFlag
+	path := "/rest/api/3/user/search?query=" + url.QueryEscape(userFlag)
 	body, exitCode := c.Fetch(context.Background(), "GET", path, nil)
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to search for user %q (exit %d)", userFlag, exitCode)

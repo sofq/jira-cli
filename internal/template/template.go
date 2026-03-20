@@ -273,17 +273,30 @@ func Save(tmpl *Template, overwrite bool) (string, error) {
 
 	path := filepath.Join(dir, tmpl.Name+".yaml")
 
-	if !overwrite {
-		if _, err := os.Stat(path); err == nil {
-			return "", fmt.Errorf("template %q already exists at %s; use --overwrite to replace", tmpl.Name, path)
-		}
-	}
-
 	// Template contains only string/bool/slice fields — yaml.Marshal cannot fail.
 	data, _ := yaml.Marshal(tmpl)
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return "", fmt.Errorf("writing template: %w", err)
+	if !overwrite {
+		// Use O_EXCL for atomic create — avoids TOCTOU race with Stat+WriteFile.
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return "", fmt.Errorf("template %q already exists at %s; use --overwrite to replace", tmpl.Name, path)
+			}
+			return "", fmt.Errorf("writing template: %w", err)
+		}
+		_, writeErr := f.Write(data)
+		closeErr := f.Close()
+		if writeErr != nil {
+			return "", fmt.Errorf("writing template: %w", writeErr)
+		}
+		if closeErr != nil {
+			return "", fmt.Errorf("writing template: %w", closeErr)
+		}
+	} else {
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			return "", fmt.Errorf("writing template: %w", err)
+		}
 	}
 	return path, nil
 }

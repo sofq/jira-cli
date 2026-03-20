@@ -213,10 +213,14 @@ func runPipe(cmd *cobra.Command, args []string) error {
 	// --- Step 4: execute target ops (sequentially or in parallel) ---
 	results := make([]BatchResult, len(values))
 
+	// Extract context before spawning goroutines to avoid concurrent
+	// access to *cobra.Command (which is not goroutine-safe).
+	ctx := cmd.Context()
+
 	if parallel <= 1 {
 		for i, rawVal := range values {
 			bop := cloneBopWithInject(targetBopTemplate, injectArg, rawVal)
-			results[i] = executeBatchOp(cmd, baseClient, i, bop, opMap)
+			results[i] = executeBatchOpWithContext(ctx, baseClient, i, bop, opMap)
 		}
 	} else {
 		type work struct {
@@ -238,7 +242,7 @@ func runPipe(cmd *cobra.Command, args []string) error {
 				defer wg.Done()
 				for item := range workCh {
 					bop := cloneBopWithInject(targetBopTemplate, injectArg, item.val)
-					r := executeBatchOp(cmd, baseClient, item.index, bop, opMap)
+					r := executeBatchOpWithContext(ctx, baseClient, item.index, bop, opMap)
 					mu.Lock()
 					results[item.index] = r
 					mu.Unlock()

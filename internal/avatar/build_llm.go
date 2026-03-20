@@ -27,8 +27,12 @@ func BuildLLM(extraction *Extraction, llmCmd string, overrides []string) (*Profi
 	// types, strings, slices, and maps — no channels or funcs).
 	extractionJSON, _ := json.Marshal(extraction)
 
-	// Split llmCmd into command and arguments.
-	fields := strings.Fields(llmCmd)
+	// Split llmCmd into command and arguments, respecting quotes so that
+	// values like `my-llm --prompt "analyze this"` work correctly.
+	fields, splitErr := shellSplit(llmCmd)
+	if splitErr != nil {
+		return nil, fmt.Errorf("invalid llmCmd: %w", splitErr)
+	}
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("llmCmd is empty")
 	}

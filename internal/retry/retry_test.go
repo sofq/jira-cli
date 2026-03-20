@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 func TestDo_SucceedsFirstTry(t *testing.T) {
 	calls := 0
-	err := Do(func() error {
+	err := Do(context.Background(), func() error {
 		calls++
 		return nil
 	}, Config{MaxRetries: 3, BaseDelay: time.Millisecond})
@@ -22,7 +23,7 @@ func TestDo_SucceedsFirstTry(t *testing.T) {
 
 func TestDo_RetriesOnRetryableError(t *testing.T) {
 	calls := 0
-	err := Do(func() error {
+	err := Do(context.Background(), func() error {
 		calls++
 		if calls < 3 {
 			return &RetryableError{Err: errors.New("transient")}
@@ -39,7 +40,7 @@ func TestDo_RetriesOnRetryableError(t *testing.T) {
 
 func TestDo_NoRetryOnNonRetryable(t *testing.T) {
 	calls := 0
-	err := Do(func() error {
+	err := Do(context.Background(), func() error {
 		calls++
 		return errors.New("permanent")
 	}, Config{MaxRetries: 3, BaseDelay: time.Millisecond})
@@ -53,7 +54,7 @@ func TestDo_NoRetryOnNonRetryable(t *testing.T) {
 
 func TestDo_ExhaustsRetries(t *testing.T) {
 	calls := 0
-	err := Do(func() error {
+	err := Do(context.Background(), func() error {
 		calls++
 		return &RetryableError{Err: errors.New("always fails")}
 	}, Config{MaxRetries: 3, BaseDelay: time.Millisecond})
@@ -68,7 +69,7 @@ func TestDo_ExhaustsRetries(t *testing.T) {
 func TestDo_RespectsRetryAfter(t *testing.T) {
 	calls := 0
 	start := time.Now()
-	err := Do(func() error {
+	err := Do(context.Background(), func() error {
 		calls++
 		if calls < 2 {
 			return &RetryableError{Err: errors.New("transient"), RetryAfter: 5 * time.Millisecond}
@@ -85,6 +86,22 @@ func TestDo_RespectsRetryAfter(t *testing.T) {
 	// Should have slept ~5ms, not ~1s from BaseDelay
 	if elapsed >= 500*time.Millisecond {
 		t.Errorf("expected RetryAfter to override BaseDelay; elapsed=%v", elapsed)
+	}
+}
+
+func TestDo_RespectsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	// Cancel context after first attempt
+	err := Do(ctx, func() error {
+		calls++
+		if calls == 1 {
+			cancel()
+		}
+		return &RetryableError{Err: errors.New("transient"), RetryAfter: time.Millisecond}
+	}, Config{MaxRetries: 5, BaseDelay: time.Millisecond})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
 

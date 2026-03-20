@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -325,7 +327,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 		var finalStatus int
 		var finalCode int
 
-		retryErr := retry.Do(func() error {
+		retryErr := retry.Do(ctx, func() error {
 			respBody, status, code, retryAfter, isRetryable := attemptRequest()
 			if isRetryable {
 				return &retry.RetryableError{
@@ -681,8 +683,11 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 
 // cacheAuthContext returns a string that uniquely identifies the auth configuration,
 // so that different profiles/credentials produce different cache keys for the same URL.
+// The token is hashed independently to prevent separator-collision attacks and to
+// avoid exposing plaintext credentials if this value is ever logged.
 func (c *Client) cacheAuthContext() string {
-	return c.BaseURL + "\x00" + c.Auth.Type + "\x00" + c.Auth.Username + "\x00" + c.Auth.Token
+	tokenHash := sha256.Sum256([]byte(c.Auth.Token))
+	return c.BaseURL + "\x00" + c.Auth.Type + "\x00" + c.Auth.Username + "\x00" + hex.EncodeToString(tokenHash[:])
 }
 
 // VerboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.

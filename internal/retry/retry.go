@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"context"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -24,7 +25,8 @@ type Config struct {
 
 // Do executes fn, retrying on RetryableError up to MaxRetries times.
 // Non-RetryableError errors are returned immediately.
-func Do(fn func() error, cfg Config) error {
+// The context is checked between retries; if cancelled, ctx.Err() is returned.
+func Do(ctx context.Context, fn func() error, cfg Config) error {
 	if cfg.MaxDelay == 0 {
 		cfg.MaxDelay = 30 * time.Second
 	}
@@ -50,7 +52,12 @@ func Do(fn func() error, cfg Config) error {
 		if delay == 0 {
 			delay = backoff(attempt, cfg.BaseDelay, cfg.MaxDelay)
 		}
-		time.Sleep(delay)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
 	}
 	return lastErr
 }

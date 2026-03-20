@@ -68,12 +68,23 @@ func writeCacheFile(path string, f oauth2CacheFile) error {
 	// json.Marshal cannot fail for map[string]oauth2CacheEntry (no channels,
 	// funcs, or complex numbers), so we omit the error check.
 	data, _ := json.Marshal(f)
-	// Write to a sibling temp file then rename for atomicity.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// Write to a unique temp file in the same directory then rename for atomicity.
+	// Using os.CreateTemp avoids torn writes when multiple jr processes run concurrently.
+	tmp, err := os.CreateTemp(filepath.Dir(path), "oauth2_tokens_*.json")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // getToken returns the cached access token for key if it exists and has not

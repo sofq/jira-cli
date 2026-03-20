@@ -70,15 +70,8 @@ func TestRunContext_Success(t *testing.T) {
 
 	cmd := newContextCmd(c)
 	err := cmd.RunE(cmd, []string{"PROJ-123"})
-	if err == nil {
-		t.Fatal("expected AlreadyWrittenError with ExitOK, got nil")
-	}
-	aw, ok := err.(*jrerrors.AlreadyWrittenError)
-	if !ok {
-		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
-	}
-	if aw.Code != jrerrors.ExitOK {
-		t.Errorf("expected exit code %d, got %d; stderr: %s", jrerrors.ExitOK, aw.Code, stderr.String())
+	if err != nil {
+		t.Fatalf("expected nil error on success, got %T: %v", err, err)
 	}
 
 	if !issueHit {
@@ -171,15 +164,8 @@ func TestRunContext_JQFilter(t *testing.T) {
 
 	cmd := newContextCmd(c)
 	err := cmd.RunE(cmd, []string{"PROJ-42"})
-	if err == nil {
-		t.Fatal("expected AlreadyWrittenError with ExitOK, got nil")
-	}
-	aw, ok := err.(*jrerrors.AlreadyWrittenError)
-	if !ok {
-		t.Fatalf("expected AlreadyWrittenError, got %T: %v", err, err)
-	}
-	if aw.Code != jrerrors.ExitOK {
-		t.Errorf("expected exit code %d, got %d; stderr: %s", jrerrors.ExitOK, aw.Code, stderr.String())
+	if err != nil {
+		t.Fatalf("expected nil error on success, got %T: %v", err, err)
 	}
 
 	output := strings.TrimSpace(stdout.String())
