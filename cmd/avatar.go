@@ -361,7 +361,7 @@ func runAvatarEdit(cmd *cobra.Command, args []string) error {
 		editor = "vi"
 	}
 
-	editorCmd := exec.Command(editor, profilePath)
+	editorCmd := exec.Command(editor, profilePath) // #nosec G204,G702 -- editor comes from $EDITOR, standard Unix pattern
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
@@ -492,7 +492,7 @@ func resolveAvatarDirFromDisk() (string, error) {
 	best := dirs[0]
 	bestTime := time.Time{}
 	for _, d := range dirs {
-		info, statErr := os.Stat(filepath.Join(d, "profile.yaml"))
+		info, statErr := os.Stat(filepath.Join(d, "profile.yaml")) // #nosec G703 -- d comes from os.ReadDir on controlled base path
 		if statErr != nil {
 			continue
 		}

@@ -285,13 +285,13 @@ func TestE2E_FullPipeline(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId":    accountID,
 				"emailAddress": "test@example.com",
 				"displayName":  displayName,
 			})
 		case "/rest/api/3/search/jql":
-			json.NewEncoder(w).Encode(mockSearchResp)
+			_ = json.NewEncoder(w).Encode(mockSearchResp)
 		default:
 			http.NotFound(w, r)
 		}
@@ -400,7 +400,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Save extraction
 	if err := SaveExtraction(tmpDir, extraction); err != nil {

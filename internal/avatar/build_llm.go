@@ -36,7 +36,7 @@ func BuildLLM(extraction *Extraction, llmCmd string, overrides []string) (*Profi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	c := exec.CommandContext(ctx, cmd, args...)
+	c := exec.CommandContext(ctx, cmd, args...) // #nosec G204 -- cmd is user-configured LLM command
 	c.Stdin = bytes.NewReader(extractionJSON)
 	var stdout bytes.Buffer
 	c.Stdout = &stdout

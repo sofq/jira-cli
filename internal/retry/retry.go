@@ -70,7 +70,7 @@ func backoff(attempt int, base, max time.Duration) time.Duration {
 		delay = max
 	}
 	// Add jitter: 75%-125% of calculated delay
-	jitter := 0.75 + rand.Float64()*0.5
+	jitter := 0.75 + rand.Float64()*0.5 // #nosec G404 -- jitter does not need cryptographic randomness
 	return time.Duration(float64(delay) * jitter)
 }
 

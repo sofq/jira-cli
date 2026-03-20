@@ -63,10 +63,14 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s" ORDER BY updated DESC`,
 		aid, aid, from, to,
 	)
-	reqBody := fmt.Sprintf(`{"jql":%s,"fields":["comment"],"maxResults":50}`, mustJSONString(jql))
+	reqBytes, _ := json.Marshal(map[string]interface{}{
+		"jql":        jql,
+		"fields":     []string{"comment"},
+		"maxResults": 50,
+	})
 
 	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
-		strings.NewReader(reqBody))
+		strings.NewReader(string(reqBytes)))
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to fetch issues for comments (exit %d)", exitCode)
 	}
@@ -115,11 +119,14 @@ func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIss
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(`reporter = "%s" AND created >= "%s" AND created <= "%s"`,
 		aid, from, to)
-	reqBody := fmt.Sprintf(`{"jql":%s,"fields":["key","issuetype","subtasks","description"],"maxResults":50}`,
-		mustJSONString(jql))
+	reqBytes, _ := json.Marshal(map[string]interface{}{
+		"jql":        jql,
+		"fields":     []string{"key", "issuetype", "subtasks", "description"},
+		"maxResults": 50,
+	})
 
 	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
-		strings.NewReader(reqBody))
+		strings.NewReader(string(reqBytes)))
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to fetch issues (exit %d)", exitCode)
 	}
@@ -161,11 +168,13 @@ func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]Changel
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
 		aid, aid, from, to,
 	)
-	reqBody := fmt.Sprintf(`{"jql":%s,"maxResults":50}`,
-		mustJSONString(jql))
+	reqBytes, _ := json.Marshal(map[string]interface{}{
+		"jql":        jql,
+		"maxResults": 50,
+	})
 
 	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql?expand=changelog",
-		strings.NewReader(reqBody))
+		strings.NewReader(string(reqBytes)))
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to fetch changelog (exit %d)", exitCode)
 	}
@@ -264,8 +273,3 @@ func extractNodeText(raw json.RawMessage) string {
 	return strings.Join(parts, "")
 }
 
-// mustJSONString encodes s as a JSON string (with quotes and escaping).
-func mustJSONString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}

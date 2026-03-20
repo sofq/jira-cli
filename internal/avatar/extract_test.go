@@ -151,17 +151,17 @@ func TestExtract_JQLUpperDateIncludesToday(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 		case "/rest/api/3/search/jql":
 			// Capture the JQL from the request body.
 			var body map[string]interface{}
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 			if jql, ok := body["jql"].(string); ok {
 				jqlQueries = append(jqlQueries, jql)
 			}
-			json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
 		default:
 			http.NotFound(w, r)
 		}
@@ -211,11 +211,11 @@ func TestExtract_InsufficientData(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 		case "/rest/api/3/search/jql":
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"issues": []interface{}{
 					map[string]interface{}{
 						"key": "PROJ-1",
@@ -289,7 +289,7 @@ func TestExtract_FetchIssuesFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/rest/api/3/myself" {
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 			return
@@ -300,7 +300,7 @@ func TestExtract_FetchIssuesFails(t *testing.T) {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
 	}))
 	defer srv.Close()
 
@@ -318,7 +318,7 @@ func TestExtract_FetchChangelogFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/rest/api/3/myself" {
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 			return
@@ -329,7 +329,7 @@ func TestExtract_FetchChangelogFails(t *testing.T) {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
 	}))
 	defer srv.Close()
 
@@ -347,7 +347,7 @@ func TestExtract_FetchCommentsFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/rest/api/3/myself" {
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 			return
@@ -359,7 +359,7 @@ func TestExtract_FetchCommentsFails(t *testing.T) {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": []interface{}{}})
 	}))
 	defer srv.Close()
 
@@ -425,11 +425,11 @@ func TestExtract_WindowDoubling(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
 			})
 		case "/rest/api/3/search/jql":
-			json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
 		default:
 			http.NotFound(w, r)
 		}
@@ -454,7 +454,7 @@ func TestExtract_InvalidMaxWindow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/rest/api/3/myself" {
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId": "u", "emailAddress": "u@u.com", "displayName": "U",
 			})
 		}
@@ -560,13 +560,13 @@ func TestExtract_WithMockServer(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"accountId":    accountID,
 				"emailAddress": "test@example.com",
 				"displayName":  displayName,
 			})
 		case "/rest/api/3/search/jql":
-			json.NewEncoder(w).Encode(makeMockIssues())
+			_ = json.NewEncoder(w).Encode(makeMockIssues())
 		default:
 			http.NotFound(w, r)
 		}

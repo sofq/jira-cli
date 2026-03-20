@@ -30,7 +30,7 @@ func TestResolveCurrentUser(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"accountId":    "abc123",
 			"emailAddress": "user@example.com",
 			"displayName":  "Test User",
@@ -61,7 +61,7 @@ func TestResolveUserByEmail(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]map[string]string{
+		_ = json.NewEncoder(w).Encode([]map[string]string{
 			{
 				"accountId":    "xyz789",
 				"emailAddress": "other@example.com",
@@ -87,7 +87,7 @@ func TestResolveUserByEmail(t *testing.T) {
 func TestResolveUserNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]map[string]string{})
+		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	}))
 	defer srv.Close()
 
@@ -118,7 +118,7 @@ func TestFetchUserComments(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"issues": []interface{}{
 				map[string]interface{}{
 					"key": "PROJ-1",
@@ -169,7 +169,7 @@ func TestFetchUserChangelog_FiltersOtherAuthors(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"issues": []interface{}{
 				map[string]interface{}{
 					"key": "PROJ-1",
@@ -242,7 +242,7 @@ func TestFetchUserChangelog_ExpandAsQueryParam(t *testing.T) {
 			t.Error("expand should not be in the request body — the new /search/jql endpoint rejects it")
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"issues": []interface{}{
 				map[string]interface{}{
 					"key": "PROJ-1",
@@ -356,7 +356,7 @@ func TestResolveUser_Myself_ParseError(t *testing.T) {
 	// Server returns invalid JSON for /myself
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not-valid-json`))
+		_, _ = w.Write([]byte(`not-valid-json`))
 	}))
 	defer srv.Close()
 
@@ -371,7 +371,7 @@ func TestResolveUser_Search_ParseError(t *testing.T) {
 	// Server returns invalid JSON for user search
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not-valid-json`))
+		_, _ = w.Write([]byte(`not-valid-json`))
 	}))
 	defer srv.Close()
 
@@ -385,7 +385,7 @@ func TestResolveUser_Search_ParseError(t *testing.T) {
 func TestFetchUserComments_ParseError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not-valid-json`))
+		_, _ = w.Write([]byte(`not-valid-json`))
 	}))
 	defer srv.Close()
 
@@ -399,7 +399,7 @@ func TestFetchUserComments_ParseError(t *testing.T) {
 func TestFetchUserIssues_ParseError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not-valid-json`))
+		_, _ = w.Write([]byte(`not-valid-json`))
 	}))
 	defer srv.Close()
 
@@ -413,7 +413,7 @@ func TestFetchUserIssues_ParseError(t *testing.T) {
 func TestFetchUserChangelog_ParseError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`not-valid-json`))
+		_, _ = w.Write([]byte(`not-valid-json`))
 	}))
 	defer srv.Close()
 

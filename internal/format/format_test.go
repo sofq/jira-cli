@@ -107,7 +107,7 @@ func TestTable_HeadersSortedAlphabetically(t *testing.T) {
 	aIdx := strings.Index(headerLine, "a")
 	mIdx := strings.Index(headerLine, "m")
 	zIdx := strings.Index(headerLine, "z")
-	if !(aIdx < mIdx && mIdx < zIdx) {
+	if aIdx >= mIdx || mIdx >= zIdx {
 		t.Errorf("headers not sorted alphabetically, header line: %q", headerLine)
 	}
 }

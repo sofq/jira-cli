@@ -88,7 +88,7 @@ func TestAnalyzeTransitions_InvalidTimestamps(t *testing.T) {
 	result := AnalyzeTransitions(entries)
 	// Should not panic; AvgTimeInStatus should be empty since timestamps are invalid
 	if result.AvgTimeInStatus == nil {
-		// okay — or it could be an empty map
+		t.Log("AvgTimeInStatus is nil (acceptable for invalid timestamps)")
 	}
 }
 
