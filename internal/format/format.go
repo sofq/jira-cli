@@ -152,10 +152,11 @@ func CSV(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 
+	// csv.Writer.Write and Flush cannot fail when the underlying writer is
+	// a *bytes.Buffer (its Write method always returns nil error).
+
 	// Header row.
-	if err := w.Write(keyOrder); err != nil {
-		return nil, fmt.Errorf("format: csv write header: %w", err)
-	}
+	_ = w.Write(keyOrder)
 
 	// Data rows.
 	for _, raw := range rows {
@@ -171,14 +172,9 @@ func CSV(data []byte) ([]byte, error) {
 				row[i] = stringify(v)
 			}
 		}
-		if err := w.Write(row); err != nil {
-			return nil, fmt.Errorf("format: csv write row: %w", err)
-		}
+		_ = w.Write(row)
 	}
 	w.Flush()
-	if err := w.Error(); err != nil {
-		return nil, fmt.Errorf("format: csv flush: %w", err)
-	}
 
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }

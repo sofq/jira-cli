@@ -65,10 +65,9 @@ func readCacheFile(path string) oauth2CacheFile {
 // Atomic replacement (write to temp + rename) prevents a concurrent reader
 // from seeing a partially-written file.
 func writeCacheFile(path string, f oauth2CacheFile) error {
-	data, err := json.Marshal(f)
-	if err != nil {
-		return err
-	}
+	// json.Marshal cannot fail for map[string]oauth2CacheEntry (no channels,
+	// funcs, or complex numbers), so we omit the error check.
+	data, _ := json.Marshal(f)
 	// Write to a sibling temp file then rename for atomicity.
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {

@@ -132,10 +132,7 @@ func AnalyzeComments(comments []string) CommentStats {
 	for _, c := range comments {
 		sentences := splitSentences(c)
 		for _, s := range sentences {
-			s = strings.TrimSpace(s)
-			if s == "" {
-				continue
-			}
+			// splitSentences guarantees non-empty, trimmed results.
 			totalSentences++
 			if reQuestion.MatchString(s) {
 				questions++

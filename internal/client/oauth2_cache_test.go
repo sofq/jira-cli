@@ -175,6 +175,20 @@ func TestWriteCacheFile_RenameError(t *testing.T) {
 	}
 }
 
+// TestReadCacheFile_CorruptJSON verifies that readCacheFile returns an empty
+// map when the cache file contains invalid JSON.
+func TestReadCacheFile_CorruptJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.json")
+	if err := os.WriteFile(path, []byte(`{corrupt json!!!`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	got := readCacheFile(path)
+	if len(got) != 0 {
+		t.Errorf("expected empty map for corrupt JSON, got %v", got)
+	}
+}
+
 // TestOAuth2Cache_TTLClamping verifies that when expiresIn-60 <= 0, the TTL is
 // clamped to 1 second so the token is still written and retrievable immediately.
 // With expiresIn=30, ttl = 30-60 = -30 which clamps to 1s.

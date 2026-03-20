@@ -311,6 +311,21 @@ func TestAvatarsBaseDirFallback(t *testing.T) {
 	}
 }
 
+// TestAvatarsBaseDirFallback_UnsetHOME covers the real fallback path in the
+// original avatarsBaseDir closure when os.UserConfigDir() fails (HOME="" on macOS).
+func TestAvatarsBaseDirFallback_UnsetHOME(t *testing.T) {
+	t.Setenv("HOME", "")
+
+	// Call the original package-level closure directly — no replacement.
+	dir := avatarsBaseDir()
+	if dir == "" {
+		t.Fatal("expected non-empty dir from fallback path")
+	}
+	if !strings.Contains(dir, filepath.Join(".config", "jr", "avatars")) {
+		t.Errorf("expected fallback dir to contain '.config/jr/avatars', got %q", dir)
+	}
+}
+
 func TestCacheDir(t *testing.T) {
 	avatarDir := "/some/path/avatars/abc123"
 	cd := CacheDir(avatarDir)

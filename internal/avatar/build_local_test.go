@@ -2,8 +2,11 @@ package avatar
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"text/template"
+	"time"
 
 	"github.com/sofq/jira-cli/internal/config"
 )
@@ -616,6 +619,86 @@ func TestBuildLocal_ReplyBias_Neither(t *testing.T) {
 	if strings.Contains(profile.StyleGuide.Interaction, "others' issues") {
 		t.Errorf("did not expect 'others' issues' when RepliesToOthersPct=0.5: %s",
 			profile.StyleGuide.Interaction)
+	}
+}
+
+// TestRenderTemplate_Error verifies that renderTemplate returns an error
+// when the template cannot be executed with the given data.
+func TestRenderTemplate_Error(t *testing.T) {
+	badTmpl := template.Must(template.New("bad").Parse("{{.NonExistent.Deep}}"))
+	_, err := renderTemplate(badTmpl, struct{}{})
+	if err == nil {
+		t.Fatal("expected error from renderTemplate with mismatched data, got nil")
+	}
+}
+
+// TestBuildLocal_WritingSectionError covers the error return in BuildLocal when
+// buildWritingSection fails (line 245-247).
+func TestBuildLocal_WritingSectionError(t *testing.T) {
+	orig := writingTmpl
+	writingTmpl = template.Must(template.New("bad").Parse("{{.NonExistent.Fail}}"))
+	defer func() { writingTmpl = orig }()
+
+	_, err := BuildLocal(&Extraction{Meta: ExtractionMeta{DisplayName: "X"}}, nil)
+	if err == nil {
+		t.Fatal("expected error when writing template fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "build writing section") {
+		t.Errorf("expected error to mention 'build writing section', got: %v", err)
+	}
+}
+
+// TestBuildLocal_WorkflowSectionError covers the error return in BuildLocal when
+// buildWorkflowSection fails (line 250-252).
+func TestBuildLocal_WorkflowSectionError(t *testing.T) {
+	orig := workflowTmpl
+	workflowTmpl = template.Must(template.New("bad").Parse("{{.NonExistent.Fail}}"))
+	defer func() { workflowTmpl = orig }()
+
+	_, err := BuildLocal(&Extraction{Meta: ExtractionMeta{DisplayName: "X"}}, nil)
+	if err == nil {
+		t.Fatal("expected error when workflow template fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "build workflow section") {
+		t.Errorf("expected error to mention 'build workflow section', got: %v", err)
+	}
+}
+
+// TestBuildLocal_InteractionSectionError covers the error return in BuildLocal when
+// buildInteractionSection fails (line 255-257).
+func TestBuildLocal_InteractionSectionError(t *testing.T) {
+	orig := interactionTmpl
+	interactionTmpl = template.Must(template.New("bad").Parse("{{.NonExistent.Fail}}"))
+	defer func() { interactionTmpl = orig }()
+
+	_, err := BuildLocal(&Extraction{Meta: ExtractionMeta{DisplayName: "X"}}, nil)
+	if err == nil {
+		t.Fatal("expected error when interaction template fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "build interaction section") {
+		t.Errorf("expected error to mention 'build interaction section', got: %v", err)
+	}
+}
+
+// TestBuildLLM_Timeout covers the context.DeadlineExceeded branch by
+// setting llmTimeout to a very short duration and running a script that sleeps.
+func TestBuildLLM_Timeout(t *testing.T) {
+	orig := llmTimeout
+	llmTimeout = 10 * time.Millisecond
+	defer func() { llmTimeout = orig }()
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "slow.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 10\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	_, err := BuildLLM(&Extraction{Version: "1"}, script, nil)
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected 'timed out' in error, got: %v", err)
 	}
 }
 

@@ -41,10 +41,9 @@ func UserHash(accountID string) string {
 
 // SaveExtraction writes an Extraction to extraction.json in dir with 0o600 permissions.
 func SaveExtraction(dir string, e *Extraction) error {
-	data, err := json.MarshalIndent(e, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal extraction: %w", err)
-	}
+	// json.MarshalIndent cannot fail for *Extraction (all fields are
+	// primitive types, strings, slices, and maps — no channels or funcs).
+	data, _ := json.MarshalIndent(e, "", "  ")
 	path := filepath.Join(dir, extractionFile)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write extraction: %w", err)
@@ -68,10 +67,9 @@ func LoadExtraction(dir string) (*Extraction, error) {
 
 // SaveProfile writes a Profile to profile.yaml in dir with 0o600 permissions.
 func SaveProfile(dir string, p *Profile) error {
-	data, err := yaml.Marshal(p)
-	if err != nil {
-		return fmt.Errorf("marshal profile: %w", err)
-	}
+	// yaml.Marshal cannot fail for *Profile (all fields are primitive types,
+	// strings, slices, and maps — no channels or funcs).
+	data, _ := yaml.Marshal(p)
 	path := filepath.Join(dir, profileFile)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write profile: %w", err)

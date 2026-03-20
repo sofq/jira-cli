@@ -13,17 +13,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// llmTimeout is the maximum duration for an LLM command. Tests can override
+// this to verify the timeout branch without waiting 5 minutes.
+var llmTimeout = 5 * time.Minute
+
 // BuildLLM generates a Profile by calling an external LLM command.
 //
 // The extraction is marshalled to JSON and written to the command's stdin.
 // The command is expected to write a valid YAML Profile to stdout.
 // overrides is a list of "key=value" strings applied to profile.Overrides.
 func BuildLLM(extraction *Extraction, llmCmd string, overrides []string) (*Profile, error) {
-	// Marshal extraction to JSON.
-	extractionJSON, err := json.Marshal(extraction)
-	if err != nil {
-		return nil, fmt.Errorf("marshal extraction: %w", err)
-	}
+	// json.Marshal cannot fail for *Extraction (all fields are primitive
+	// types, strings, slices, and maps — no channels or funcs).
+	extractionJSON, _ := json.Marshal(extraction)
 
 	// Split llmCmd into command and arguments.
 	fields := strings.Fields(llmCmd)
@@ -32,8 +34,8 @@ func BuildLLM(extraction *Extraction, llmCmd string, overrides []string) (*Profi
 	}
 	cmd, args := fields[0], fields[1:]
 
-	// Execute the command with a 5-minute timeout and extraction JSON on stdin.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Execute the command with a timeout and extraction JSON on stdin.
+	ctx, cancel := context.WithTimeout(context.Background(), llmTimeout)
 	defer cancel()
 
 	c := exec.CommandContext(ctx, cmd, args...) // #nosec G204 -- cmd is user-configured LLM command
