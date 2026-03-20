@@ -62,7 +62,7 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s" ORDER BY updated DESC`,
-		aid, aid, from, to,
+		aid, aid, escapeJQLString(from), escapeJQLString(to),
 	)
 	reqBytes, _ := json.Marshal(map[string]interface{}{
 		"jql":        jql,
@@ -119,7 +119,7 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIssue, error) {
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(`reporter = "%s" AND created >= "%s" AND created <= "%s"`,
-		aid, from, to)
+		aid, escapeJQLString(from), escapeJQLString(to))
 	reqBytes, _ := json.Marshal(map[string]interface{}{
 		"jql":        jql,
 		"fields":     []string{"key", "issuetype", "subtasks", "description"},
@@ -167,7 +167,7 @@ func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]Changel
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
-		aid, aid, from, to,
+		aid, aid, escapeJQLString(from), escapeJQLString(to),
 	)
 	reqBytes, _ := json.Marshal(map[string]interface{}{
 		"jql":        jql,

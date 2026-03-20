@@ -364,7 +364,7 @@ func runAvatarEdit(cmd *cobra.Command, args []string) error {
 
 	// Split editor string to handle values like "code --wait" or "vim -p".
 	editorParts := strings.Fields(editor)
-	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], profilePath)...) // #nosec G204 -- editor comes from $EDITOR, standard Unix pattern
+	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], profilePath)...) // #nosec G204 G702 -- editor comes from $EDITOR, standard Unix pattern
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
