@@ -609,3 +609,86 @@ func TestExtract_WithMockServer(t *testing.T) {
 		t.Error("Meta.DataPoints.Comments should be non-zero")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Extract — FetchUserWorklogs failure
+// ---------------------------------------------------------------------------
+
+func TestExtract_FetchWorklogsFails(t *testing.T) {
+	const accountID = "user-abc"
+
+	makeADF := func(text string) interface{} {
+		return map[string]interface{}{
+			"type": "doc", "version": 1,
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "paragraph",
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": text},
+					},
+				},
+			},
+		}
+	}
+
+	// Build enough data to pass hard minimums and the adaptive loop.
+	comments := make([]interface{}, 15)
+	for i := range comments {
+		comments[i] = map[string]interface{}{
+			"author":  map[string]string{"accountId": accountID},
+			"created": "2026-03-18T10:00:00Z",
+			"body":    makeADF(fmt.Sprintf("Comment %d for testing.", i+1)),
+		}
+	}
+	issues := make([]interface{}, 5)
+	for i := range issues {
+		issueComments := comments
+		if i > 0 {
+			issueComments = nil
+		}
+		issues[i] = map[string]interface{}{
+			"key": fmt.Sprintf("PROJ-%d", i+1),
+			"fields": map[string]interface{}{
+				"issuetype":   map[string]string{"name": "Task"},
+				"subtasks":    []interface{}{},
+				"description": makeADF("Desc."),
+				"comment":     map[string]interface{}{"comments": issueComments},
+			},
+			"changelog": map[string]interface{}{"histories": []interface{}{}},
+		}
+	}
+
+	// The adaptive loop calls: comments, issues, changelog (pass targets → break).
+	// Then the worklog call (4th search/jql) should fail.
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/rest/api/3/myself" {
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"accountId": accountID, "emailAddress": "t@t.com", "displayName": "T",
+			})
+			return
+		}
+		callCount++
+		// First 3 search/jql calls succeed (comments, issues, changelog).
+		// 4th call (worklogs) fails.
+		if callCount == 4 {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"issues": issues})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := Extract(context.Background(), c, ExtractOptions{
+		MinComments: 1, MinUpdates: 1, MaxWindow: "2w",
+	})
+	if err == nil {
+		t.Fatal("expected error when FetchUserWorklogs fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetch worklogs") {
+		t.Errorf("expected error to mention 'fetch worklogs', got: %v", err)
+	}
+}
