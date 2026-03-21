@@ -2,6 +2,7 @@ package avatar
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -310,7 +311,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 		MaxWindow:   "6m",
 	}
 
-	extraction, err := Extract(c, opts)
+	extraction, err := Extract(context.Background(), c, opts)
 	if err != nil {
 		t.Fatalf("Extract returned error: %v", err)
 	}

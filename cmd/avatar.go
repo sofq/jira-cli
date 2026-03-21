@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -127,8 +128,8 @@ func init() {
 
 // resolveAvatarDir resolves the avatar directory for the given user flag.
 // It uses the client to resolve the user's accountID to generate the hash.
-func resolveAvatarDir(c *client.Client, userFlag string) (string, string, error) {
-	user, err := avatar.ResolveUser(c, userFlag)
+func resolveAvatarDir(ctx context.Context, c *client.Client, userFlag string) (string, string, error) {
+	user, err := avatar.ResolveUser(ctx, c, userFlag)
 	if err != nil {
 		return "", "", err
 	}
@@ -177,7 +178,7 @@ func runAvatarExtract(cmd *cobra.Command, args []string) error {
 		MaxWindow:   maxWindow,
 	}
 
-	extraction, extractErr := avatar.Extract(c, opts)
+	extraction, extractErr := avatar.Extract(cmd.Context(), c, opts)
 	if extractErr != nil {
 		apiErr := &jrerrors.APIError{ErrorType: "extraction_error", Message: extractErr.Error()}
 		apiErr.WriteJSON(os.Stderr)
@@ -218,7 +219,7 @@ func runAvatarBuild(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 
 	// Resolve avatar dir using the client.
-	dir, _, resolveErr := resolveAvatarDir(c, userFlag)
+	dir, _, resolveErr := resolveAvatarDir(cmd.Context(), c, userFlag)
 	if resolveErr != nil {
 		apiErr := &jrerrors.APIError{ErrorType: "config_error", Message: "failed to resolve user: " + resolveErr.Error()}
 		apiErr.WriteJSON(os.Stderr)

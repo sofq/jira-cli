@@ -20,9 +20,9 @@ type JiraUser struct {
 // ResolveUser resolves the target Jira user.
 // If userFlag is empty it fetches the authenticated user (/rest/api/3/myself).
 // If userFlag is set it searches for matching users and returns the first result.
-func ResolveUser(c *client.Client, userFlag string) (*JiraUser, error) {
+func ResolveUser(ctx context.Context, c *client.Client, userFlag string) (*JiraUser, error) {
 	if userFlag == "" {
-		body, exitCode := c.Fetch(context.Background(), "GET", "/rest/api/3/myself", nil)
+		body, exitCode := c.Fetch(ctx, "GET", "/rest/api/3/myself", nil)
 		if exitCode != 0 {
 			return nil, fmt.Errorf("failed to fetch current user (exit %d)", exitCode)
 		}
@@ -34,7 +34,7 @@ func ResolveUser(c *client.Client, userFlag string) (*JiraUser, error) {
 	}
 
 	path := "/rest/api/3/user/search?query=" + url.QueryEscape(userFlag)
-	body, exitCode := c.Fetch(context.Background(), "GET", path, nil)
+	body, exitCode := c.Fetch(ctx, "GET", path, nil)
 	if exitCode != 0 {
 		return nil, fmt.Errorf("failed to search for user %q (exit %d)", userFlag, exitCode)
 	}
@@ -58,7 +58,7 @@ func escapeJQLString(s string) string {
 
 // FetchUserComments fetches comments authored by accountID on issues updated
 // within the [from, to] date window.
-func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComment, error) {
+func FetchUserComments(ctx context.Context, c *client.Client, accountID, from, to string) ([]RawComment, error) {
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s" ORDER BY updated DESC`,
@@ -78,7 +78,7 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 		}
 		reqBytes, _ := json.Marshal(reqMap)
 
-		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+		body, exitCode := c.Fetch(ctx, "POST", "/rest/api/3/search/jql",
 			strings.NewReader(string(reqBytes)))
 		if exitCode != 0 {
 			return nil, fmt.Errorf("failed to fetch issues for comments (exit %d)", exitCode)
@@ -135,7 +135,7 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 }
 
 // FetchUserIssues fetches issues reported by accountID created within [from, to].
-func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIssue, error) {
+func FetchUserIssues(ctx context.Context, c *client.Client, accountID, from, to string) ([]CreatedIssue, error) {
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(`reporter = "%s" AND created >= "%s" AND created <= "%s"`,
 		aid, escapeJQLString(from), escapeJQLString(to))
@@ -154,7 +154,7 @@ func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIss
 		}
 		reqBytes, _ := json.Marshal(reqMap)
 
-		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+		body, exitCode := c.Fetch(ctx, "POST", "/rest/api/3/search/jql",
 			strings.NewReader(string(reqBytes)))
 		if exitCode != 0 {
 			return nil, fmt.Errorf("failed to fetch issues (exit %d)", exitCode)
@@ -229,7 +229,7 @@ func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIss
 
 // FetchUserChangelog fetches changelog entries authored by accountID on issues
 // updated within [from, to].
-func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]ChangelogEntry, error) {
+func FetchUserChangelog(ctx context.Context, c *client.Client, accountID, from, to string) ([]ChangelogEntry, error) {
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
@@ -248,7 +248,7 @@ func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]Changel
 		}
 		reqBytes, _ := json.Marshal(reqMap)
 
-		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql?expand=changelog",
+		body, exitCode := c.Fetch(ctx, "POST", "/rest/api/3/search/jql?expand=changelog",
 			strings.NewReader(string(reqBytes)))
 		if exitCode != 0 {
 			return nil, fmt.Errorf("failed to fetch changelog (exit %d)", exitCode)
@@ -305,7 +305,7 @@ func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]Changel
 
 // FetchUserWorklogs fetches worklog entries authored by accountID on issues
 // updated within [from, to].
-func FetchUserWorklogs(c *client.Client, accountID, from, to string) ([]WorklogEntry, error) {
+func FetchUserWorklogs(ctx context.Context, c *client.Client, accountID, from, to string) ([]WorklogEntry, error) {
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
@@ -326,7 +326,7 @@ func FetchUserWorklogs(c *client.Client, accountID, from, to string) ([]WorklogE
 		}
 		reqBytes, _ := json.Marshal(reqMap)
 
-		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+		body, exitCode := c.Fetch(ctx, "POST", "/rest/api/3/search/jql",
 			strings.NewReader(string(reqBytes)))
 		if exitCode != 0 {
 			return nil, fmt.Errorf("failed to fetch worklogs (exit %d)", exitCode)

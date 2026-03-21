@@ -2,6 +2,7 @@ package avatar
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +40,7 @@ func TestResolveCurrentUser(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	user, err := ResolveUser(c, "")
+	user, err := ResolveUser(context.Background(), c, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,7 +73,7 @@ func TestResolveUserByEmail(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	user, err := ResolveUser(c, "other@example.com")
+	user, err := ResolveUser(context.Background(), c, "other@example.com")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestResolveUserNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := ResolveUser(c, "nobody@example.com")
+	_, err := ResolveUser(context.Background(), c, "nobody@example.com")
 	if err == nil {
 		t.Fatal("expected error for empty search results, got nil")
 	}
@@ -146,7 +147,7 @@ func TestFetchUserComments(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	comments, err := FetchUserComments(c, "abc123", "2025-01-01", "2025-01-31")
+	comments, err := FetchUserComments(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -208,7 +209,7 @@ func TestFetchUserChangelog_FiltersOtherAuthors(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	entries, err := FetchUserChangelog(c, accountID, "2025-01-01", "2025-01-31")
+	entries, err := FetchUserChangelog(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -268,7 +269,7 @@ func TestFetchUserChangelog_ExpandAsQueryParam(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	entries, err := FetchUserChangelog(c, accountID, "2025-01-01", "2025-01-31")
+	entries, err := FetchUserChangelog(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -294,7 +295,7 @@ func TestResolveUser_Myself_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := ResolveUser(c, "")
+	_, err := ResolveUser(context.Background(), c, "")
 	if err == nil {
 		t.Fatal("expected error for 500 response from /myself, got nil")
 	}
@@ -307,7 +308,7 @@ func TestResolveUser_Search_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := ResolveUser(c, "test@example.com")
+	_, err := ResolveUser(context.Background(), c, "test@example.com")
 	if err == nil {
 		t.Fatal("expected error for 500 response from user search, got nil")
 	}
@@ -320,7 +321,7 @@ func TestFetchUserComments_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserComments(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserComments(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for 500 response, got nil")
 	}
@@ -333,7 +334,7 @@ func TestFetchUserIssues_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserIssues(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserIssues(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for 500 response, got nil")
 	}
@@ -346,7 +347,7 @@ func TestFetchUserChangelog_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserChangelog(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserChangelog(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for 500 response, got nil")
 	}
@@ -361,7 +362,7 @@ func TestResolveUser_Myself_ParseError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := ResolveUser(c, "")
+	_, err := ResolveUser(context.Background(), c, "")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response from /myself, got nil")
 	}
@@ -376,7 +377,7 @@ func TestResolveUser_Search_ParseError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := ResolveUser(c, "test@example.com")
+	_, err := ResolveUser(context.Background(), c, "test@example.com")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response from user search, got nil")
 	}
@@ -390,7 +391,7 @@ func TestFetchUserComments_ParseError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserComments(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserComments(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response, got nil")
 	}
@@ -404,7 +405,7 @@ func TestFetchUserIssues_ParseError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserIssues(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserIssues(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response, got nil")
 	}
@@ -418,7 +419,7 @@ func TestFetchUserChangelog_ParseError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := FetchUserChangelog(c, "abc123", "2025-01-01", "2025-01-31")
+	_, err := FetchUserChangelog(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response, got nil")
 	}

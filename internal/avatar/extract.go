@@ -1,6 +1,7 @@
 package avatar
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -67,13 +68,13 @@ const initialWindow = 14 * 24 * time.Hour // 2 weeks
 // Extract runs the full extraction pipeline: it resolves the target user,
 // collects activity data over an adaptive time window, runs all analysers,
 // and returns a populated Extraction document.
-func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
+func Extract(ctx context.Context, c *client.Client, opts ExtractOptions) (*Extraction, error) {
 	if c == nil {
 		return nil, fmt.Errorf("extract: client must not be nil")
 	}
 
 	// Resolve user.
-	user, err := ResolveUser(c, opts.UserFlag)
+	user, err := ResolveUser(ctx, c, opts.UserFlag)
 	if err != nil {
 		return nil, fmt.Errorf("extract: resolve user: %w", err)
 	}
@@ -106,17 +107,17 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 		// issues updated today are included.
 		toStr := to.Add(24 * time.Hour).Format("2006-01-02")
 
-		rawComments, err = FetchUserComments(c, user.AccountID, fromStr, toStr)
+		rawComments, err = FetchUserComments(ctx, c, user.AccountID, fromStr, toStr)
 		if err != nil {
 			return nil, fmt.Errorf("extract: fetch comments: %w", err)
 		}
 
-		createdIssues, err = FetchUserIssues(c, user.AccountID, fromStr, toStr)
+		createdIssues, err = FetchUserIssues(ctx, c, user.AccountID, fromStr, toStr)
 		if err != nil {
 			return nil, fmt.Errorf("extract: fetch issues: %w", err)
 		}
 
-		changelog, err = FetchUserChangelog(c, user.AccountID, fromStr, toStr)
+		changelog, err = FetchUserChangelog(ctx, c, user.AccountID, fromStr, toStr)
 		if err != nil {
 			return nil, fmt.Errorf("extract: fetch changelog: %w", err)
 		}
@@ -136,7 +137,7 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 	}
 
 	// Fetch worklogs.
-	worklogs, err := FetchUserWorklogs(c, user.AccountID, from.Format("2006-01-02"), to.Add(24*time.Hour).Format("2006-01-02"))
+	worklogs, err := FetchUserWorklogs(ctx, c, user.AccountID, from.Format("2006-01-02"), to.Add(24*time.Hour).Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("extract: fetch worklogs: %w", err)
 	}
