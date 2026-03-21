@@ -162,6 +162,9 @@ func AnalyzeComments(comments []string) CommentStats {
 		SignOffs:      detectSignOffs(comments),
 	}
 
+	sentencePatterns := analyzeSentencePatterns(comments)
+	formalityScore := computeFormalityScore(comments, tone, formatting)
+
 	return CommentStats{
 		AvgLengthWords:    avg,
 		MedianLengthWords: median,
@@ -169,6 +172,8 @@ func AnalyzeComments(comments []string) CommentStats {
 		Formatting:        formatting,
 		Vocabulary:        vocab,
 		ToneSignals:       tone,
+		SentencePatterns:  sentencePatterns,
+		FormalityScore:    formalityScore,
 	}
 }
 
@@ -387,6 +392,110 @@ func extractJargon(comments []string) []string {
 		result = append(result, e.word)
 	}
 	return result
+}
+
+// reContraction matches common English contractions.
+var reContraction = regexp.MustCompile(`(?i)\b(I'm|I'll|I've|I'd|we're|we'll|we've|they're|they'll|they've|don't|doesn't|didn't|can't|won't|couldn't|wouldn't|shouldn't|isn't|aren't|wasn't|weren't|it's|that's|what's|there's|here's|let's)\b`)
+
+// reSubjectStart matches sentences starting with common subjects.
+var reSubjectStart = regexp.MustCompile(`(?i)^(I|We|The|This|That|It)\b`)
+
+// analyzeSentencePatterns analyses how the user structures sentences.
+func analyzeSentencePatterns(comments []string) SentencePatterns {
+	if len(comments) == 0 {
+		return SentencePatterns{}
+	}
+
+	var totalSents, fragments, totalWords, contractionComments, subjectStarts float64
+
+	for _, c := range comments {
+		sents := splitSentences(c)
+		hasContraction := reContraction.MatchString(c)
+		if hasContraction {
+			contractionComments++
+		}
+		for _, s := range sents {
+			totalSents++
+			wc := wordCount(s)
+			totalWords += float64(wc)
+			// Fragment: ≤4 words and no common verb pattern
+			if wc <= 4 {
+				fragments++
+			}
+			if reSubjectStart.MatchString(strings.TrimSpace(s)) {
+				subjectStarts++
+			}
+		}
+	}
+
+	n := float64(len(comments))
+	result := SentencePatterns{}
+	if totalSents > 0 {
+		result.FragmentRatio = fragments / totalSents
+		result.AvgWordsPerSent = totalWords / totalSents
+		result.StartsWithSubject = subjectStarts / totalSents
+	}
+	result.UsesContractions = contractionComments / n
+	return result
+}
+
+// computeFormalityScore returns a 0-1 score where 0 = very casual, 1 = very formal.
+// Based on: contraction usage, exclamation/emoji use, first-person ratio, sentence length.
+func computeFormalityScore(comments []string, tone ToneSignals, fmt FormattingStats) float64 {
+	if len(comments) == 0 {
+		return 0.5
+	}
+
+	score := 0.5 // neutral baseline
+
+	// Contractions → more casual
+	contractionCount := 0
+	for _, c := range comments {
+		if reContraction.MatchString(c) {
+			contractionCount++
+		}
+	}
+	contractionRatio := float64(contractionCount) / float64(len(comments))
+	score -= contractionRatio * 0.15 // heavy contraction use = more casual
+
+	// Exclamation marks → more casual
+	score -= tone.ExclamationRatio * 0.1
+
+	// Emoji → more casual
+	score -= fmt.UsesEmoji * 0.1
+
+	// First person → slightly more casual
+	score -= tone.FirstPersonRatio * 0.05
+
+	// Imperative → more formal/direct
+	score += tone.ImperativeRatio * 0.1
+
+	// Sentence length: longer sentences → more formal
+	var totalWords, totalSents float64
+	for _, c := range comments {
+		sents := splitSentences(c)
+		for _, s := range sents {
+			totalSents++
+			totalWords += float64(wordCount(s))
+		}
+	}
+	if totalSents > 0 {
+		avgLen := totalWords / totalSents
+		if avgLen > 15 {
+			score += 0.1
+		} else if avgLen < 6 {
+			score -= 0.1
+		}
+	}
+
+	// Clamp to [0, 1]
+	if score < 0 {
+		score = 0
+	}
+	if score > 1 {
+		score = 1
+	}
+	return score
 }
 
 // detectSignOffs checks the last 30 characters of each comment for common

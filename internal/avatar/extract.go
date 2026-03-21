@@ -2,6 +2,7 @@ package avatar
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -134,11 +135,18 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 		window *= 2
 	}
 
+	// Fetch worklogs.
+	worklogs, err := FetchUserWorklogs(c, user.AccountID, from.Format("2006-01-02"), to.Add(24*time.Hour).Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("extract: fetch worklogs: %w", err)
+	}
+
 	// Check hard minimums.
 	found := DataPoints{
 		Comments:      len(rawComments),
 		IssuesCreated: len(createdIssues),
 		Transitions:   len(changelog),
+		Worklogs:      len(worklogs),
 	}
 	required := DataPoints{
 		Comments:      hardMinComments,
@@ -163,19 +171,41 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 		descriptionTexts[i] = issue.Description
 	}
 
-	// Build IssueFields slice for field preference analysis.
+	// Build IssueFields slice for field preference analysis from CreatedIssue data.
 	issueFields := make([]IssueFields, len(createdIssues))
-	// issueFields contains zero-value structs since CreatedIssue doesn't carry
-	// priority/labels/components; AnalyzeFieldPreferences gracefully handles this.
+	for i, ci := range createdIssues {
+		issueFields[i] = IssueFields{
+			Priority:   ci.Priority,
+			Labels:     ci.Labels,
+			Components: ci.Components,
+			FixVersion: ci.FixVersion,
+		}
+	}
 
 	// Build CommentRecords for interaction analysis.
+	// Group comments by issue to compute ParentTimestamp (previous comment's time).
+	type issueComment struct {
+		idx  int
+		date string
+	}
+	issueGroups := map[string][]issueComment{}
 	commentRecords := make([]CommentRecord, len(rawComments))
 	for i, rc := range rawComments {
 		commentRecords[i] = CommentRecord{
-			IssueOwner: rc.Issue, // approximate: owner = issue key
+			IssueOwner: rc.Reporter, // reporter's accountID, not the issue key
 			Author:     rc.Author,
 			Timestamp:  rc.Date,
 			Text:       rc.Text,
+		}
+		issueGroups[rc.Issue] = append(issueGroups[rc.Issue], issueComment{idx: i, date: rc.Date})
+	}
+	// Sort each issue's comments by date and set ParentTimestamp to the previous comment's time.
+	for _, group := range issueGroups {
+		sort.Slice(group, func(a, b int) bool {
+			return group[a].date < group[b].date
+		})
+		for j := 1; j < len(group); j++ {
+			commentRecords[group[j].idx].ParentTimestamp = group[j-1].date
 		}
 	}
 
@@ -204,7 +234,9 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 	// Interaction
 	responsePatterns := AnalyzeResponsePatterns(commentRecords, user.AccountID)
 	mentionHabits := AnalyzeMentionHabits(commentTexts)
+	escalationSignals := AnalyzeEscalation(commentRecords, changelog, user.AccountID)
 	collaboration := AnalyzeCollaboration(timestamps)
+	worklogHabits := AnalyzeWorklogs(worklogs)
 
 	// Examples
 	commentExamples := SelectCommentExamples(rawComments, 10)
@@ -232,9 +264,14 @@ func Extract(c *client.Client, opts ExtractOptions) (*Extraction, error) {
 			IssueCreation:      issueCreation,
 		},
 		Interaction: InteractionAnalysis{
-			ResponsePatterns: responsePatterns,
-			MentionHabits:    mentionHabits,
-			Collaboration:    collaboration,
+			ResponsePatterns:  responsePatterns,
+			MentionHabits:     mentionHabits,
+			EscalationSignals: escalationSignals,
+			Collaboration: Collaboration{
+				ActiveHours:      collaboration.ActiveHours,
+				PeakActivityDays: collaboration.PeakActivityDays,
+				WorklogHabits:    worklogHabits,
+			},
 		},
 		Examples: ExtractionExamples{
 			Comments:     commentExamples,

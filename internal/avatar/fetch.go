@@ -64,55 +64,74 @@ func FetchUserComments(c *client.Client, accountID, from, to string) ([]RawComme
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s" ORDER BY updated DESC`,
 		aid, aid, escapeJQLString(from), escapeJQLString(to),
 	)
-	reqBytes, _ := json.Marshal(map[string]interface{}{
-		"jql":        jql,
-		"fields":     []string{"comment"},
-		"maxResults": 50,
-	})
+	var allResults []RawComment
+	nextPageToken := ""
 
-	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
-		strings.NewReader(string(reqBytes)))
-	if exitCode != 0 {
-		return nil, fmt.Errorf("failed to fetch issues for comments (exit %d)", exitCode)
-	}
-
-	// Parse the search response.
-	var searchResp struct {
-		Issues []struct {
-			Key    string `json:"key"`
-			Fields struct {
-				Comment struct {
-					Comments []struct {
-						Author struct {
-							AccountID string `json:"accountId"`
-						} `json:"author"`
-						Created string          `json:"created"`
-						Body    json.RawMessage `json:"body"`
-					} `json:"comments"`
-				} `json:"comment"`
-			} `json:"fields"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal(body, &searchResp); err != nil {
-		return nil, fmt.Errorf("failed to parse comment search response: %w", err)
-	}
-
-	var results []RawComment
-	for _, issue := range searchResp.Issues {
-		for _, c := range issue.Fields.Comment.Comments {
-			if c.Author.AccountID != accountID {
-				continue
-			}
-			text := extractTextFromADF(c.Body)
-			results = append(results, RawComment{
-				Issue:  issue.Key,
-				Date:   c.Created,
-				Text:   text,
-				Author: accountID,
-			})
+	for {
+		reqMap := map[string]interface{}{
+			"jql":        jql,
+			"fields":     []string{"comment", "reporter"},
+			"maxResults": 50,
 		}
+		if nextPageToken != "" {
+			reqMap["nextPageToken"] = nextPageToken
+		}
+		reqBytes, _ := json.Marshal(reqMap)
+
+		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+			strings.NewReader(string(reqBytes)))
+		if exitCode != 0 {
+			return nil, fmt.Errorf("failed to fetch issues for comments (exit %d)", exitCode)
+		}
+
+		// Parse the search response.
+		var searchResp struct {
+			Issues []struct {
+				Key    string `json:"key"`
+				Fields struct {
+					Reporter struct {
+						AccountID string `json:"accountId"`
+					} `json:"reporter"`
+					Comment struct {
+						Comments []struct {
+							Author struct {
+								AccountID string `json:"accountId"`
+							} `json:"author"`
+							Created string          `json:"created"`
+							Body    json.RawMessage `json:"body"`
+						} `json:"comments"`
+					} `json:"comment"`
+				} `json:"fields"`
+			} `json:"issues"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &searchResp); err != nil {
+			return nil, fmt.Errorf("failed to parse comment search response: %w", err)
+		}
+
+		for _, issue := range searchResp.Issues {
+			reporter := issue.Fields.Reporter.AccountID
+			for _, c := range issue.Fields.Comment.Comments {
+				if c.Author.AccountID != accountID {
+					continue
+				}
+				text := extractTextFromADF(c.Body)
+				allResults = append(allResults, RawComment{
+					Issue:    issue.Key,
+					Date:     c.Created,
+					Text:     text,
+					Author:   accountID,
+					Reporter: reporter,
+				})
+			}
+		}
+
+		if searchResp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = searchResp.NextPageToken
 	}
-	return results, nil
+	return allResults, nil
 }
 
 // FetchUserIssues fetches issues reported by accountID created within [from, to].
@@ -120,45 +139,92 @@ func FetchUserIssues(c *client.Client, accountID, from, to string) ([]CreatedIss
 	aid := escapeJQLString(accountID)
 	jql := fmt.Sprintf(`reporter = "%s" AND created >= "%s" AND created <= "%s"`,
 		aid, escapeJQLString(from), escapeJQLString(to))
-	reqBytes, _ := json.Marshal(map[string]interface{}{
-		"jql":        jql,
-		"fields":     []string{"key", "issuetype", "subtasks", "description"},
-		"maxResults": 50,
-	})
 
-	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
-		strings.NewReader(string(reqBytes)))
-	if exitCode != 0 {
-		return nil, fmt.Errorf("failed to fetch issues (exit %d)", exitCode)
-	}
+	var allResults []CreatedIssue
+	nextPageToken := ""
 
-	var searchResp struct {
-		Issues []struct {
-			Key    string `json:"key"`
-			Fields struct {
-				IssueType struct {
-					Name string `json:"name"`
-				} `json:"issuetype"`
-				Subtasks    []json.RawMessage `json:"subtasks"`
-				Description json.RawMessage   `json:"description"`
-			} `json:"fields"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal(body, &searchResp); err != nil {
-		return nil, fmt.Errorf("failed to parse issues response: %w", err)
-	}
+	for {
+		reqMap := map[string]interface{}{
+			"jql":        jql,
+			"fields":     []string{"key", "issuetype", "subtasks", "description", "priority", "labels", "components", "fixVersions"},
+			"maxResults": 50,
+		}
+		if nextPageToken != "" {
+			reqMap["nextPageToken"] = nextPageToken
+		}
+		reqBytes, _ := json.Marshal(reqMap)
 
-	results := make([]CreatedIssue, 0, len(searchResp.Issues))
-	for _, issue := range searchResp.Issues {
-		desc := extractTextFromADF(issue.Fields.Description)
-		results = append(results, CreatedIssue{
-			Key:          issue.Key,
-			Type:         issue.Fields.IssueType.Name,
-			SubtaskCount: len(issue.Fields.Subtasks),
-			Description:  desc,
-		})
+		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+			strings.NewReader(string(reqBytes)))
+		if exitCode != 0 {
+			return nil, fmt.Errorf("failed to fetch issues (exit %d)", exitCode)
+		}
+
+		var searchResp struct {
+			Issues []struct {
+				Key    string `json:"key"`
+				Fields struct {
+					IssueType struct {
+						Name string `json:"name"`
+					} `json:"issuetype"`
+					Subtasks    []json.RawMessage `json:"subtasks"`
+					Description json.RawMessage   `json:"description"`
+					Priority    *struct {
+						Name string `json:"name"`
+					} `json:"priority"`
+					Labels     []string `json:"labels"`
+					Components []struct {
+						Name string `json:"name"`
+					} `json:"components"`
+					FixVersions []struct {
+						Name string `json:"name"`
+					} `json:"fixVersions"`
+				} `json:"fields"`
+			} `json:"issues"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &searchResp); err != nil {
+			return nil, fmt.Errorf("failed to parse issues response: %w", err)
+		}
+
+		for _, issue := range searchResp.Issues {
+			desc := extractTextFromADF(issue.Fields.Description)
+
+			priority := ""
+			if issue.Fields.Priority != nil {
+				priority = issue.Fields.Priority.Name
+			}
+
+			var components []string
+			for _, c := range issue.Fields.Components {
+				if c.Name != "" {
+					components = append(components, c.Name)
+				}
+			}
+
+			fixVersion := ""
+			if len(issue.Fields.FixVersions) > 0 {
+				fixVersion = issue.Fields.FixVersions[0].Name
+			}
+
+			allResults = append(allResults, CreatedIssue{
+				Key:          issue.Key,
+				Type:         issue.Fields.IssueType.Name,
+				SubtaskCount: len(issue.Fields.Subtasks),
+				Description:  desc,
+				Priority:     priority,
+				Labels:       issue.Fields.Labels,
+				Components:   components,
+				FixVersion:   fixVersion,
+			})
+		}
+
+		if searchResp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = searchResp.NextPageToken
 	}
-	return results, nil
+	return allResults, nil
 }
 
 // FetchUserChangelog fetches changelog entries authored by accountID on issues
@@ -169,58 +235,146 @@ func FetchUserChangelog(c *client.Client, accountID, from, to string) ([]Changel
 		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
 		aid, aid, escapeJQLString(from), escapeJQLString(to),
 	)
-	reqBytes, _ := json.Marshal(map[string]interface{}{
-		"jql":        jql,
-		"maxResults": 50,
-	})
+	var allResults []ChangelogEntry
+	nextPageToken := ""
 
-	body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql?expand=changelog",
-		strings.NewReader(string(reqBytes)))
-	if exitCode != 0 {
-		return nil, fmt.Errorf("failed to fetch changelog (exit %d)", exitCode)
-	}
+	for {
+		reqMap := map[string]interface{}{
+			"jql":        jql,
+			"maxResults": 50,
+		}
+		if nextPageToken != "" {
+			reqMap["nextPageToken"] = nextPageToken
+		}
+		reqBytes, _ := json.Marshal(reqMap)
 
-	var searchResp struct {
-		Issues []struct {
-			Key       string `json:"key"`
-			Changelog struct {
-				Histories []struct {
-					Author struct {
-						AccountID string `json:"accountId"`
-					} `json:"author"`
-					Created string `json:"created"`
-					Items   []struct {
-						Field      string `json:"field"`
-						FromString string `json:"fromString"`
-						ToString   string `json:"toString"`
-					} `json:"items"`
-				} `json:"histories"`
-			} `json:"changelog"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal(body, &searchResp); err != nil {
-		return nil, fmt.Errorf("failed to parse changelog response: %w", err)
-	}
+		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql?expand=changelog",
+			strings.NewReader(string(reqBytes)))
+		if exitCode != 0 {
+			return nil, fmt.Errorf("failed to fetch changelog (exit %d)", exitCode)
+		}
 
-	var results []ChangelogEntry
-	for _, issue := range searchResp.Issues {
-		for _, history := range issue.Changelog.Histories {
-			if history.Author.AccountID != accountID {
-				continue
+		var searchResp struct {
+			Issues []struct {
+				Key       string `json:"key"`
+				Changelog struct {
+					Histories []struct {
+						Author struct {
+							AccountID string `json:"accountId"`
+						} `json:"author"`
+						Created string `json:"created"`
+						Items   []struct {
+							Field      string `json:"field"`
+							FromString string `json:"fromString"`
+							ToString   string `json:"toString"`
+						} `json:"items"`
+					} `json:"histories"`
+				} `json:"changelog"`
+			} `json:"issues"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &searchResp); err != nil {
+			return nil, fmt.Errorf("failed to parse changelog response: %w", err)
+		}
+
+		for _, issue := range searchResp.Issues {
+			for _, history := range issue.Changelog.Histories {
+				if history.Author.AccountID != accountID {
+					continue
+				}
+				for _, item := range history.Items {
+					allResults = append(allResults, ChangelogEntry{
+						Issue:     issue.Key,
+						Timestamp: history.Created,
+						Author:    accountID,
+						Field:     item.Field,
+						From:      item.FromString,
+						To:        item.ToString,
+					})
+				}
 			}
-			for _, item := range history.Items {
-				results = append(results, ChangelogEntry{
-					Issue:     issue.Key,
-					Timestamp: history.Created,
-					Author:    accountID,
-					Field:     item.Field,
-					From:      item.FromString,
-					To:        item.ToString,
+		}
+
+		if searchResp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = searchResp.NextPageToken
+	}
+	return allResults, nil
+}
+
+// FetchUserWorklogs fetches worklog entries authored by accountID on issues
+// updated within [from, to].
+func FetchUserWorklogs(c *client.Client, accountID, from, to string) ([]WorklogEntry, error) {
+	aid := escapeJQLString(accountID)
+	jql := fmt.Sprintf(
+		`(reporter = "%s" OR assignee was "%s") AND updated >= "%s" AND updated <= "%s"`,
+		aid, aid, escapeJQLString(from), escapeJQLString(to),
+	)
+
+	var allResults []WorklogEntry
+	nextPageToken := ""
+
+	for {
+		reqMap := map[string]interface{}{
+			"jql":        jql,
+			"fields":     []string{"worklog"},
+			"maxResults": 50,
+		}
+		if nextPageToken != "" {
+			reqMap["nextPageToken"] = nextPageToken
+		}
+		reqBytes, _ := json.Marshal(reqMap)
+
+		body, exitCode := c.Fetch(context.Background(), "POST", "/rest/api/3/search/jql",
+			strings.NewReader(string(reqBytes)))
+		if exitCode != 0 {
+			return nil, fmt.Errorf("failed to fetch worklogs (exit %d)", exitCode)
+		}
+
+		var searchResp struct {
+			Issues []struct {
+				Fields struct {
+					Worklog struct {
+						Worklogs []struct {
+							Author struct {
+								AccountID string `json:"accountId"`
+							} `json:"author"`
+							Started          string `json:"started"`
+							TimeSpentSeconds int    `json:"timeSpentSeconds"`
+						} `json:"worklogs"`
+					} `json:"worklog"`
+				} `json:"fields"`
+			} `json:"issues"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &searchResp); err != nil {
+			return nil, fmt.Errorf("failed to parse worklog response: %w", err)
+		}
+
+		for _, issue := range searchResp.Issues {
+			for _, wl := range issue.Fields.Worklog.Worklogs {
+				if wl.Author.AccountID != accountID {
+					continue
+				}
+				// Parse date from the started field (e.g. "2025-01-15T10:00:00.000+0000")
+				date := wl.Started
+				if len(date) >= 10 {
+					date = date[:10]
+				}
+				allResults = append(allResults, WorklogEntry{
+					Date:            date,
+					DurationSeconds: wl.TimeSpentSeconds,
 				})
 			}
 		}
+
+		if searchResp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = searchResp.NextPageToken
 	}
-	return results, nil
+	return allResults, nil
 }
 
 // extractTextFromADF extracts plain text from an Atlassian Document Format (ADF)

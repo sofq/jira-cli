@@ -6,16 +6,45 @@ import (
 )
 
 // classifyComment classifies a comment text into a context category using
-// keyword matching. Priority: blocker_report > review_feedback > question > status_update.
+// keyword matching. Priority order: blocker_report > decision > request >
+// pushback > review_feedback > acknowledgment > technical > question > status_update.
 func classifyComment(text string) string {
 	lower := strings.ToLower(text)
 
-	// blocker_report: check first (highest priority)
+	// blocker_report: highest priority
 	if strings.Contains(lower, "block") ||
 		strings.Contains(lower, "waiting on") ||
 		strings.Contains(lower, "waiting for") ||
-		strings.Contains(lower, "need input") {
+		strings.Contains(lower, "need input") ||
+		strings.Contains(lower, "stuck") {
 		return "blocker_report"
+	}
+
+	// decision: explicit choices or conclusions
+	if strings.Contains(lower, "decided") ||
+		strings.Contains(lower, "going with") ||
+		strings.Contains(lower, "let's go with") ||
+		strings.Contains(lower, "we'll use") ||
+		strings.Contains(lower, "the plan is") {
+		return "decision"
+	}
+
+	// request: asking someone to do something
+	if strings.Contains(lower, "can you") ||
+		strings.Contains(lower, "could you") ||
+		strings.Contains(lower, "please") ||
+		strings.Contains(lower, "would you") {
+		return "request"
+	}
+
+	// pushback: disagreement or concerns
+	if strings.Contains(lower, "disagree") ||
+		strings.Contains(lower, "concern") ||
+		strings.Contains(lower, "not sure about") ||
+		strings.Contains(lower, "i don't think") ||
+		strings.Contains(lower, "instead") ||
+		strings.Contains(lower, "alternatively") {
+		return "pushback"
 	}
 
 	// review_feedback
@@ -27,6 +56,29 @@ func classifyComment(text string) string {
 		return "review_feedback"
 	}
 
+	// acknowledgment: short confirmations
+	if strings.Contains(lower, "thanks") ||
+		strings.Contains(lower, "got it") ||
+		strings.Contains(lower, "noted") ||
+		strings.Contains(lower, "sounds good") ||
+		strings.Contains(lower, "will do") ||
+		strings.Contains(lower, "on it") {
+		return "acknowledgment"
+	}
+
+	// technical: code/architecture discussion
+	if strings.Contains(lower, "stack trace") ||
+		strings.Contains(lower, "error") ||
+		strings.Contains(lower, "exception") ||
+		strings.Contains(lower, "root cause") ||
+		strings.Contains(lower, "refactor") ||
+		strings.Contains(lower, "migration") ||
+		strings.Contains(lower, "endpoint") ||
+		strings.Contains(lower, "database") ||
+		strings.Contains(lower, "api") {
+		return "technical"
+	}
+
 	// question: ends with "?" or high question density
 	trimmed := strings.TrimSpace(text)
 	if strings.HasSuffix(trimmed, "?") {
@@ -35,7 +87,6 @@ func classifyComment(text string) string {
 	sentences := strings.Split(trimmed, ".")
 	questionCount := strings.Count(trimmed, "?")
 	if len(sentences) > 0 && questionCount > 0 {
-		// high density: more than 1 question per 3 sentences
 		if float64(questionCount)/float64(len(sentences)) > 0.33 {
 			return "question"
 		}
@@ -71,8 +122,8 @@ func absInt(x int) int {
 
 // SelectCommentExamples selects up to maxExamples diverse, representative
 // comments from the input. It classifies each comment by context, groups by
-// context, picks the comment closest to the group's median word count, then
-// distributes selections across contexts (round-robin from largest groups).
+// context, and picks up to 2 examples per category (closest to median word
+// count), distributed round-robin across contexts from largest groups.
 func SelectCommentExamples(comments []RawComment, maxExamples int) []CommentExample {
 	if len(comments) == 0 {
 		return nil
@@ -85,11 +136,11 @@ func SelectCommentExamples(comments []RawComment, maxExamples int) []CommentExam
 		groups[ctx] = append(groups[ctx], c)
 	}
 
-	// For each group, find the best representative (closest to median word count)
+	// For each group, find up to 2 best representatives
 	type groupEntry struct {
-		context     string
-		best        RawComment
-		groupSize   int
+		context   string
+		examples  []RawComment
+		groupSize int
 	}
 
 	var entries []groupEntry
@@ -100,19 +151,32 @@ func SelectCommentExamples(comments []RawComment, maxExamples int) []CommentExam
 		}
 		med := medianWordCount(texts)
 
-		best := grp[0]
-		bestDist := absInt(wordCount(grp[0].Text) - med)
-		for _, c := range grp[1:] {
-			d := absInt(wordCount(c.Text) - med)
-			if d < bestDist {
-				bestDist = d
-				best = c
-			}
+		// Sort by distance from median
+		type scored struct {
+			comment RawComment
+			dist    int
+		}
+		var scoredComments []scored
+		for _, c := range grp {
+			scoredComments = append(scoredComments, scored{c, absInt(wordCount(c.Text) - med)})
+		}
+		sort.Slice(scoredComments, func(i, j int) bool {
+			return scoredComments[i].dist < scoredComments[j].dist
+		})
+
+		// Take up to 2 per category
+		maxPerCategory := 2
+		if len(scoredComments) < maxPerCategory {
+			maxPerCategory = len(scoredComments)
+		}
+		var examples []RawComment
+		for i := 0; i < maxPerCategory; i++ {
+			examples = append(examples, scoredComments[i].comment)
 		}
 
 		entries = append(entries, groupEntry{
 			context:   ctx,
-			best:      best,
+			examples:  examples,
 			groupSize: len(grp),
 		})
 	}
@@ -125,19 +189,23 @@ func SelectCommentExamples(comments []RawComment, maxExamples int) []CommentExam
 		return entries[i].context < entries[j].context
 	})
 
-	// Distribute: round-robin from largest groups, up to maxExamples
+	// Round-robin: first pass takes 1 per group, second pass takes the second
 	var result []CommentExample
-	for _, e := range entries {
-		if len(result) >= maxExamples {
-			break
+	for pass := 0; pass < 2; pass++ {
+		for _, e := range entries {
+			if len(result) >= maxExamples {
+				break
+			}
+			if pass < len(e.examples) {
+				c := e.examples[pass]
+				result = append(result, CommentExample{
+					Issue:   c.Issue,
+					Date:    c.Date,
+					Text:    c.Text,
+					Context: e.context,
+				})
+			}
 		}
-		c := e.best
-		result = append(result, CommentExample{
-			Issue:   c.Issue,
-			Date:    c.Date,
-			Text:    c.Text,
-			Context: e.context,
-		})
 	}
 
 	return result

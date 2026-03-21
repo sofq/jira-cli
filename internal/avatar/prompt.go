@@ -78,9 +78,26 @@ func formatProse(p *Profile, sections []string) string {
 	}
 
 	if len(p.Examples) > 0 {
-		fmt.Fprintf(&sb, "\n## Representative Examples\n")
+		// Group examples by context for better agent consumption
+		contextGroups := map[string][]ProfileExample{}
+		var contextOrder []string
 		for _, ex := range p.Examples {
-			fmt.Fprintf(&sb, "### %s (from %s)\n%s\n", ex.Context, ex.Source, ex.Text)
+			if _, exists := contextGroups[ex.Context]; !exists {
+				contextOrder = append(contextOrder, ex.Context)
+			}
+			contextGroups[ex.Context] = append(contextGroups[ex.Context], ex)
+		}
+
+		fmt.Fprintf(&sb, "\n## Representative Examples\n")
+		for _, ctx := range contextOrder {
+			examples := contextGroups[ctx]
+			for i, ex := range examples {
+				if len(examples) > 1 {
+					fmt.Fprintf(&sb, "### %s #%d (from %s)\n%s\n", ex.Context, i+1, ex.Source, ex.Text)
+				} else {
+					fmt.Fprintf(&sb, "### %s (from %s)\n%s\n", ex.Context, ex.Source, ex.Text)
+				}
+			}
 		}
 	}
 
