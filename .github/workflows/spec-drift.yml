@@ -16,6 +16,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
         with:
@@ -42,18 +44,43 @@ jobs:
           cp spec/jira-v3-latest.json spec/jira-v3.json
           go run ./gen/...
 
-      - name: Run tests against new spec
+      - name: Check if generated code changed
         if: steps.diff.outputs.changed == 'true'
-        id: tests
+        id: code
         run: |
-          if go build ./... && go test ./internal/... ./gen/... 2>&1; then
-            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          if git diff --quiet -- '*.go'; then
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Spec changed but generated code is identical."
           else
-            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Generated code has changed!"
+            git diff --stat -- '*.go'
           fi
+
+      - name: Run tests
+        if: steps.diff.outputs.changed == 'true'
+        run: go build ./... && go test ./internal/... ./gen/...
+
+      - name: Determine next patch version
+        if: steps.code.outputs.code_changed == 'true'
+        id: version
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | head -1)
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT="v0.0.1"
+          else
+            VERSION="${LATEST_TAG#v}"
+            MAJOR=$(echo "$VERSION" | cut -d. -f1)
+            MINOR=$(echo "$VERSION" | cut -d. -f2)
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            NEXT="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          echo "next_tag=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next release: $NEXT"
 
       - name: Create PR for spec update
         if: steps.diff.outputs.changed == 'true'
+        id: pr
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
         with:
           commit-message: "deps: update Jira OpenAPI spec"
@@ -63,9 +90,16 @@ jobs:
 
             This PR updates the spec and regenerates all commands.
 
-            **Tests:** ${{ steps.tests.outputs.tests_passed == 'true' && 'Passing' || 'Failing — manual review needed' }}
+            **Code changed:** ${{ steps.code.outputs.code_changed == 'true' && 'Yes — generated commands updated' || 'No — spec-only change' }}
+            ${{ steps.code.outputs.code_changed == 'true' && format('**Auto-release:** {0} (after merge)', steps.version.outputs.next_tag) || '**Auto-release:** None (spec-only)' }}
 
             Source: https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
           branch: auto/spec-update
-          labels: dependencies
+          labels: ${{ steps.code.outputs.code_changed == 'true' && 'dependencies,auto-release' || 'dependencies' }}
           delete-branch: true
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        run: gh pr merge "${{ steps.pr.outputs.pull-request-url }}" --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
