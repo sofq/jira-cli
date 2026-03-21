@@ -61,9 +61,18 @@ func readCacheFile(path string) oauth2CacheFile {
 	return f
 }
 
+// tempFile is the interface needed by writeCacheFile for atomic writes.
+type tempFile interface {
+	Name() string
+	Write([]byte) (int, error)
+	Close() error
+}
+
 // openTempFile creates a temp file for atomic writes. Tests can override this
 // to return a file whose Write or Close will fail.
-var openTempFile = os.CreateTemp
+var openTempFile = func(dir, pattern string) (tempFile, error) {
+	return os.CreateTemp(dir, pattern)
+}
 
 // writeCacheFile serialises f and atomically replaces the cache file at path.
 // Atomic replacement (write to temp + rename) prevents a concurrent reader
@@ -80,7 +89,7 @@ func writeCacheFile(path string, f oauth2CacheFile) error {
 	}
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		os.Remove(tmpName)
 		return err
 	}

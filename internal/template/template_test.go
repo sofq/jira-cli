@@ -1,7 +1,10 @@
 package template
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -829,6 +832,91 @@ func (e *fakeDirEntry) Name() string               { return e.name }
 func (e *fakeDirEntry) IsDir() bool                { return false }
 func (e *fakeDirEntry) Type() fs.FileMode          { return 0 }
 func (e *fakeDirEntry) Info() (fs.FileInfo, error)  { return nil, nil }
+
+// writeErrorWriter is an io.WriteCloser that fails on Write.
+type writeErrorWriter struct{}
+
+func (writeErrorWriter) Write([]byte) (int, error) {
+	return 0, fmt.Errorf("injected write error")
+}
+
+func (writeErrorWriter) Close() error { return nil }
+
+// closeErrorWriter is an io.WriteCloser that succeeds on Write but fails on Close.
+type closeErrorWriter struct {
+	bytes.Buffer
+}
+
+func (closeErrorWriter) Close() error {
+	return fmt.Errorf("injected close error")
+}
+
+// TestSave_WriteErrorOnCreate verifies that Save propagates write errors
+// when f.Write fails on a newly created file (overwrite=false path).
+func TestSave_WriteErrorOnCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	origOpen := openFileFunc
+	openFileFunc = func(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+		// Create the file so O_EXCL doesn't fail, then return a writer that fails.
+		f, err := os.OpenFile(name, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+		return writeErrorWriter{}, nil
+	}
+	defer func() { openFileFunc = origOpen }()
+
+	tmpl := &Template{
+		Name:      "writefail",
+		IssueType: "Task",
+		Fields:    map[string]string{"summary": "{{.summary}}"},
+	}
+	_, err := Save(tmpl, false)
+	if err == nil {
+		t.Fatal("expected error from Write, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing template") {
+		t.Errorf("expected 'writing template' in error, got: %v", err)
+	}
+}
+
+// TestSave_CloseErrorOnCreate verifies that Save propagates close errors
+// when f.Close fails on a newly created file (overwrite=false path).
+func TestSave_CloseErrorOnCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return tmpDir }
+	defer func() { userTemplatesDir = origDir }()
+
+	origOpen := openFileFunc
+	openFileFunc = func(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+		f, err := os.OpenFile(name, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+		return &closeErrorWriter{}, nil
+	}
+	defer func() { openFileFunc = origOpen }()
+
+	tmpl := &Template{
+		Name:      "closefail",
+		IssueType: "Task",
+		Fields:    map[string]string{"summary": "{{.summary}}"},
+	}
+	_, err := Save(tmpl, false)
+	if err == nil {
+		t.Fatal("expected error from Close, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing template") {
+		t.Errorf("expected 'writing template' in error, got: %v", err)
+	}
+}
 
 // TestSave_OverwriteWriteError verifies that Save with overwrite=true propagates
 // errors from os.WriteFile when the directory is read-only.
