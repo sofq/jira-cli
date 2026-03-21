@@ -49,12 +49,22 @@ type WritingAnalysis struct {
 
 // CommentStats holds metrics derived from issue comments.
 type CommentStats struct {
-	AvgLengthWords    float64         `json:"avg_length_words"`
-	MedianLengthWords float64         `json:"median_length_words"`
-	LengthDist        LengthDist      `json:"length_dist"`
-	Formatting        FormattingStats `json:"formatting"`
-	Vocabulary        VocabularyStats `json:"vocabulary"`
-	ToneSignals       ToneSignals     `json:"tone_signals"`
+	AvgLengthWords    float64          `json:"avg_length_words"`
+	MedianLengthWords float64          `json:"median_length_words"`
+	LengthDist        LengthDist       `json:"length_dist"`
+	Formatting        FormattingStats  `json:"formatting"`
+	Vocabulary        VocabularyStats  `json:"vocabulary"`
+	ToneSignals       ToneSignals      `json:"tone_signals"`
+	SentencePatterns  SentencePatterns `json:"sentence_patterns"`
+	FormalityScore    float64          `json:"formality_score"`
+}
+
+// SentencePatterns captures how the user structures sentences.
+type SentencePatterns struct {
+	FragmentRatio     float64 `json:"fragment_ratio"`      // ratio of fragments (no verb, ≤4 words) to total sentences
+	AvgWordsPerSent   float64 `json:"avg_words_per_sent"`  // average words per sentence
+	UsesContractions  float64 `json:"uses_contractions"`   // ratio of comments with contractions
+	StartsWithSubject float64 `json:"starts_with_subject"` // ratio starting with I/We/The/This
 }
 
 // LengthDist breaks down the percentage of short/medium/long texts.
@@ -239,10 +249,11 @@ type ProfileExample struct {
 
 // RawComment is a comment as returned by the Jira API, before analysis.
 type RawComment struct {
-	Issue  string `json:"issue"`
-	Date   string `json:"date"`
-	Text   string `json:"text"`
-	Author string `json:"author"`
+	Issue    string `json:"issue"`
+	Date     string `json:"date"`
+	Text     string `json:"text"`
+	Author   string `json:"author"`
+	Reporter string `json:"reporter"` // accountID of the issue reporter (for own-vs-others analysis)
 }
 
 // ChangelogEntry represents a single field change in an issue's history.
@@ -265,10 +276,14 @@ type IssueFields struct {
 
 // CreatedIssue records summary information about an issue the user created.
 type CreatedIssue struct {
-	Key          string `json:"key"`
-	Type         string `json:"type"`
-	SubtaskCount int    `json:"subtask_count"`
-	Description  string `json:"description"`
+	Key          string   `json:"key"`
+	Type         string   `json:"type"`
+	SubtaskCount int      `json:"subtask_count"`
+	Description  string   `json:"description"`
+	Priority     string   `json:"priority"`
+	Labels       []string `json:"labels"`
+	Components   []string `json:"components"`
+	FixVersion   string   `json:"fix_version"`
 }
 
 // CommentRecord represents a comment in a thread, with parent context.

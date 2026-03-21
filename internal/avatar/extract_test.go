@@ -1,6 +1,7 @@
 package avatar
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -169,7 +170,7 @@ func TestExtract_JQLUpperDateIncludesToday(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{
+	_, err := Extract(context.Background(), c, ExtractOptions{
 		MinComments: 1, MinUpdates: 1, MaxWindow: "2w",
 	})
 	if err != nil {
@@ -244,7 +245,7 @@ func TestExtract_InsufficientData(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{
+	_, err := Extract(context.Background(), c, ExtractOptions{
 		MinComments: 50, MinUpdates: 30, MaxWindow: "1w",
 	})
 	if err == nil {
@@ -276,7 +277,7 @@ func TestExtract_FetchUserFails(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	_, err := Extract(context.Background(), c, ExtractOptions{MaxWindow: "1w"})
 	if err == nil {
 		t.Fatal("expected error when ResolveUser fails, got nil")
 	}
@@ -305,7 +306,7 @@ func TestExtract_FetchIssuesFails(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	_, err := Extract(context.Background(), c, ExtractOptions{MaxWindow: "1w"})
 	if err == nil {
 		t.Fatal("expected error when FetchUserIssues fails, got nil")
 	}
@@ -334,7 +335,7 @@ func TestExtract_FetchChangelogFails(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	_, err := Extract(context.Background(), c, ExtractOptions{MaxWindow: "1w"})
 	if err == nil {
 		t.Fatal("expected error when FetchUserChangelog fails, got nil")
 	}
@@ -364,7 +365,7 @@ func TestExtract_FetchCommentsFails(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{MaxWindow: "1w"})
+	_, err := Extract(context.Background(), c, ExtractOptions{MaxWindow: "1w"})
 	if err == nil {
 		t.Fatal("expected error when FetchUserComments fails, got nil")
 	}
@@ -438,7 +439,7 @@ func TestExtract_WindowDoubling(t *testing.T) {
 
 	c := newTestAvatarClient(srv.URL)
 	// Use MinComments=100 to ensure soft minimum is never met, forcing window to max
-	_, err := Extract(c, ExtractOptions{
+	_, err := Extract(context.Background(), c, ExtractOptions{
 		MinComments: 100, MinUpdates: 1, MaxWindow: "1m",
 	})
 	// Should return InsufficientDataError since we never reach 100 comments
@@ -462,7 +463,7 @@ func TestExtract_InvalidMaxWindow(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestAvatarClient(srv.URL)
-	_, err := Extract(c, ExtractOptions{MaxWindow: "bad-window"})
+	_, err := Extract(context.Background(), c, ExtractOptions{MaxWindow: "bad-window"})
 	if err == nil {
 		t.Fatal("expected error for invalid MaxWindow, got nil")
 	}
@@ -473,7 +474,7 @@ func TestExtract_InvalidMaxWindow(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExtract_NilClient(t *testing.T) {
-	_, err := Extract(nil, DefaultExtractOptions())
+	_, err := Extract(context.Background(), nil, DefaultExtractOptions())
 	if err == nil {
 		t.Fatal("expected error for nil client, got nil")
 	}
@@ -583,7 +584,7 @@ func TestExtract_WithMockServer(t *testing.T) {
 		MaxWindow:   "6m",
 	}
 
-	extraction, err := Extract(c, opts)
+	extraction, err := Extract(context.Background(), c, opts)
 	if err != nil {
 		t.Fatalf("Extract returned error: %v", err)
 	}

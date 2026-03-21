@@ -10,12 +10,19 @@ import (
 )
 
 // writingTmplSrc is the Go template for generating the writing section.
-const writingTmplSrc = `{{.DisplayName}} writes {{.LengthDesc}} comments — typically {{.MedianWords}} words.{{if .BulletHigh}}
-Frequently uses bullet points.{{end}}{{if .EmojiRare}}
-Rarely uses emoji.{{end}}{{if .CodeHigh}}
-Uses code blocks when referencing specific errors or config.{{end}}{{if .SignOffs}}
+const writingTmplSrc = `{{.DisplayName}} writes {{.LengthDesc}} comments — typically {{.MedianWords}} words.{{if .SentenceStyle}}
+{{.SentenceStyle}}{{end}}{{if .FormalityDesc}}
+Tone: {{.FormalityDesc}}.{{end}}{{if .BulletHigh}}
+Frequently uses bullet points.{{end}}{{if .NoBullets}}
+Never uses bullet points.{{end}}{{if .EmojiRare}}
+Never uses emoji.{{end}}{{if .CodeHigh}}
+Uses code blocks when referencing specific errors or config.{{end}}{{if .NoCode}}
+Never uses code blocks.{{end}}{{if .NoHeadings}}
+Never uses headings in comments.{{end}}{{if .NoMentions}}
+Never uses @mentions.{{end}}{{if .SignOffs}}
 Ends messages with {{.SignOffs}}.{{end}}{{if .StructurePatterns}}
-Descriptions follow structured patterns: {{.StructurePatterns}}.{{end}}`
+Descriptions follow structured patterns: {{.StructurePatterns}}.{{end}}{{if .EmptyDescriptions}}
+Typically leaves issue descriptions empty.{{end}}`
 
 // workflowTmplSrc is the Go template for generating the workflow section.
 const workflowTmplSrc = `{{.DisplayName}} always sets {{.AlwaysSets}} when creating issues.{{if .DefaultPriority}}
@@ -27,7 +34,8 @@ Most commonly creates: {{.TopIssueTypes}}.{{end}}`
 // interactionTmplSrc is the Go template for generating the interaction section.
 const interactionTmplSrc = `{{.DisplayName}} has a median reply time of {{.MedianReplyTime}}.{{if .ReplyBias}}
 {{.ReplyBias}}{{end}}{{if .Collaborators}}
-Frequently mentions: {{.Collaborators}}.{{end}}{{if .ActiveHours}}
+Frequently mentions: {{.Collaborators}}.{{end}}{{if .EscalationStyle}}
+{{.EscalationStyle}}{{end}}{{if .ActiveHours}}
 Active hours: {{.ActiveHours}}.{{end}}{{if .PeakDays}}
 Peak activity days: {{.PeakDays}}.{{end}}`
 
@@ -36,11 +44,18 @@ type writingData struct {
 	DisplayName       string
 	LengthDesc        string
 	MedianWords       int
+	SentenceStyle     string
+	FormalityDesc     string
 	BulletHigh        bool
+	NoBullets         bool
 	EmojiRare         bool
 	CodeHigh          bool
+	NoCode            bool
+	NoHeadings        bool
+	NoMentions        bool
 	SignOffs          string
 	StructurePatterns string
+	EmptyDescriptions bool
 }
 
 // workflowData is the template data for the workflow section.
@@ -59,6 +74,7 @@ type interactionData struct {
 	MedianReplyTime string
 	ReplyBias       string
 	Collaborators   string
+	EscalationStyle string
 	ActiveHours     string
 	PeakDays        string
 }
@@ -105,15 +121,49 @@ func buildWritingSection(displayName string, w WritingAnalysis) (string, error) 
 		structurePatterns = strings.Join(desc.StructurePatterns, "; ")
 	}
 
+	// Sentence style description
+	sentenceStyle := ""
+	sp := comments.SentencePatterns
+	if sp.FragmentRatio > 0.5 {
+		sentenceStyle = "Prefers short fragments over full sentences (e.g. \"Done. Merging.\")."
+	} else if sp.AvgWordsPerSent > 15 {
+		sentenceStyle = "Writes in complete, detailed sentences."
+	} else if sp.AvgWordsPerSent > 0 {
+		sentenceStyle = fmt.Sprintf("Average sentence length: %.0f words.", sp.AvgWordsPerSent)
+	}
+
+	// Formality description
+	formalityDesc := ""
+	switch {
+	case comments.FormalityScore >= 0.7:
+		formalityDesc = "formal and professional"
+	case comments.FormalityScore >= 0.45:
+		formalityDesc = "neutral/balanced"
+	case comments.FormalityScore >= 0.3:
+		formalityDesc = "casual and direct"
+	case comments.FormalityScore > 0:
+		formalityDesc = "very casual and informal"
+	}
+
+	// Empty descriptions detection
+	emptyDescriptions := desc.AvgLengthWords < 2
+
 	data := writingData{
 		DisplayName:       displayName,
 		LengthDesc:        lengthDescription(comments.MedianLengthWords),
 		MedianWords:       int(comments.MedianLengthWords),
+		SentenceStyle:     sentenceStyle,
+		FormalityDesc:     formalityDesc,
 		BulletHigh:        comments.Formatting.UsesBullets > 0.5,
+		NoBullets:         comments.Formatting.UsesBullets == 0,
 		EmojiRare:         comments.Formatting.UsesEmoji < 0.05,
 		CodeHigh:          comments.Formatting.UsesCodeBlocks > 0.1,
+		NoCode:            comments.Formatting.UsesCodeBlocks == 0,
+		NoHeadings:        comments.Formatting.UsesHeadings == 0,
+		NoMentions:        comments.Formatting.UsesMentions == 0,
 		SignOffs:          signOffs,
 		StructurePatterns: structurePatterns,
+		EmptyDescriptions: emptyDescriptions,
 	}
 
 	return renderTemplate(writingTmpl, data)
@@ -190,6 +240,15 @@ func buildInteractionSection(displayName string, ia InteractionAnalysis) (string
 		collaborators = strings.Join(ia.MentionHabits.FrequentlyMentions, ", ")
 	}
 
+	escalationStyle := ""
+	es := ia.EscalationSignals
+	if len(es.BlockerKeywords) > 0 {
+		escalationStyle = fmt.Sprintf("Uses escalation keywords: %s.", strings.Join(es.BlockerKeywords, ", "))
+		if es.AvgCommentsBeforeEscalation > 0 {
+			escalationStyle += fmt.Sprintf(" Typically escalates after ~%.0f comments.", es.AvgCommentsBeforeEscalation)
+		}
+	}
+
 	activeHours := ""
 	ah := ia.Collaboration.ActiveHours
 	if ah.Start != "" && ah.End != "" {
@@ -209,6 +268,7 @@ func buildInteractionSection(displayName string, ia InteractionAnalysis) (string
 		MedianReplyTime: rp.MedianReplyTime,
 		ReplyBias:       replyBias,
 		Collaborators:   collaborators,
+		EscalationStyle: escalationStyle,
 		ActiveHours:     activeHours,
 		PeakDays:        peakDays,
 	}
