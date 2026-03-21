@@ -177,14 +177,20 @@ func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, see
 	}
 
 	// Detect removed issues (only after first poll).
+	// Collect keys to remove first, then process them — this avoids
+	// partial map mutation if emitEvent returns early on maxEvents.
 	if !firstPoll {
+		var removedKeys []string
 		for key := range seen {
 			if !currentKeys[key] {
-				delete(seen, key)
-				removedJSON, _ := marshalNoEscape(map[string]string{"key": key})
-				if code := emitEvent(c, "removed", removedJSON, emitted, maxEvents); code != jrerrors.ExitOK {
-					return code
-				}
+				removedKeys = append(removedKeys, key)
+			}
+		}
+		for _, key := range removedKeys {
+			delete(seen, key)
+			removedJSON, _ := marshalNoEscape(map[string]string{"key": key})
+			if code := emitEvent(c, "removed", removedJSON, emitted, maxEvents); code != jrerrors.ExitOK {
+				return code
 			}
 		}
 	}

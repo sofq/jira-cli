@@ -52,6 +52,25 @@ jr issue get --issueIdOrKey PROJ-123 \
 Always use `--fields` and `--jq` together. `--fields` reduces what Jira sends back (saving bandwidth and API quota), while `--jq` shapes the output into exactly the structure you need.
 :::
 
+## `--format` — human-readable output
+
+The `--format` flag renders the response as a table or CSV to stderr, while JSON output continues on stdout as usual. This is useful when you want to display results to a human while still piping JSON to another tool.
+
+```bash
+# Table output on stderr
+jr project search --format table
+
+# CSV output on stderr
+jr project search --format csv
+
+# Combine with presets
+jr issue get --issueIdOrKey PROJ-123 --preset agent --format table
+```
+
+::: tip
+The formatted output goes to stderr and JSON goes to stdout. This means you can redirect them independently — for example, pipe stdout to `jq` while viewing the table on your terminal.
+:::
+
 ## Cache read-heavy data
 
 For data that changes infrequently (like project lists), use `--cache` to avoid redundant API calls:

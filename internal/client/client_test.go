@@ -3,6 +3,8 @@ package client_test
 import (
 	"bytes"
 	"context"
+	crypto_sha256 "crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1991,6 +1993,11 @@ func TestFetchPage_ConnectionError_Pagination(t *testing.T) {
 
 // TestFetchPage_AuthError covers line 520-529: auth fails on a pagination page fetch.
 func TestFetchPage_AuthError(t *testing.T) {
+	// Disable the OAuth2 file cache for this test by redirecting to /dev/null.
+	// This ensures every fetchOAuth2Token call hits the token server so the
+	// second call can return an empty token and trigger the auth error.
+	client.SetOAuth2CacheFileForTest(t, os.DevNull)
+
 	callCount := 0
 	var tokenCallCount int
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -2469,5 +2476,427 @@ func TestDo_DryRun_AuditLogging(t *testing.T) {
 	}
 	if entry["dry_run"] != true {
 		t.Error("expected dry_run=true in audit entry")
+	}
+}
+
+// --- OAuth2 cache hit ---
+
+// TestOAuth2_CacheHit verifies that fetchOAuth2Token returns the cached token without
+// making a request to the token endpoint when a valid entry exists in the cache file.
+func TestOAuth2_CacheHit(t *testing.T) {
+	// Redirect the OAuth2 cache file to a temp path so we can pre-populate it.
+	tmpFile := filepath.Join(t.TempDir(), "oauth2_tokens.json")
+	client.SetOAuth2CacheFileForTest(t, tmpFile)
+
+	// Build the cache key that fetchOAuth2Token will compute for our tokenURL+clientID.
+	// We write the cache entry directly using the same JSON structure the package uses.
+	tokenURL := "https://auth.example.com/token"
+	clientID := "cached-client-id"
+
+	// Compute the cache key (sha256 of "tokenURL\x00clientID") and write a valid entry.
+	// We write raw JSON that matches oauth2CacheFile layout.
+	cacheKey := computeOAuth2CacheKey(tokenURL, clientID)
+	expiresAt := time.Now().Add(10 * time.Minute).UTC().Format(time.RFC3339Nano)
+	cacheContent := fmt.Sprintf(`{%q:{"token":"cached-access-token","expires_at":%q}}`, cacheKey, expiresAt)
+	if err := os.WriteFile(tmpFile, []byte(cacheContent), 0o600); err != nil {
+		t.Fatalf("failed to write cache file: %v", err)
+	}
+
+	// The token server must NOT be called — if it is, the test fails.
+	tokenServerCalled := false
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		tokenServerCalled = true
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"access_token":"fresh-token","expires_in":3600}`)
+	}))
+	defer tokenServer.Close()
+
+	// Use a fixed token URL that matches what we cached (not the live tokenServer.URL).
+	var gotAuth string
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer apiServer.Close()
+
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{
+		BaseURL:    apiServer.URL,
+		Auth:       config.AuthConfig{Type: "oauth2", ClientID: clientID, ClientSecret: "secret", TokenURL: tokenURL},
+		HTTPClient: &http.Client{},
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	code := c.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+	if tokenServerCalled {
+		t.Error("token endpoint should NOT have been called on a cache hit")
+	}
+	if gotAuth != "Bearer cached-access-token" {
+		t.Errorf("expected 'Bearer cached-access-token', got %q", gotAuth)
+	}
+}
+
+// computeOAuth2CacheKey replicates the package's cache key computation so tests can
+// write cache entries with the correct key without importing internal symbols.
+// It mirrors: sha256(tokenURL + "\x00" + clientID) encoded as hex.
+func computeOAuth2CacheKey(tokenURL, clientID string) string {
+	h := crypto_sha256.Sum256([]byte(tokenURL + "\x00" + clientID))
+	return hex.EncodeToString(h[:])
+}
+
+// --- Retry path in doOnce ---
+
+// errReader is an io.Reader that always returns an error.
+type errReader struct{ msg string }
+
+func (e *errReader) Read(_ []byte) (int, error) { return 0, fmt.Errorf("%s", e.msg) }
+
+// TestDoOnce_RequestBodyReadError covers lines 244-252: io.ReadAll fails when the request
+// body reader returns an error before any data is sent.
+func TestDoOnce_RequestBodyReadError(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{}`))
+	defer te.Close()
+
+	// Pass a body reader that always errors — triggers the pre-flight read failure.
+	body := &errReader{msg: "simulated read error"}
+	code := te.Client.Do(context.Background(), "POST", "/test", nil, body)
+	if code != 1 {
+		t.Fatalf("expected exit 1 (connection_error on request body read), got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if !strings.Contains(te.Stderr.String(), "connection_error") {
+		t.Errorf("expected connection_error in stderr, got: %s", te.Stderr.String())
+	}
+	if !strings.Contains(te.Stderr.String(), "reading request body") {
+		t.Errorf("expected 'reading request body' in error message, got: %s", te.Stderr.String())
+	}
+}
+
+// TestDoOnce_RetrySucceeds verifies that a transient 503 on the first attempt is retried
+// and the eventual 200 response is written to stdout.
+func TestDoOnce_RetrySucceeds(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			// First attempt: transient server error.
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintln(w, `{"errorMessages":["temporarily unavailable"]}`)
+			return
+		}
+		// Second attempt: success.
+		fmt.Fprintln(w, `{"recovered":true}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0 after successful retry, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls (1 retry), got %d", callCount)
+	}
+	if !strings.Contains(te.Stdout.String(), "recovered") {
+		t.Errorf("expected 'recovered' in stdout, got: %s", te.Stdout.String())
+	}
+}
+
+// TestDoOnce_RetryExhausted verifies that after exhausting all retries on a 429 the
+// client returns ExitRateLimit (5) with a rate_limited error on stderr.
+func TestDoOnce_RetryExhausted(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprintln(w, `{"message":"rate limited"}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 5 {
+		t.Fatalf("expected exit 5 (rate_limited), got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// After exhausting retries, server should have been called MaxRetries+1 times.
+	if callCount != 2 {
+		t.Errorf("expected 2 total attempts (initial + 1 retry), got %d", callCount)
+	}
+	var errObj map[string]any
+	if err := json.Unmarshal(te.Stderr.Bytes(), &errObj); err != nil {
+		t.Fatalf("stderr is not valid JSON: %s; err=%v", te.Stderr.String(), err)
+	}
+	if errObj["error_type"] != "rate_limited" {
+		t.Errorf("expected error_type rate_limited, got %v", errObj["error_type"])
+	}
+	hint, _ := errObj["hint"].(string)
+	if !strings.Contains(hint, "1") {
+		t.Errorf("expected hint to mention retry count, got %q", hint)
+	}
+}
+
+// TestDoOnce_Retry204Response covers line 360-362: retry succeeds with a 204 No Content
+// response, which should be normalised to an empty JSON object "{}".
+func TestDoOnce_Retry204Response(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		if callCount == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintln(w, `{"errorMessages":["temporarily unavailable"]}`)
+			return
+		}
+		// Second attempt: 204 No Content.
+		w.WriteHeader(http.StatusNoContent)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+
+	code := te.Client.Do(context.Background(), "PUT", "/test", nil, strings.NewReader(`{}`))
+	if code != 0 {
+		t.Fatalf("expected exit 0 after 204 retry, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if out := strings.TrimSpace(te.Stdout.String()); out != "{}" {
+		t.Errorf("expected '{}' for 204 response after retry, got %q", out)
+	}
+}
+
+// TestDoOnce_RetryAfterHeader verifies that the Retry-After response header is parsed
+// and forwarded to the retry engine for the 429 status code.
+func TestDoOnce_RetryAfterHeader(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			fmt.Fprintln(w, `{"message":"rate limited"}`)
+			return
+		}
+		fmt.Fprintln(w, `{"ok":true}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+
+	start := time.Now()
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	elapsed := time.Since(start)
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 after retry, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls, got %d", callCount)
+	}
+	// Retry-After: 1 means 1 second sleep — elapsed should be at least ~1s.
+	if elapsed < 900*time.Millisecond {
+		t.Errorf("expected at least ~1s delay due to Retry-After header, elapsed=%v", elapsed)
+	}
+}
+
+// TestDoOnce_RetryNonRetryable verifies that a non-retryable 4xx error (e.g. 404) is
+// returned immediately without retrying even when MaxRetries > 0.
+func TestDoOnce_RetryNonRetryable(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, `{"errorMessages":["not found"]}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 3
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 3 {
+		t.Fatalf("expected exit 3 (not_found), got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// 404 is not retryable — server should only be called once.
+	if callCount != 1 {
+		t.Errorf("expected 1 HTTP call (no retry for 404), got %d", callCount)
+	}
+}
+
+// TestDoOnce_RetryCacheWriteWarning covers line 366: cache.Set fails in the retry
+// path when the cache directory is read-only. The request still succeeds (non-fatal).
+func TestDoOnce_RetryCacheWriteWarning(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, chmod restriction will not apply")
+	}
+	cacheDir := cache.Dir()
+	if err := os.Chmod(cacheDir, 0o555); err != nil {
+		t.Skipf("cannot chmod cache dir %s: %v", cacheDir, err)
+	}
+	defer func() { _ = os.Chmod(cacheDir, 0o755) }()
+
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintln(w, `{"errorMessages":["temporarily unavailable"]}`)
+			return
+		}
+		fmt.Fprintln(w, `{"data":"retry-cached"}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+	te.Client.CacheTTL = 5 * time.Minute
+	te.Client.Verbose = true
+
+	code := te.Client.Do(context.Background(), "GET", "/retry-cache-warn-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0 despite cache write failure, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if !strings.Contains(te.Stderr.String(), "cache write failed") {
+		t.Errorf("expected cache write failed warning in stderr, got: %s", te.Stderr.String())
+	}
+}
+
+// TestDoOnce_RetryCacheWriteAfterSuccess verifies that after a successful retry the
+// response is written to the cache so subsequent identical requests hit the cache.
+func TestDoOnce_RetryCacheWriteAfterSuccess(t *testing.T) {
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintln(w, `{"errorMessages":["temporarily unavailable"]}`)
+			return
+		}
+		fmt.Fprintln(w, `{"data":"retry-cached"}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 1
+	te.Client.CacheTTL = 5 * time.Minute
+
+	code := te.Client.Do(context.Background(), "GET", "/retry-cache-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0 after retry, got %d; stderr=%s", code, te.Stderr.String())
+	}
+
+	// Second request should come from cache — server call count must not increase.
+	te.ResetBuffers()
+	code = te.Client.Do(context.Background(), "GET", "/retry-cache-test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0 on cached request, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 total server calls (1 retry + cache hit), got %d", callCount)
+	}
+	if !strings.Contains(te.Stdout.String(), "retry-cached") {
+		t.Errorf("expected cached data in stdout, got: %s", te.Stdout.String())
+	}
+}
+
+// TestDoOnce_RetryNonOKFinalCode verifies that when attemptRequest returns a non-OK
+// exit code during the retry path (e.g. auth error), that code is returned directly.
+func TestDoOnce_RetryNonOKFinalCode(t *testing.T) {
+	// Server always returns 401, which is not retryable.
+	callCount := 0
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, `{"message":"Unauthorized"}`)
+	})
+	defer te.Close()
+	te.Client.MaxRetries = 2
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 2 {
+		t.Fatalf("expected exit 2 (auth_failed), got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// 401 is non-retryable so only one attempt is made.
+	if callCount != 1 {
+		t.Errorf("expected 1 HTTP call (non-retryable 401), got %d", callCount)
+	}
+}
+
+// --- WriteOutput format branches ---
+
+// TestWriteOutput_FormatTable verifies that setting Format="table" causes a human-readable
+// table to be written to stderr while JSON is still written to stdout.
+func TestWriteOutput_FormatTable(t *testing.T) {
+	te := newTestEnv(jsonHandler(`[{"key":"PROJ-1","summary":"Login broken"},{"key":"PROJ-2","summary":"Dashboard slow"}]`))
+	defer te.Close()
+	te.Client.Format = "table"
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// JSON must still be on stdout.
+	var result []map[string]any
+	if err := json.Unmarshal(te.Stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", te.Stdout.String(), err)
+	}
+	// Table must be on stderr.
+	stderrOut := te.Stderr.String()
+	if !strings.Contains(stderrOut, "key") || !strings.Contains(stderrOut, "summary") {
+		t.Errorf("expected table headers in stderr, got: %s", stderrOut)
+	}
+	if !strings.Contains(stderrOut, "PROJ-1") {
+		t.Errorf("expected PROJ-1 row in table on stderr, got: %s", stderrOut)
+	}
+}
+
+// TestWriteOutput_FormatCSV verifies that setting Format="csv" causes CSV output to be
+// written to stderr while JSON is still written to stdout.
+func TestWriteOutput_FormatCSV(t *testing.T) {
+	te := newTestEnv(jsonHandler(`[{"key":"PROJ-1","status":"Open"},{"key":"PROJ-2","status":"Done"}]`))
+	defer te.Close()
+	te.Client.Format = "csv"
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// JSON must still be on stdout.
+	var result []map[string]any
+	if err := json.Unmarshal(te.Stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", te.Stdout.String(), err)
+	}
+	// CSV on stderr must include headers and data.
+	stderrOut := te.Stderr.String()
+	if !strings.Contains(stderrOut, "key") || !strings.Contains(stderrOut, "status") {
+		t.Errorf("expected CSV headers in stderr, got: %s", stderrOut)
+	}
+	if !strings.Contains(stderrOut, "PROJ-1") {
+		t.Errorf("expected PROJ-1 in CSV on stderr, got: %s", stderrOut)
+	}
+}
+
+// TestWriteOutput_FormatUnknown verifies that an unrecognised format string emits a
+// warning to stderr (not a fatal error) while still writing JSON to stdout.
+func TestWriteOutput_FormatUnknown(t *testing.T) {
+	te := newTestEnv(jsonHandler(`{"key":"PROJ-1"}`))
+	defer te.Close()
+	te.Client.Format = "xml" // unsupported format
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0 (format error is non-fatal), got %d", code)
+	}
+	// JSON must still be on stdout.
+	var result map[string]any
+	if err := json.Unmarshal(te.Stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stdout is not valid JSON: %s; err=%v", te.Stdout.String(), err)
+	}
+	// Warning message must appear on stderr.
+	stderrOut := te.Stderr.String()
+	if !strings.Contains(stderrOut, "format warning") {
+		t.Errorf("expected 'format warning' in stderr, got: %s", stderrOut)
+	}
+	if !strings.Contains(stderrOut, "xml") {
+		t.Errorf("expected format name 'xml' in warning, got: %s", stderrOut)
 	}
 }

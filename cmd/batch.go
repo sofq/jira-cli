@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/adf"
@@ -61,6 +62,7 @@ Use --input to specify a file, or pipe JSON to stdin.`,
 func init() {
 	batchCmd.Flags().String("input", "", "path to JSON input file (reads stdin if not set)")
 	batchCmd.Flags().Int("max-batch", 50, "maximum number of operations per batch")
+	batchCmd.Flags().Int("parallel", 0, "number of concurrent operations (0 = sequential)")
 	rootCmd.AddCommand(batchCmd)
 }
 
@@ -163,12 +165,33 @@ func runBatch(cmd *cobra.Command, args []string) error {
 		opMap[key] = op
 	}
 
+	// Read --parallel before spawning goroutines: cmd must not be accessed
+	// from multiple goroutines concurrently.
+	parallel, _ := cmd.Flags().GetInt("parallel")
+
 	// Execute each operation and collect results.
 	results := make([]BatchResult, len(ops))
 
-	for i, bop := range ops {
-		result := executeBatchOp(cmd, baseClient, i, bop, opMap)
-		results[i] = result
+	if parallel > 0 {
+		// Parallel execution with a bounded goroutine pool.
+		// Each goroutine writes to its own index in results — no mutex needed.
+		sem := make(chan struct{}, parallel)
+		var wg sync.WaitGroup
+		ctx := cmd.Context()
+		for i, bop := range ops {
+			wg.Add(1)
+			sem <- struct{}{} // acquire slot
+			go func(idx int, op BatchOp) {
+				defer wg.Done()
+				defer func() { <-sem }() // release slot
+				results[idx] = executeBatchOpWithContext(ctx, baseClient, idx, op, opMap)
+			}(i, bop)
+		}
+		wg.Wait()
+	} else {
+		for i, bop := range ops {
+			results[i] = executeBatchOp(cmd, baseClient, i, bop, opMap)
+		}
 	}
 
 	// Write all results as a JSON array to stdout.
@@ -215,6 +238,92 @@ func runBatch(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// executeBatchOpWithContext is identical to executeBatchOp but accepts a
+// pre-extracted context.Context instead of *cobra.Command. Use this variant
+// when the operation runs inside a goroutine to avoid concurrent access to cmd.
+func executeBatchOpWithContext(
+	ctx context.Context,
+	baseClient *client.Client,
+	index int,
+	bop BatchOp,
+	opMap map[string]generated.SchemaOp,
+) BatchResult {
+	// Look up the schema op.
+	schemaOp, ok := opMap[bop.Command]
+	if !ok {
+		errMsg := fmt.Sprintf("unknown command %q", bop.Command)
+		return errorResult(index, jrerrors.ExitError, "validation_error", errMsg)
+	}
+
+	// Check policy for this operation.
+	if baseClient.Policy != nil {
+		if err := baseClient.Policy.Check(bop.Command); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   err.Error(),
+			}
+			encoded, _ := json.Marshal(apiErr)
+			return BatchResult{
+				Index:    index,
+				ExitCode: jrerrors.ExitValidation,
+				Error:    json.RawMessage(encoded),
+			}
+		}
+	}
+
+	// Create a per-operation client with captured stdout/stderr.
+	var stdoutBuf strings.Builder
+	var stderrBuf strings.Builder
+
+	opClient := &client.Client{
+		BaseURL:     baseClient.BaseURL,
+		Auth:        baseClient.Auth,
+		HTTPClient:  baseClient.HTTPClient,
+		Stdout:      &stdoutBuf,
+		Stderr:      &stderrBuf,
+		JQFilter:    bop.JQ,
+		Paginate:    baseClient.Paginate,
+		DryRun:      baseClient.DryRun,
+		Verbose:     baseClient.Verbose,
+		Pretty:      false,
+		Fields:      baseClient.Fields,
+		CacheTTL:    baseClient.CacheTTL,
+		AuditLogger: baseClient.AuditLogger,
+		Profile:     baseClient.Profile,
+		Operation:   bop.Command,
+	}
+
+	// Hand-written commands have custom execution logic.
+	if strings.HasPrefix(bop.Command, "workflow ") {
+		exitCode := executeBatchWorkflow(ctx, opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+	}
+	if strings.HasPrefix(bop.Command, "template ") {
+		exitCode := executeBatchTemplate(ctx, opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+	}
+	if bop.Command == "diff diff" {
+		exitCode := executeBatchDiff(ctx, opClient, bop)
+		return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+	}
+
+	// Build path by substituting {paramName} placeholders.
+	path := schemaOp.Path
+	for _, flag := range schemaOp.Flags {
+		if flag.In == "path" {
+			placeholder := "{" + flag.Name + "}"
+			if val, exists := bop.Args[flag.Name]; exists && val != "" {
+				path = strings.ReplaceAll(path, placeholder, url.PathEscape(val))
+			} else if flag.Required && strings.Contains(path, placeholder) {
+				errMsg := fmt.Sprintf("missing required path parameter %q", flag.Name)
+				return errorResult(index, jrerrors.ExitValidation, "validation_error", errMsg)
+			}
+		}
+	}
+
+	return executeBatchOpHTTP(ctx, opClient, schemaOp, bop, index, path, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 }
 
 // executeBatchOp runs a single batch operation and returns its result.
@@ -324,6 +433,48 @@ func executeBatchOp(
 	exitCode := opClient.Do(cmd.Context(), schemaOp.Method, path, query, body)
 
 	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
+}
+
+// executeBatchOpHTTP performs the HTTP portion of a batch operation using a
+// pre-built opClient and resolved path. It is called by both executeBatchOp
+// and executeBatchOpWithContext to avoid code duplication.
+func executeBatchOpHTTP(
+	ctx context.Context,
+	opClient *client.Client,
+	schemaOp generated.SchemaOp,
+	bop BatchOp,
+	index int,
+	path string,
+	stdoutBuf *strings.Builder,
+	stderrBuf *strings.Builder,
+	verbose bool,
+) BatchResult {
+	// Build query params from args that match "query" flags in the schema.
+	query := url.Values{}
+	for _, flag := range schemaOp.Flags {
+		if flag.In == "query" {
+			if val, exists := bop.Args[flag.Name]; exists {
+				query.Set(flag.Name, val)
+			}
+		}
+	}
+
+	// If the batch op explicitly specifies "fields" in its args,
+	// clear the per-op client's Fields so that client.Do() does not overwrite
+	// the per-op value with the global --fields flag.
+	if _, hasFields := bop.Args["fields"]; hasFields {
+		opClient.Fields = ""
+	}
+
+	// Handle body.
+	var body io.Reader
+	if bodyStr, exists := bop.Args["body"]; exists && bodyStr != "" {
+		body = strings.NewReader(bodyStr)
+	}
+
+	exitCode := opClient.Do(ctx, schemaOp.Method, path, query, body)
+
+	return buildBatchResult(index, exitCode, stdoutBuf, stderrBuf, verbose)
 }
 
 // batchValidationError writes a validation error to the client's stderr and returns ExitValidation.

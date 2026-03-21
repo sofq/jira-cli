@@ -26,13 +26,25 @@ type AuthConfig struct {
 	Scopes       string `json:"scopes,omitempty"`
 }
 
+// AvatarConfig holds configuration for the avatar (persona) feature.
+type AvatarConfig struct {
+	Enabled     bool              `json:"enabled,omitempty"`
+	Engine      string            `json:"engine,omitempty"`
+	LLMCmd      string            `json:"llm_cmd,omitempty"`
+	MinComments int               `json:"min_comments,omitempty"`
+	MinUpdates  int               `json:"min_updates,omitempty"`
+	MaxWindow   string            `json:"max_window,omitempty"`
+	Overrides   map[string]string `json:"overrides,omitempty"`
+}
+
 // Profile holds the configuration for a named Jira instance.
 type Profile struct {
-	BaseURL           string     `json:"base_url"`
-	Auth              AuthConfig `json:"auth"`
-	AllowedOperations []string   `json:"allowed_operations,omitempty"`
-	DeniedOperations  []string   `json:"denied_operations,omitempty"`
-	AuditLog          bool       `json:"audit_log,omitempty"`
+	BaseURL           string        `json:"base_url"`
+	Auth              AuthConfig    `json:"auth"`
+	AllowedOperations []string      `json:"allowed_operations,omitempty"`
+	DeniedOperations  []string      `json:"denied_operations,omitempty"`
+	AuditLog          bool          `json:"audit_log,omitempty"`
+	Avatar            *AvatarConfig `json:"avatar,omitempty"`
 }
 
 // Config is the top-level configuration structure persisted to disk.

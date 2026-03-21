@@ -154,7 +154,7 @@ func parseVars(varFlags []string) (map[string]string, error) {
 	vars := make(map[string]string, len(varFlags))
 	for _, v := range varFlags {
 		parts := strings.SplitN(v, "=", 2)
-		if len(parts) != 2 {
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
 			return nil, fmt.Errorf("invalid --var format %q; expected key=value", v)
 		}
 		vars[parts[0]] = parts[1]

@@ -26,6 +26,8 @@ var skipClientCommands = map[string]bool{
 	"help":       true,
 	"schema":     true,
 	"preset":     true,
+	"doctor":     true,
+	"explain":    true,
 }
 
 var rootCmd = &cobra.Command{
@@ -60,6 +62,8 @@ var rootCmd = &cobra.Command{
 		fields, _ := cmd.Flags().GetString("fields")
 		cacheTTL, _ := cmd.Flags().GetDuration("cache")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
+		outputFormat, _ := cmd.Flags().GetString("format")
+		retryCount, _ := cmd.Flags().GetInt("retry")
 
 		// Expand --preset into --fields and --jq defaults.
 		// Explicit --fields or --jq flags take precedence over preset values.
@@ -184,6 +188,8 @@ var rootCmd = &cobra.Command{
 			Pretty:      pretty,
 			Fields:      fields,
 			CacheTTL:    cacheTTL,
+			Format:      outputFormat,
+			MaxRetries:  retryCount,
 			AuditLogger: auditLogger,
 			Profile:     resolved.ProfileName,
 			Operation:   operation,
@@ -191,6 +197,14 @@ var rootCmd = &cobra.Command{
 		}
 
 		cmd.SetContext(client.NewContext(cmd.Context(), c))
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		// Close the audit logger if one was opened during PersistentPreRunE.
+		c, err := client.FromContext(cmd.Context())
+		if err == nil && c.AuditLogger != nil {
+			c.AuditLogger.Close()
+		}
 		return nil
 	},
 }
@@ -213,6 +227,8 @@ func init() {
 	pf.String("preset", "", "named output preset (expands to --fields and --jq defaults)")
 	pf.Bool("audit", false, "enable audit logging for this invocation")
 	pf.String("audit-file", "", "path to audit log file (implies --audit)")
+	pf.Int("retry", 0, "number of retries for transient errors (429, 5xx)")
+	pf.String("format", "", "additional output format written to stderr: table or csv")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
@@ -221,9 +237,10 @@ func init() {
 	// with hand-written ones while preserving generated subcommands.
 	generated.RegisterAll(rootCmd)
 
-	// Merge hand-written version/workflow with their generated subcommands.
+	// Merge hand-written version/workflow/avatar with their generated subcommands.
 	mergeCommand(rootCmd, versionCmd)
 	mergeCommand(rootCmd, workflowCmd)
+	mergeCommand(rootCmd, avatarCmd)
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)

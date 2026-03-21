@@ -8,6 +8,7 @@
   <a href="https://github.com/sofq/jira-cli/releases"><img src="https://img.shields.io/github/v/release/sofq/jira-cli?style=for-the-badge&logo=github&logoColor=white&color=181717" alt="GitHub Release"></a>
   <a href="https://github.com/sofq/jira-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/sofq/jira-cli/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI" alt="CI"></a>
   <a href="https://codecov.io/gh/sofq/jira-cli"><img src="https://img.shields.io/codecov/c/github/sofq/jira-cli?style=for-the-badge&logo=codecov&logoColor=white" alt="codecov"></a>
+  <a href="https://github.com/sofq/jira-cli/security"><img src="https://img.shields.io/github/actions/workflow/status/sofq/jira-cli/security.yml?style=for-the-badge&logo=github&logoColor=white&label=Security" alt="Security"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="License"></a>
 </p>
 
@@ -71,7 +72,7 @@ jr workflow sprint --issue PROJ-123 --to "Sprint 5"
 echo '[
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}
-]' | jr batch
+]' | jr batch --parallel 5
 ```
 
 ### Watch — NDJSON event stream
@@ -96,6 +97,46 @@ Built-in: `bug-report`, `story`, `task`, `epic`, `subtask`, `spike`.
 ```bash
 jr diff --issue PROJ-123 --since 2h --field status
 ```
+
+### Context — full issue in one call
+
+```bash
+jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
+```
+
+Issue fields + comments + changelog in a single invocation.
+
+### Pipe — chain commands
+
+```bash
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ'" "issue get"
+jr pipe "project search" "project get" --extract "[.values[].key]" --inject projectIdOrKey --parallel 5
+```
+
+### Retry & resilience
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 --retry 3      # exponential backoff on 429/5xx
+jr project search --format table                     # human-readable table on stderr
+jr project search --format csv                       # CSV on stderr, JSON on stdout
+```
+
+### Doctor & Explain
+
+```bash
+jr doctor                                            # check config, auth, connectivity
+jr explain '{"error_type":"auth_failed","status":401,"message":"..."}'  # remediation advice
+```
+
+### Avatar — user style profiling
+
+```bash
+jr avatar extract && jr avatar build    # analyze Jira activity
+jr avatar prompt                        # output profile for agent consumption
+jr avatar show                          # display profile
+```
+
+Analyzes writing patterns, workflow habits, and interactions to build behavioral profiles.
 
 ### Error contract agents can branch on
 

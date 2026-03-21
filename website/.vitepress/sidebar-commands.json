@@ -68,6 +68,10 @@
     "link": "/commands/configure"
   },
   {
+    "text": "context",
+    "link": "/commands/context"
+  },
+  {
     "text": "customFieldOption",
     "link": "/commands/customFieldOption"
   },
@@ -84,8 +88,16 @@
     "link": "/commands/diff"
   },
   {
+    "text": "doctor",
+    "link": "/commands/doctor"
+  },
+  {
     "text": "events",
     "link": "/commands/events"
+  },
+  {
+    "text": "explain",
+    "link": "/commands/explain"
   },
   {
     "text": "expression",
@@ -198,6 +210,10 @@
   {
     "text": "permissionscheme",
     "link": "/commands/permissionscheme"
+  },
+  {
+    "text": "pipe",
+    "link": "/commands/pipe"
   },
   {
     "text": "plans",

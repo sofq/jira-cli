@@ -15,12 +15,20 @@ features:
     details: "jr watch --jql 'status changed' --interval 30s. NDJSON stream of changes. Build automations that react to Jira in real time."
   - title: Diff & Changelog
     details: "jr diff --issue PROJ-1 --since 2h. See exactly what changed, when, and by whom. Structured JSON, not a wall of text."
-  - title: Batch Operations
-    details: "Pipe a JSON array of commands into jr batch. Run 50 operations in one call. Parallel by default."
+  - title: Batch & Parallel
+    details: "jr batch --parallel 5 runs operations concurrently. One process, one output array. 50 ops max by default."
   - title: Security Built In
     details: "Operation policies per profile. Audit logging. Batch limits. Lock down what agents can do — allowed_operations or denied_operations with glob patterns."
   - title: 600+ Commands
     details: "Auto-generated from Jira's OpenAPI spec. Every endpoint is a CLI command, always in sync. Run jr schema to explore."
+  - title: Context
+    details: "jr context PROJ-1 — issue, comments, and changelog in one call. Three API calls collapsed into one command."
+  - title: Pipe
+    details: "jr pipe 'search ...' 'workflow transition --to Done' --parallel 5. Chain commands together. Source → extract → target."
+  - title: Retry & Resilience
+    details: "--retry 3 for exponential backoff on 429/5xx. --parallel for concurrent batch. Built-in fault tolerance."
+  - title: Avatar
+    details: "jr avatar build — analyze Jira activity to build user style profiles. Agents adapt to how you work."
 ---
 
 <!-- Why jr section -->
@@ -41,6 +49,64 @@ features:
 <!-- Killer demos -->
 <div class="terminal-section">
   <h2 class="section-title">See it in action</h2>
+
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="terminal-title">context — full issue context in one call</div>
+    </div>
+    <div class="terminal-body">
+
+```bash
+jr context PROJ-123 --jq '{key: .issue.key, summary: .issue.fields.summary, comments: [.comments.comments[].body]}'
+```
+
+```json
+{
+  "key": "PROJ-123",
+  "summary": "Login page 500 on Safari",
+  "comments": [
+    "Reproduced on Safari 17. Stacktrace attached.",
+    "Fix deployed to staging — please verify."
+  ]
+}
+```
+
+  </div>
+  </div>
+
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="terminal-title">pipe — chain commands, fan out in parallel</div>
+    </div>
+    <div class="terminal-body">
+
+```bash
+jr pipe \
+  "search search-and-reconsile-issues-using-jql --jql 'project=PROJ AND status=\"In Progress\"'" \
+  "workflow transition --to Done" \
+  --parallel 5
+```
+
+```json
+[
+  {"index":0,"exit_code":0,"data":{}},
+  {"index":1,"exit_code":0,"data":{}},
+  {"index":2,"exit_code":0,"data":{}}
+]
+```
+
+  </div>
+  </div>
 
   <div class="terminal-window">
     <div class="terminal-header">
@@ -107,6 +173,70 @@ jr diff --issue PROJ-123 --since 2h --field status,assignee
   {"field":"status","from":"Open","to":"In Progress","author":"alice","time":"14:20:00"},
   {"field":"assignee","from":"null","to":"alice","time":"14:20:00"}
 ]
+```
+
+  </div>
+  </div>
+
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="terminal-title">context — full issue in one call</div>
+    </div>
+    <div class="terminal-body">
+
+```bash
+jr context PROJ-123 --jq '{key: .issue.key, status: .issue.fields.status.name, comments: (.comments.comments | length), changes: (.changelog | length)}'
+```
+
+```json
+{"key":"PROJ-123","status":"In Progress","comments":5,"changes":12}
+```
+
+  </div>
+  </div>
+
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="terminal-title">pipe — chain source → extract → target</div>
+    </div>
+    <div class="terminal-body">
+
+```bash
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ AND status=Done'" \
+  "workflow transition --to Closed" \
+  --extract "[.issues[].key]" --inject issueIdOrKey --parallel 5
+```
+
+  </div>
+  </div>
+
+  <div class="terminal-window">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="terminal-title">doctor — health check</div>
+    </div>
+    <div class="terminal-body">
+
+```bash
+jr doctor
+```
+
+```json
+{"status":"healthy","checks":[{"name":"config","status":"pass","message":"Config file found"},{"name":"auth","status":"pass","message":"Authenticated as alice@company.com"},{"name":"connectivity","status":"pass","message":"Jira Cloud reachable (204ms)"}]}
 ```
 
   </div>
