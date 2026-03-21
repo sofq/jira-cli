@@ -569,3 +569,379 @@ func TestExtractTextFromADF(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Pagination tests
+// ---------------------------------------------------------------------------
+
+func TestFetchUserComments_Pagination(t *testing.T) {
+	const accountID = "abc123"
+	callCount := 0
+
+	adfBody := map[string]interface{}{
+		"type": "doc", "version": 1,
+		"content": []interface{}{
+			map[string]interface{}{
+				"type": "paragraph",
+				"content": []interface{}{
+					map[string]interface{}{"type": "text", "text": "page comment"},
+				},
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"fields": map[string]interface{}{
+						"comment": map[string]interface{}{
+							"comments": []interface{}{
+								map[string]interface{}{
+									"author":  map[string]string{"accountId": accountID},
+									"created": "2025-01-01T10:00:00.000+0000",
+									"body":    adfBody,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		if callCount == 1 {
+			resp["nextPageToken"] = "token-page-2"
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	comments, err := FetchUserComments(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls for pagination, got %d", callCount)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("expected 2 comments (one per page), got %d", len(comments))
+	}
+}
+
+func TestFetchUserIssues_Pagination(t *testing.T) {
+	const accountID = "abc123"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"fields": map[string]interface{}{
+						"issuetype":   map[string]string{"name": "Bug"},
+						"subtasks":    []interface{}{},
+						"description": nil,
+						"priority":    nil,
+						"labels":      []string{},
+						"components":  []interface{}{},
+						"fixVersions": []interface{}{},
+					},
+				},
+			},
+		}
+		if callCount == 1 {
+			resp["nextPageToken"] = "token-page-2"
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	issues, err := FetchUserIssues(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls for pagination, got %d", callCount)
+	}
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues (one per page), got %d", len(issues))
+	}
+}
+
+func TestFetchUserChangelog_Pagination(t *testing.T) {
+	const accountID = "abc123"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"changelog": map[string]interface{}{
+						"histories": []interface{}{
+							map[string]interface{}{
+								"author":  map[string]string{"accountId": accountID},
+								"created": "2025-01-15T10:00:00Z",
+								"items": []interface{}{
+									map[string]interface{}{
+										"field":      "status",
+										"fromString": "To Do",
+										"toString":   "In Progress",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		if callCount == 1 {
+			resp["nextPageToken"] = "token-page-2"
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	entries, err := FetchUserChangelog(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls for pagination, got %d", callCount)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 changelog entries (one per page), got %d", len(entries))
+	}
+}
+
+func TestFetchUserWorklogs_Pagination(t *testing.T) {
+	const accountID = "abc123"
+	callCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"fields": map[string]interface{}{
+						"worklog": map[string]interface{}{
+							"worklogs": []interface{}{
+								map[string]interface{}{
+									"author":           map[string]string{"accountId": accountID},
+									"started":          "2025-01-15T10:00:00.000+0000",
+									"timeSpentSeconds": 3600,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		if callCount == 1 {
+			resp["nextPageToken"] = "token-page-2"
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	worklogs, err := FetchUserWorklogs(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls for pagination, got %d", callCount)
+	}
+	if len(worklogs) != 2 {
+		t.Fatalf("expected 2 worklog entries (one per page), got %d", len(worklogs))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FetchUserWorklogs — happy path and error tests
+// ---------------------------------------------------------------------------
+
+func TestFetchUserWorklogs_Basic(t *testing.T) {
+	const accountID = "abc123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"fields": map[string]interface{}{
+						"worklog": map[string]interface{}{
+							"worklogs": []interface{}{
+								map[string]interface{}{
+									"author":           map[string]string{"accountId": accountID},
+									"started":          "2025-01-15T10:00:00.000+0000",
+									"timeSpentSeconds": 3600,
+								},
+								// Different user — filtered out.
+								map[string]interface{}{
+									"author":           map[string]string{"accountId": "other"},
+									"started":          "2025-01-15T11:00:00.000+0000",
+									"timeSpentSeconds": 1800,
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	worklogs, err := FetchUserWorklogs(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(worklogs) != 1 {
+		t.Fatalf("expected 1 worklog (other-user filtered), got %d", len(worklogs))
+	}
+	if worklogs[0].DurationSeconds != 3600 {
+		t.Errorf("DurationSeconds = %d, want 3600", worklogs[0].DurationSeconds)
+	}
+	if worklogs[0].Date != "2025-01-15" {
+		t.Errorf("Date = %q, want %q", worklogs[0].Date, "2025-01-15")
+	}
+}
+
+func TestFetchUserWorklogs_DateTruncation(t *testing.T) {
+	const accountID = "abc123"
+
+	tests := []struct {
+		name     string
+		started  string
+		wantDate string
+	}{
+		{"full ISO timestamp", "2025-06-20T14:30:00.000+0000", "2025-06-20"},
+		{"exactly 10 chars", "2025-06-20", "2025-06-20"},
+		{"short value kept as-is", "2025-06", "2025-06"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"issues": []interface{}{
+						map[string]interface{}{
+							"fields": map[string]interface{}{
+								"worklog": map[string]interface{}{
+									"worklogs": []interface{}{
+										map[string]interface{}{
+											"author":           map[string]string{"accountId": accountID},
+											"started":          tc.started,
+											"timeSpentSeconds": 900,
+										},
+									},
+								},
+							},
+						},
+					},
+				})
+			}))
+			defer srv.Close()
+
+			c := newTestAvatarClient(srv.URL)
+			worklogs, err := FetchUserWorklogs(context.Background(), c, accountID, "2025-01-01", "2025-12-31")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(worklogs) != 1 {
+				t.Fatalf("expected 1 worklog, got %d", len(worklogs))
+			}
+			if worklogs[0].Date != tc.wantDate {
+				t.Errorf("Date = %q, want %q", worklogs[0].Date, tc.wantDate)
+			}
+		})
+	}
+}
+
+func TestFetchUserWorklogs_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserWorklogs(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+func TestFetchUserWorklogs_ParseError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`not-valid-json`))
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	_, err := FetchUserWorklogs(context.Background(), c, "abc123", "2025-01-01", "2025-01-31")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FetchUserIssues — components and fixVersions branches
+// ---------------------------------------------------------------------------
+
+func TestFetchUserIssues_ComponentsAndFixVersions(t *testing.T) {
+	const accountID = "abc123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"issues": []interface{}{
+				map[string]interface{}{
+					"key": "PROJ-1",
+					"fields": map[string]interface{}{
+						"issuetype":   map[string]string{"name": "Story"},
+						"subtasks":    []interface{}{},
+						"description": nil,
+						"priority":    nil,
+						"labels":      []string{"backend"},
+						"components": []interface{}{
+							map[string]string{"name": "auth"},
+							map[string]string{"name": ""},
+						},
+						"fixVersions": []interface{}{
+							map[string]string{"name": "v1.2.0"},
+							map[string]string{"name": "v1.3.0"},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestAvatarClient(srv.URL)
+	issues, err := FetchUserIssues(context.Background(), c, accountID, "2025-01-01", "2025-01-31")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if len(issues[0].Components) != 1 || issues[0].Components[0] != "auth" {
+		t.Errorf("Components = %v, want [auth]", issues[0].Components)
+	}
+	if issues[0].FixVersion != "v1.2.0" {
+		t.Errorf("FixVersion = %q, want %q", issues[0].FixVersion, "v1.2.0")
+	}
+}

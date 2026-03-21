@@ -426,6 +426,81 @@ func TestAnalyzeComments_HeadingDetection(t *testing.T) {
 	}
 }
 
+// TestAnalyzeSentencePatterns_Empty verifies that empty input returns zero-value.
+func TestAnalyzeSentencePatterns_Empty(t *testing.T) {
+	sp := analyzeSentencePatterns(nil)
+	if sp.FragmentRatio != 0 || sp.AvgWordsPerSent != 0 || sp.UsesContractions != 0 {
+		t.Errorf("expected zero SentencePatterns for nil, got %+v", sp)
+	}
+	sp2 := analyzeSentencePatterns([]string{})
+	if sp2.FragmentRatio != 0 {
+		t.Errorf("expected zero FragmentRatio for empty, got %f", sp2.FragmentRatio)
+	}
+}
+
+// TestAnalyzeSentencePatterns_Contractions verifies that contraction detection works.
+func TestAnalyzeSentencePatterns_Contractions(t *testing.T) {
+	comments := []string{
+		"I'm going to fix this. We'll deploy tomorrow.",
+		"Don't worry, it's handled.",
+		"Plain comment without contractions here.",
+	}
+	sp := analyzeSentencePatterns(comments)
+	// 2 out of 3 comments have contractions → ratio = 2/3 ≈ 0.67
+	if sp.UsesContractions == 0 {
+		t.Error("UsesContractions should be non-zero for comments with contractions")
+	}
+}
+
+// TestComputeFormalityScore_Empty verifies the early return for empty comments.
+func TestComputeFormalityScore_Empty(t *testing.T) {
+	score := computeFormalityScore(nil, ToneSignals{}, FormattingStats{})
+	if score != 0.5 {
+		t.Errorf("computeFormalityScore(nil) = %f, want 0.5", score)
+	}
+	score2 := computeFormalityScore([]string{}, ToneSignals{}, FormattingStats{})
+	if score2 != 0.5 {
+		t.Errorf("computeFormalityScore([]) = %f, want 0.5", score2)
+	}
+}
+
+// TestComputeFormalityScore_ClampLow verifies score clamping to 0 for very casual input.
+func TestComputeFormalityScore_ClampLow(t *testing.T) {
+	// Very casual: lots of contractions, exclamations, emoji, first-person
+	comments := []string{
+		"I'm so excited!! 🎉 I can't believe it!",
+		"I'll do it! We're going!! 🎉🎉",
+		"Don't worry! I've got it!! 🎉",
+	}
+	tone := ToneSignals{
+		ExclamationRatio: 1.0,
+		FirstPersonRatio: 1.0,
+	}
+	fmt := FormattingStats{UsesEmoji: 1.0}
+	score := computeFormalityScore(comments, tone, fmt)
+	if score != 0 {
+		t.Errorf("expected score clamped to 0 for very casual input, got %f", score)
+	}
+}
+
+// TestComputeFormalityScore_ClampHigh verifies score clamping to 1 for very formal input.
+func TestComputeFormalityScore_ClampHigh(t *testing.T) {
+	// Very formal: high imperative ratio, long sentences, no casual signals.
+	// Push score above 1.0 by using extreme values.
+	longSent := "Update the deployment pipeline to use the new Docker image version and run all integration tests before merging."
+	comments := []string{longSent, longSent, longSent}
+	tone := ToneSignals{
+		ImperativeRatio:   10.0, // extreme value to push score over 1.0
+		ExclamationRatio:  0,
+		FirstPersonRatio:  0,
+	}
+	fmt := FormattingStats{UsesEmoji: 0}
+	score := computeFormalityScore(comments, tone, fmt)
+	if score != 1 {
+		t.Errorf("expected score clamped to 1, got %f", score)
+	}
+}
+
 // TestDetectSignOffs verifies that common sign-off patterns at end of comments are detected.
 func TestDetectSignOffs(t *testing.T) {
 	comments := []string{

@@ -714,3 +714,185 @@ func TestBuild_LLMRequiresCmd(t *testing.T) {
 		t.Errorf("expected error to mention 'llm-cmd', got: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// buildWritingSection — sentence style branches
+// ---------------------------------------------------------------------------
+
+func TestBuildLocal_SentenceStyle_FragmentRatio(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{
+				SentencePatterns: SentencePatterns{FragmentRatio: 0.7},
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "short fragments") {
+		t.Errorf("expected 'short fragments' in Writing for FragmentRatio=0.7, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_SentenceStyle_LongSentences(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{
+				SentencePatterns: SentencePatterns{
+					FragmentRatio:   0.1, // below 0.5
+					AvgWordsPerSent: 20,  // above 15
+				},
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "complete, detailed sentences") {
+		t.Errorf("expected 'complete, detailed sentences' in Writing for AvgWordsPerSent=20, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_SentenceStyle_AvgLength(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{
+				SentencePatterns: SentencePatterns{
+					FragmentRatio:   0.1, // below 0.5
+					AvgWordsPerSent: 10,  // above 0, below 15
+				},
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "Average sentence length") {
+		t.Errorf("expected 'Average sentence length' in Writing for AvgWordsPerSent=10, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// buildWritingSection — formality branches
+// ---------------------------------------------------------------------------
+
+func TestBuildLocal_Formality_FormalProfessional(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{FormalityScore: 0.8},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "formal and professional") {
+		t.Errorf("expected 'formal and professional' for FormalityScore=0.8, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_Formality_NeutralBalanced(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{FormalityScore: 0.5},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "neutral/balanced") {
+		t.Errorf("expected 'neutral/balanced' for FormalityScore=0.5, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_Formality_CasualDirect(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{FormalityScore: 0.35},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "casual and direct") {
+		t.Errorf("expected 'casual and direct' for FormalityScore=0.35, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+func TestBuildLocal_Formality_VeryCasualInformal(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Writing: WritingAnalysis{
+			Comments: CommentStats{FormalityScore: 0.1},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Writing, "very casual and informal") {
+		t.Errorf("expected 'very casual and informal' for FormalityScore=0.1, got: %s", profile.StyleGuide.Writing)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// buildInteractionSection — escalation branches
+// ---------------------------------------------------------------------------
+
+func TestBuildLocal_Escalation_KeywordsOnly(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{MedianReplyTime: "1h"},
+			EscalationSignals: EscalationSignals{
+				BlockerKeywords:              []string{"blocked", "urgent"},
+				AvgCommentsBeforeEscalation:  0,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "escalation keywords") {
+		t.Errorf("expected 'escalation keywords' in Interaction, got: %s", profile.StyleGuide.Interaction)
+	}
+	if strings.Contains(profile.StyleGuide.Interaction, "Typically escalates after") {
+		t.Errorf("did not expect 'Typically escalates after' when AvgCommentsBeforeEscalation=0, got: %s", profile.StyleGuide.Interaction)
+	}
+}
+
+func TestBuildLocal_Escalation_KeywordsAndCount(t *testing.T) {
+	extraction := &Extraction{
+		Meta: ExtractionMeta{User: "u", DisplayName: "U"},
+		Interaction: InteractionAnalysis{
+			ResponsePatterns: ResponsePatterns{MedianReplyTime: "1h"},
+			EscalationSignals: EscalationSignals{
+				BlockerKeywords:              []string{"blocked"},
+				AvgCommentsBeforeEscalation:  3,
+			},
+		},
+	}
+	profile, err := BuildLocal(extraction, nil)
+	if err != nil {
+		t.Fatalf("BuildLocal returned error: %v", err)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "escalation keywords") {
+		t.Errorf("expected 'escalation keywords' in Interaction, got: %s", profile.StyleGuide.Interaction)
+	}
+	if !strings.Contains(profile.StyleGuide.Interaction, "Typically escalates after") {
+		t.Errorf("expected 'Typically escalates after' in Interaction, got: %s", profile.StyleGuide.Interaction)
+	}
+}

@@ -247,3 +247,104 @@ func TestSelectDescriptionExamples(t *testing.T) {
 		}
 	}
 }
+
+// TestClassifyComment_DecisionPath covers the "decision" classification.
+func TestClassifyComment_DecisionPath(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"We decided to use Postgres.", "decision"},
+		{"Going with option A.", "decision"},
+		{"Let's go with the new design.", "decision"},
+		{"We'll use Redis for caching.", "decision"},
+		{"The plan is to migrate next week.", "decision"},
+	}
+	for _, tc := range cases {
+		got := classifyComment(tc.text)
+		if got != tc.want {
+			t.Errorf("classifyComment(%q) = %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyComment_RequestPath covers the "request" classification.
+func TestClassifyComment_RequestPath(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"Can you update the config?", "request"},
+		{"Could you check the logs?", "request"},
+		{"Please deploy to staging.", "request"},
+		{"Would you review this PR?", "request"},
+	}
+	for _, tc := range cases {
+		got := classifyComment(tc.text)
+		if got != tc.want {
+			t.Errorf("classifyComment(%q) = %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyComment_PushbackPath covers the "pushback" classification.
+func TestClassifyComment_PushbackPath(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"I disagree with this approach.", "pushback"},
+		{"I have a concern about the timeline.", "pushback"},
+		{"Not sure about this implementation.", "pushback"},
+		{"I don't think this will work.", "pushback"},
+		{"We could use Redis instead.", "pushback"},
+		{"Alternatively, we could try Kafka.", "pushback"},
+	}
+	for _, tc := range cases {
+		got := classifyComment(tc.text)
+		if got != tc.want {
+			t.Errorf("classifyComment(%q) = %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyComment_AcknowledgmentPath covers the "acknowledgment" classification.
+func TestClassifyComment_AcknowledgmentPath(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"Thanks for the update.", "acknowledgment"},
+		{"Got it, will proceed.", "acknowledgment"},
+		{"Noted.", "acknowledgment"},
+		{"Sounds good to me.", "acknowledgment"},
+		{"Will do.", "acknowledgment"},
+		{"On it.", "acknowledgment"},
+	}
+	for _, tc := range cases {
+		got := classifyComment(tc.text)
+		if got != tc.want {
+			t.Errorf("classifyComment(%q) = %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyComment_TechnicalPath covers the "technical" classification.
+func TestClassifyComment_TechnicalPath(t *testing.T) {
+	cases := []struct {
+		text string
+		want string
+	}{
+		{"Found the root cause of the crash.", "technical"},
+		{"The stack trace shows a null pointer.", "technical"},
+		{"We need to refactor the auth module.", "technical"},
+		{"The API endpoint returns 404.", "technical"},
+		{"Database migration failed on staging.", "technical"},
+	}
+	for _, tc := range cases {
+		got := classifyComment(tc.text)
+		if got != tc.want {
+			t.Errorf("classifyComment(%q) = %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
