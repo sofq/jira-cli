@@ -94,6 +94,42 @@ jr diff --issue PROJ-123                           # all changes
 jr diff --issue PROJ-123 --since 2h                # changes in last 2 hours
 jr diff --issue PROJ-123 --since 2025-01-01        # changes since date
 jr diff --issue PROJ-123 --field status            # only status changes
+
+# Avatar — user style profiling
+jr avatar extract                                  # extract Jira activity data for current user
+jr avatar build                                    # build profile from extracted data
+jr avatar prompt                                   # output profile as agent-consumable prompt text
+jr avatar show                                     # display the current profile (YAML)
+jr avatar edit                                     # open profile in $EDITOR
+jr avatar refresh                                  # re-extract and rebuild in one step
+jr avatar status                                   # show extraction/build status
+
+# Full issue context in one call (issue + comments + changelog)
+jr context PROJ-123
+jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
+
+# Health check
+jr doctor                                          # check config, auth, connectivity
+jr doctor --profile staging                        # check a specific profile
+
+# Error remediation
+jr explain '{"error_type":"auth_failed","status":401,"message":"..."}'
+echo '{"error_type":"rate_limited",...}' | jr explain  # from stdin
+
+# Pipe: chain source → extract → target
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ'" "issue get"
+jr pipe "project search" "project get" --extract "[.values[].key]" --inject projectIdOrKey
+jr pipe "search ..." "workflow transition --to Done" --parallel 5
+
+# Parallel batch execution
+echo '[...]' | jr batch --parallel 5               # run 5 operations concurrently
+
+# Retry transient errors (429, 5xx) with exponential backoff
+jr issue get --issueIdOrKey PROJ-123 --retry 3
+
+# Table/CSV output to stderr (JSON still goes to stdout)
+jr project search --format table                   # human-readable table on stderr
+jr project search --format csv                     # CSV on stderr
 ```
 
 ## Discovery
@@ -108,6 +144,8 @@ jr preset list                # list available output presets
 jr template list              # list available issue templates
 jr template show <name>       # show a template's variables and fields
 jr diff --issue <key>         # show changelog for an issue
+jr avatar status              # check avatar profile status
+jr avatar prompt              # get avatar profile for agent use
 ```
 
 ## Global Flags
@@ -127,6 +165,9 @@ jr diff --issue <key>         # show changelog for an issue
 | `--audit` | enable audit logging for this invocation |
 | `--audit-file <path>` | audit log file path (implies --audit) |
 | `--max-batch <N>` | max operations per batch (default 50, batch command only) |
+| `--retry <N>` | retry transient errors (429, 5xx) with exponential backoff |
+| `--parallel <N>` | concurrent operations in batch (default 0 = sequential) |
+| `--format <type>` | additional output format to stderr: table or csv |
 
 ## Security
 

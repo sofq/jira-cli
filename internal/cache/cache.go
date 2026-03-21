@@ -44,7 +44,7 @@ func Get(key string, ttl time.Duration) ([]byte, bool) {
 		return nil, false
 	}
 	if time.Since(info.ModTime()) > ttl {
-		os.Remove(path)
+		_ = os.Remove(path) // Best-effort cleanup; stale entry is harmless.
 		return nil, false
 	}
 	data, err := os.ReadFile(path)

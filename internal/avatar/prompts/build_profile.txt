@@ -1,0 +1,13 @@
+You are analyzing a Jira user's activity data to create a style profile.
+The profile will be used by an AI agent to act as this user's avatar.
+
+Given the extraction data below, generate a profile YAML with:
+- style_guide.writing: How they write (tone, length, formatting, vocabulary)
+- style_guide.workflow: How they work (field habits, transitions, issue types)
+- style_guide.interaction: How they interact (response patterns, escalation, collaboration)
+- examples: Select the most representative examples, annotate with context
+
+Be specific and concrete. Reference actual patterns from the data.
+Avoid generic descriptions that could apply to anyone.
+
+Output ONLY valid YAML matching the profile schema. No markdown fences, no extra text.

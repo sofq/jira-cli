@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,8 +17,10 @@ import (
 	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
+	"github.com/sofq/jira-cli/internal/format"
 	"github.com/sofq/jira-cli/internal/jq"
 	"github.com/sofq/jira-cli/internal/policy"
+	"github.com/sofq/jira-cli/internal/retry"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )
@@ -39,6 +43,8 @@ type Client struct {
 	Pretty     bool      // pretty-print JSON
 	Fields     string        // --fields comma-separated field names for GET
 	CacheTTL   time.Duration // --cache duration; 0 means no caching
+	Format     string        // --format additional output format to stderr: "table" or "csv"
+	MaxRetries int           // 0 = no retries (default)
 
 	// Security fields
 	AuditLogger *audit.Logger  // nil means no audit logging
@@ -99,8 +105,17 @@ func (c *Client) ApplyAuth(req *http.Request) error {
 	return nil
 }
 
-// fetchOAuth2Token performs a client_credentials grant and returns the access token.
+// fetchOAuth2Token performs a client_credentials grant and returns the access
+// token.  It checks the file-based cache before making a network request and
+// stores a successful response back into the cache.
 func (c *Client) fetchOAuth2Token() (string, error) {
+	cacheKey := oauth2CacheKey(c.Auth.TokenURL, c.Auth.ClientID)
+
+	// Cache hit — return without a network call.
+	if tok, ok := getToken(cacheKey); ok {
+		return tok, nil
+	}
+
 	data := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {c.Auth.ClientID},
@@ -123,10 +138,21 @@ func (c *Client) fetchOAuth2Token() (string, error) {
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return "", fmt.Errorf("oauth2 token response decode failed: %w", err)
 	}
+
+	expiresIn := tokenResp.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 3600
+	}
+
+	// Best-effort cache write — a write failure must not prevent the request
+	// from succeeding.
+	_ = setToken(cacheKey, tokenResp.AccessToken, expiresIn)
+
 	return tokenResp.AccessToken, nil
 }
 
@@ -193,81 +219,169 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 }
 
 // doOnce performs a single HTTP request and writes the response to Stdout.
+// When MaxRetries > 0, transient errors (429, 5xx) are retried with exponential backoff.
 func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body io.Reader) int {
 	// Cache check for GET requests.
+	// Use explicit --cache TTL when set; fall back to metadata preset TTL for
+	// well-known low-churn endpoints (e.g. /rest/api/3/project).
 	var cacheKey string
-	if c.CacheTTL > 0 && method == "GET" {
+	cacheTTL := c.CacheTTL
+	if cacheTTL == 0 && method == "GET" {
+		cacheTTL = cache.MetadataTTL(path)
+	}
+	if cacheTTL > 0 && method == "GET" {
 		cacheKey = cache.Key(method, rawURL, c.cacheAuthContext())
-		if data, ok := cache.Get(cacheKey, c.CacheTTL); ok {
+		if data, ok := cache.Get(cacheKey, cacheTTL); ok {
 			exitCode := c.WriteOutput(data)
 			c.auditLog(method, path, 0, exitCode)
 			return exitCode
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   err.Error(),
-		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-
-	req.Header.Set("Accept", "application/json")
+	// Buffer the request body so it can be re-read on retries.
+	var bodyBytes []byte
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if err := c.ApplyAuth(req); err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "auth_error",
-			Status:    0,
-			Message:   err.Error(),
-			Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "connection_error",
+				Status:    0,
+				Message:   "reading request body: " + err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitError
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitAuth
 	}
 
-	c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   err.Error(),
+	// attemptRequest performs one HTTP round-trip.
+	attemptRequest := func() ([]byte, int, int, time.Duration, bool) {
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
-	}
-	defer resp.Body.Close()
 
-	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		apiErr := &jrerrors.APIError{
-			ErrorType: "connection_error",
-			Status:    0,
-			Message:   "reading response body: " + err.Error(),
+		req, err := http.NewRequestWithContext(ctx, method, rawURL, reqBody)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
 		}
-		apiErr.WriteJSON(c.Stderr)
-		return jrerrors.ExitError
+
+		req.Header.Set("Accept", "application/json")
+		if reqBody != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		if err := c.ApplyAuth(req); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "auth_error",
+				Message:   err.Error(),
+				Hint:      "Check your oauth2 configuration: client_id, client_secret, token_url must be set",
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitAuth, 0, false
+		}
+
+		c.VerboseLog(map[string]any{"type": "request", "method": method, "url": rawURL})
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
+		}
+		defer resp.Body.Close()
+
+		c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			apiErr := &jrerrors.APIError{ErrorType: "connection_error", Message: "reading response body: " + err.Error()}
+			apiErr.WriteJSON(c.Stderr)
+			return nil, 0, jrerrors.ExitError, 0, false
+		}
+
+		if resp.StatusCode >= 400 {
+			if c.MaxRetries > 0 && retry.ShouldRetryStatus(resp.StatusCode) {
+				var retryAfter time.Duration
+				if resp.StatusCode == http.StatusTooManyRequests {
+					if ra := resp.Header.Get("Retry-After"); ra != "" {
+						if secs, parseErr := time.ParseDuration(ra + "s"); parseErr == nil {
+							retryAfter = secs
+						}
+					}
+				}
+				return respBody, resp.StatusCode, jrerrors.ExitRateLimit, retryAfter, true
+			}
+			apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
+			apiErr.WriteJSON(c.Stderr)
+			c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
+			return nil, resp.StatusCode, apiErr.ExitCode(), 0, false
+		}
+
+		return respBody, resp.StatusCode, jrerrors.ExitOK, 0, false
 	}
 
-	// HTTP error (>=400): write structured error to stderr.
-	if resp.StatusCode >= 400 {
-		apiErr := jrerrors.NewFromHTTP(resp.StatusCode, strings.TrimSpace(string(respBody)), method, path, resp)
-		apiErr.WriteJSON(c.Stderr)
-		c.auditLog(method, path, resp.StatusCode, apiErr.ExitCode())
-		return apiErr.ExitCode()
+	if c.MaxRetries > 0 {
+		var finalBody []byte
+		var finalStatus int
+		var finalCode int
+
+		retryErr := retry.Do(ctx, func() error {
+			respBody, status, code, retryAfter, isRetryable := attemptRequest()
+			if isRetryable {
+				return &retry.RetryableError{
+					Err:        fmt.Errorf("HTTP %d", status),
+					RetryAfter: retryAfter,
+				}
+			}
+			finalBody = respBody
+			finalStatus = status
+			finalCode = code
+			return nil
+		}, retry.Config{
+			MaxRetries: c.MaxRetries,
+			BaseDelay:  time.Second,
+		})
+
+		if retryErr != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "rate_limited",
+				Message:   retryErr.Error(),
+				Hint:      fmt.Sprintf("Request failed after %d retries", c.MaxRetries),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			c.auditLog(method, path, 0, jrerrors.ExitRateLimit)
+			return jrerrors.ExitRateLimit
+		}
+
+		if finalCode != jrerrors.ExitOK {
+			return finalCode
+		}
+
+		if len(finalBody) == 0 || finalStatus == http.StatusNoContent {
+			finalBody = []byte("{}")
+		}
+
+		if cacheKey != "" {
+			if err := cache.Set(cacheKey, finalBody); err != nil {
+				c.VerboseLog(map[string]any{"type": "warning", "message": "cache write failed: " + err.Error()})
+			}
+		}
+
+		exitCode := c.WriteOutput(finalBody)
+		c.auditLog(method, path, finalStatus, exitCode)
+		return exitCode
+	}
+
+	// No retry path: single attempt.
+	respBody, status, code, _, _ := attemptRequest()
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	// HTTP 204 No Content — emit empty JSON object to maintain JSON-only contract.
-	if len(respBody) == 0 || resp.StatusCode == http.StatusNoContent {
+	if len(respBody) == 0 || status == http.StatusNoContent {
 		respBody = []byte("{}")
 	}
 
@@ -279,7 +393,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 	}
 
 	exitCode := c.WriteOutput(respBody)
-	c.auditLog(method, path, resp.StatusCode, exitCode)
+	c.auditLog(method, path, status, exitCode)
 	return exitCode
 }
 
@@ -569,8 +683,11 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 
 // cacheAuthContext returns a string that uniquely identifies the auth configuration,
 // so that different profiles/credentials produce different cache keys for the same URL.
+// The token is hashed independently to prevent separator-collision attacks and to
+// avoid exposing plaintext credentials if this value is ever logged.
 func (c *Client) cacheAuthContext() string {
-	return c.BaseURL + "\x00" + c.Auth.Type + "\x00" + c.Auth.Username + "\x00" + c.Auth.Token
+	tokenHash := sha256.Sum256([]byte(c.Auth.Token))
+	return c.BaseURL + "\x00" + c.Auth.Type + "\x00" + c.Auth.Username + "\x00" + hex.EncodeToString(tokenHash[:])
 }
 
 // VerboseLog writes a structured JSON log entry to stderr when verbose mode is enabled.
@@ -659,6 +776,9 @@ func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader)
 
 // WriteOutput applies optional JQ filtering and pretty-printing, then writes
 // the final JSON bytes to Stdout. Returns an exit code.
+//
+// If Format is set ("table" or "csv"), the formatted output is also written to
+// Stderr so that the JSON-only stdout contract is preserved.
 func (c *Client) WriteOutput(data []byte) int {
 	// Apply JQ filter.
 	if c.JQFilter != "" {
@@ -680,6 +800,30 @@ func (c *Client) WriteOutput(data []byte) int {
 		data = pretty.Pretty(data)
 	}
 
+	// JSON always goes to stdout.
 	fmt.Fprintf(c.Stdout, "%s\n", strings.TrimRight(string(data), "\n"))
+
+	// Apply additional format and write to stderr (preserves JSON stdout contract).
+	if c.Format != "" {
+		var (
+			formatted []byte
+			err       error
+		)
+		switch strings.ToLower(c.Format) {
+		case "table":
+			formatted, err = format.Table(data)
+		case "csv":
+			formatted, err = format.CSV(data)
+		default:
+			err = fmt.Errorf("unknown format %q: supported values are \"table\" and \"csv\"", c.Format)
+		}
+		if err != nil {
+			// Format errors are non-fatal: warn on stderr as plain text.
+			fmt.Fprintf(c.Stderr, "format warning: %s\n", err.Error())
+		} else if len(formatted) > 0 {
+			fmt.Fprintf(c.Stderr, "%s\n", formatted)
+		}
+	}
+
 	return jrerrors.ExitOK
 }

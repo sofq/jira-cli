@@ -47,7 +47,34 @@ jr workflow create --project PROJ --type Bug --summary "Login broken" --priority
 echo '[
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},
   {"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}
-]' | jr batch
+]' | jr batch --parallel 5
+```
+
+### Context — full issue in one call
+
+```bash
+jr context PROJ-123 --jq '{key: .issue.key, comments: [.comments.comments[].body]}'
+```
+
+### Pipe — chain commands
+
+```bash
+jr pipe "search search-and-reconsile-issues-using-jql --jql 'project=PROJ'" "issue get"
+```
+
+### Retry, format, diagnostics
+
+```bash
+jr issue get --issueIdOrKey PROJ-123 --retry 3    # exponential backoff on 429/5xx
+jr project search --format table                   # human-readable table on stderr
+jr doctor                                          # health check
+jr explain '{"error_type":"auth_failed",...}'       # error remediation
+```
+
+### Avatar — user style profiling
+
+```bash
+jr avatar extract && jr avatar build && jr avatar prompt
 ```
 
 ### Watch mode
