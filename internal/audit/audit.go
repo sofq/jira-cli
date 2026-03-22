@@ -10,14 +10,15 @@ import (
 
 // Entry is a single audit log record.
 type Entry struct {
-	Timestamp string `json:"ts,omitempty"`
-	Profile   string `json:"profile,omitempty"`
-	Operation string `json:"op,omitempty"`
-	Method    string `json:"method,omitempty"`
-	Path      string `json:"path,omitempty"`
-	Status    int    `json:"status"`
-	Exit      int    `json:"exit"`
-	DryRun    bool   `json:"dry_run,omitempty"`
+	Timestamp string         `json:"ts,omitempty"`
+	Profile   string         `json:"profile,omitempty"`
+	Operation string         `json:"op,omitempty"`
+	Method    string         `json:"method,omitempty"`
+	Path      string         `json:"path,omitempty"`
+	Status    int            `json:"status"`
+	Exit      int            `json:"exit"`
+	DryRun    bool           `json:"dry_run,omitempty"`
+	Extra     map[string]any `json:"extra,omitempty"`
 }
 
 // Logger writes audit entries as JSONL to a file.
@@ -60,7 +61,7 @@ func (l *Logger) Log(entry Entry) {
 	}
 	entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 
-	// Entry contains only string/int/bool fields — json.Marshal cannot fail.
+	// Entry fields are all JSON-safe types — json.Marshal cannot fail.
 	data, _ := json.Marshal(entry)
 	data = append(data, '\n')
 

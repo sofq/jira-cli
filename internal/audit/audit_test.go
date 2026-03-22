@@ -259,3 +259,71 @@ func TestLogger_ConcurrentLog(t *testing.T) {
 		}
 	}
 }
+
+func TestLogWithExtra(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	l, err := audit.NewLogger(path)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	l.Log(audit.Entry{
+		Operation: "issue get",
+		Extra: map[string]any{
+			"yolo":      true,
+			"character": "formal-pm",
+		},
+	})
+	l.Close()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	line := strings.TrimSpace(string(data))
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		t.Fatalf("line is not valid JSON: %v", err)
+	}
+
+	extraRaw, ok := raw["extra"]
+	if !ok {
+		t.Fatal("expected 'extra' key in JSON output, not found")
+	}
+	extra, ok := extraRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("extra is not a JSON object, got %T", extraRaw)
+	}
+	if v, ok := extra["yolo"]; !ok || v != true {
+		t.Errorf("extra[yolo] = %v, want true", v)
+	}
+	if v, ok := extra["character"]; !ok || v != "formal-pm" {
+		t.Errorf("extra[character] = %v, want formal-pm", v)
+	}
+}
+
+func TestLogWithoutExtra(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	l, err := audit.NewLogger(path)
+	if err != nil {
+		t.Fatalf("NewLogger: %v", err)
+	}
+	l.Log(audit.Entry{
+		Operation: "issue get",
+	})
+	l.Close()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	line := strings.TrimSpace(string(data))
+	if strings.Contains(line, `"extra"`) {
+		t.Errorf("JSON output should not contain 'extra' key when Extra is nil, got: %s", line)
+	}
+}
