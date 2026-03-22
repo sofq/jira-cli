@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sofq/jira-cli/internal/avatar"
+	"github.com/sofq/jira-cli/internal/character"
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -263,6 +264,26 @@ func runAvatarBuild(cmd *cobra.Command, args []string) error {
 		apiErr := &jrerrors.APIError{ErrorType: "io_error", Message: "failed to save profile: " + saveErr.Error()}
 		apiErr.WriteJSON(os.Stderr)
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitError}
+	}
+
+	// Convert profile to character and save it locally (non-fatal on failure).
+	ch := character.FromProfile(profile)
+	charDir := character.DefaultDir()
+	// If a character with this name already exists but has a different source,
+	// append "-avatar" to avoid overwriting user-managed characters.
+	if character.Exists(charDir, ch.Name) {
+		existing, loadErr := character.Load(charDir, ch.Name)
+		if loadErr == nil && existing.Source != character.SourceAvatar {
+			ch.Name = ch.Name + "-avatar"
+		}
+	}
+	if charSaveErr := character.Save(charDir, ch); charSaveErr != nil {
+		warnMsg := map[string]string{
+			"type":    "warning",
+			"message": "failed to save character file: " + charSaveErr.Error(),
+		}
+		warnJSON, _ := json.Marshal(warnMsg)
+		fmt.Fprintf(os.Stderr, "%s\n", warnJSON)
 	}
 
 	out, _ := json.Marshal(profile)
