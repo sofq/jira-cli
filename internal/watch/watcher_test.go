@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -113,7 +114,7 @@ func TestEmitEvent_Basic(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr}
 	emitted := 0
-	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0)
+	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -133,7 +134,7 @@ func TestEmitEvent_MaxEventsReached(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr}
 	emitted := 0
-	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 1)
+	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 1, nil)
 	if code != -1 {
 		t.Fatalf("expected -1 sentinel, got %d", code)
 	}
@@ -143,7 +144,7 @@ func TestEmitEvent_JQFilter(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr, JQFilter: ".type"}
 	emitted := 0
-	code := emitEvent(c, "updated", json.RawMessage(`{"key":"T-1"}`), &emitted, 0)
+	code := emitEvent(c, "updated", json.RawMessage(`{"key":"T-1"}`), &emitted, 0, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -157,7 +158,7 @@ func TestEmitEvent_JQFilterError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr, JQFilter: ".invalid[[["}
 	emitted := 0
-	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0)
+	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0, nil)
 	if code != jrerrors.ExitValidation {
 		t.Fatalf("expected ExitValidation, got %d", code)
 	}
@@ -170,7 +171,7 @@ func TestEmitEvent_Pretty(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr, Pretty: true}
 	emitted := 0
-	emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0)
+	emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 0, nil)
 	out := stdout.String()
 	// Pretty output should be indented
 	if !strings.Contains(out, "\n") {
@@ -188,7 +189,7 @@ func TestPoll_FirstPoll_InitialEvents(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -213,7 +214,7 @@ func TestPoll_SecondPoll_CreatedEvent(t *testing.T) {
 	seen := make(map[string]string)
 	emitted := 0
 	// Not first poll — new issue should be "created"
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -230,7 +231,7 @@ func TestPoll_UpdatedEvent(t *testing.T) {
 
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -250,7 +251,7 @@ func TestPoll_NoChange(t *testing.T) {
 
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -268,7 +269,7 @@ func TestPoll_RemovedEvent(t *testing.T) {
 
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, false, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -289,7 +290,7 @@ func TestPoll_RemovedNotOnFirstPoll(t *testing.T) {
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
 	// On first poll, removals should NOT be emitted
-	poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if emitted != 0 {
 		t.Errorf("expected no removal on first poll, got %d events", emitted)
 	}
@@ -304,7 +305,7 @@ func TestPoll_FetchError(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit code on auth error")
 	}
@@ -318,7 +319,7 @@ func TestPoll_InvalidJSON(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if code != jrerrors.ExitError {
 		t.Fatalf("expected ExitError for bad JSON, got %d", code)
 	}
@@ -336,7 +337,7 @@ func TestPoll_FieldsUpdatedFallback(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -355,7 +356,7 @@ func TestPoll_BadIssueJSON(t *testing.T) {
 	seen := make(map[string]string)
 	emitted := 0
 	// Should not panic — bad issue is skipped
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	// The outer JSON is valid but the issue element is not valid JSON inside the array.
 	// Actually the whole response will fail to parse. Let's adjust expectations.
 	// json.Unmarshal of the outer object may fail too since {bad json} is not valid JSON.
@@ -375,7 +376,7 @@ func TestPoll_SkipBadIssueFingerprint(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 0, true, nil)
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected ExitOK (bad issue skipped), got %d", code)
 	}
@@ -395,7 +396,7 @@ func TestPoll_MaxEventsReached(t *testing.T) {
 
 	seen := make(map[string]string)
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, true)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, true, nil)
 	if code != -1 {
 		t.Fatalf("expected -1 sentinel for maxEvents, got %d", code)
 	}
@@ -409,7 +410,7 @@ func TestPoll_MaxEventsOnUpdate(t *testing.T) {
 
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, false, nil)
 	if code != -1 {
 		t.Fatalf("expected -1 for maxEvents on update, got %d", code)
 	}
@@ -423,7 +424,7 @@ func TestPoll_MaxEventsOnRemoval(t *testing.T) {
 
 	seen := map[string]string{"T-1": "2025-01-01T00:00:00Z"}
 	emitted := 0
-	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, false)
+	code := poll(context.Background(), te.Client, jqlSearchRequest{JQL: "project=T"}, seen, &emitted, 1, false, nil)
 	if code != -1 {
 		t.Fatalf("expected -1 for maxEvents on removal, got %d", code)
 	}
@@ -440,7 +441,7 @@ func TestPoll_WithFields(t *testing.T) {
 	seen := make(map[string]string)
 	emitted := 0
 	req := jqlSearchRequest{JQL: "project=T", Fields: []string{"summary", "status"}}
-	poll(context.Background(), te.Client, req, seen, &emitted, 0, true)
+	poll(context.Background(), te.Client, req, seen, &emitted, 0, true, nil)
 
 	if !strings.Contains(string(gotBody), `"summary"`) {
 		t.Errorf("expected fields in request body, got %s", gotBody)
@@ -755,8 +756,140 @@ func TestEmitEvent_JQFilterMaxEvents(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := &client.Client{Stdout: &stdout, Stderr: &stderr, JQFilter: ".type"}
 	emitted := 0
-	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 1)
+	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 1, nil)
 	if code != -1 {
 		t.Fatalf("expected -1 when maxEvents=1, got %d", code)
+	}
+}
+
+// --- Handler callback ---
+
+// TestRunWithHandler verifies that when Options.Handler is set, events are
+// delivered to the callback instead of being written to stdout.
+func TestRunWithHandler(t *testing.T) {
+	var pollCount atomic.Int32
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		n := pollCount.Add(1)
+		if n == 1 {
+			// First poll: return one issue.
+			writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+		} else {
+			// Second poll: empty (no new events).
+			writeJSON(w, searchJSON())
+		}
+	})
+	defer te.Close()
+
+	var received []Event
+	handler := func(ev Event) error {
+		received = append(received, ev)
+		return nil
+	}
+
+	code := Run(context.Background(), te.Client, Options{
+		JQL:       "project=T",
+		Interval:  50 * time.Millisecond,
+		MaxEvents: 1,
+		Handler:   handler,
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if len(received) == 0 {
+		t.Fatal("expected at least one event via Handler, got none")
+	}
+	if received[0].Type != "initial" {
+		t.Errorf("expected first event type 'initial', got %q", received[0].Type)
+	}
+	// stdout must be empty — handler bypasses NDJSON output.
+	if te.Stdout.Len() != 0 {
+		t.Errorf("expected empty stdout when Handler is set, got %q", te.Stdout.String())
+	}
+}
+
+// TestRunWithHandler_HandlerError verifies that a non-nil error from Handler
+// stops the loop and Run returns ExitError.
+func TestRunWithHandler_HandlerError(t *testing.T) {
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+	})
+	defer te.Close()
+
+	handler := func(ev Event) error {
+		return fmt.Errorf("handler failed")
+	}
+
+	code := Run(context.Background(), te.Client, Options{
+		JQL:      "project=T",
+		Interval: 50 * time.Millisecond,
+		Handler:  handler,
+	})
+	if code != jrerrors.ExitError {
+		t.Fatalf("expected ExitError when handler returns error, got %d", code)
+	}
+	if !strings.Contains(te.Stderr.String(), "handler_error") {
+		t.Errorf("expected handler_error in stderr, got %s", te.Stderr.String())
+	}
+}
+
+// TestRun_MaxEventsMinusOne verifies that MaxEvents=-1 runs exactly one poll
+// cycle and then returns.
+func TestRun_MaxEventsMinusOne(t *testing.T) {
+	var pollCount atomic.Int32
+	te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+		pollCount.Add(1)
+		writeJSON(w, searchJSON(issueJSON("T-1", "2025-01-01T00:00:00Z")))
+	})
+	defer te.Close()
+
+	code := Run(context.Background(), te.Client, Options{
+		JQL:       "project=T",
+		Interval:  50 * time.Millisecond,
+		MaxEvents: -1,
+	})
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected ExitOK for MaxEvents=-1, got %d", code)
+	}
+	// Only the first (immediate) poll should have run.
+	if pollCount.Load() != 1 {
+		t.Errorf("expected exactly 1 poll for MaxEvents=-1, got %d", pollCount.Load())
+	}
+}
+
+// TestEmitEvent_WithHandler verifies the handler path in emitEvent directly.
+func TestEmitEvent_WithHandler(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{Stdout: &stdout, Stderr: &stderr}
+	emitted := 0
+	var got Event
+	handler := func(ev Event) error {
+		got = ev
+		return nil
+	}
+	code := emitEvent(c, "updated", json.RawMessage(`{"key":"T-1"}`), &emitted, 0, handler)
+	if code != jrerrors.ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if emitted != 1 {
+		t.Errorf("expected emitted=1, got %d", emitted)
+	}
+	if got.Type != "updated" {
+		t.Errorf("expected type=updated, got %q", got.Type)
+	}
+	// stdout must remain empty.
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout with handler, got %q", stdout.String())
+	}
+}
+
+// TestEmitEvent_WithHandler_MaxEvents verifies the sentinel when using handler.
+func TestEmitEvent_WithHandler_MaxEvents(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := &client.Client{Stdout: &stdout, Stderr: &stderr}
+	emitted := 0
+	handler := func(ev Event) error { return nil }
+	code := emitEvent(c, "created", json.RawMessage(`{"key":"T-1"}`), &emitted, 1, handler)
+	if code != -1 {
+		t.Fatalf("expected -1 sentinel with handler + maxEvents=1, got %d", code)
 	}
 }

@@ -24,7 +24,11 @@ type Options struct {
 	Issue     string // single-issue shorthand (converted to JQL)
 	Interval  time.Duration
 	Fields    []string // fields to request from Jira
-	MaxEvents int // 0 = unlimited
+	MaxEvents int      // 0 = unlimited; -1 = one poll cycle then stop
+	// Handler, when non-nil, is called for each event instead of writing
+	// NDJSON to stdout. If Handler returns a non-nil error, the loop stops
+	// and Run returns ExitError.
+	Handler func(Event) error
 }
 
 // jqlSearchRequest is the POST body for /rest/api/3/search/jql.
@@ -72,7 +76,7 @@ func Run(ctx context.Context, c *client.Client, opts Options) int {
 	defer ticker.Stop()
 
 	// Run first poll immediately.
-	if code := poll(ctx, c, searchReq, seen, &emitted, opts.MaxEvents, firstPoll); code != jrerrors.ExitOK {
+	if code := poll(ctx, c, searchReq, seen, &emitted, opts.MaxEvents, firstPoll, opts.Handler); code != jrerrors.ExitOK {
 		if code == -1 { // maxEvents reached
 			return jrerrors.ExitOK
 		}
@@ -80,13 +84,18 @@ func Run(ctx context.Context, c *client.Client, opts Options) int {
 	}
 	firstPoll = false
 
+	// MaxEvents = -1 means "one poll cycle then stop".
+	if opts.MaxEvents == -1 {
+		return jrerrors.ExitOK
+	}
+
 	consecutiveErrors := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return jrerrors.ExitOK
 		case <-ticker.C:
-			code := poll(ctx, c, searchReq, seen, &emitted, opts.MaxEvents, firstPoll)
+			code := poll(ctx, c, searchReq, seen, &emitted, opts.MaxEvents, firstPoll, opts.Handler)
 			if code == -1 { // maxEvents reached
 				return jrerrors.ExitOK
 			}
@@ -117,7 +126,7 @@ func Run(ctx context.Context, c *client.Client, opts Options) int {
 
 // poll performs a single JQL search and emits events for new/changed issues.
 // Returns -1 when maxEvents is reached, an exit code on fatal error, or ExitOK.
-func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, seen map[string]string, emitted *int, maxEvents int, firstPoll bool) int {
+func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, seen map[string]string, emitted *int, maxEvents int, firstPoll bool, handler func(Event) error) int {
 	reqBody, _ := json.Marshal(searchReq)
 	respBody, exitCode := c.Fetch(ctx, "POST", "/rest/api/3/search/jql", bytes.NewReader(reqBody))
 	if exitCode != jrerrors.ExitOK {
@@ -164,13 +173,13 @@ func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, see
 			if firstPoll {
 				eventType = "initial"
 			}
-			if code := emitEvent(c, eventType, raw, emitted, maxEvents); code != jrerrors.ExitOK {
+			if code := emitEvent(c, eventType, raw, emitted, maxEvents, handler); code != jrerrors.ExitOK {
 				return code
 			}
 		} else if fp.Updated != prevUpdated {
 			// Changed issue.
 			seen[fp.Key] = fp.Updated
-			if code := emitEvent(c, "updated", raw, emitted, maxEvents); code != jrerrors.ExitOK {
+			if code := emitEvent(c, "updated", raw, emitted, maxEvents, handler); code != jrerrors.ExitOK {
 				return code
 			}
 		}
@@ -189,7 +198,7 @@ func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, see
 		for _, key := range removedKeys {
 			delete(seen, key)
 			removedJSON, _ := marshalNoEscape(map[string]string{"key": key})
-			if code := emitEvent(c, "removed", removedJSON, emitted, maxEvents); code != jrerrors.ExitOK {
+			if code := emitEvent(c, "removed", removedJSON, emitted, maxEvents, handler); code != jrerrors.ExitOK {
 				return code
 			}
 		}
@@ -198,13 +207,33 @@ func poll(ctx context.Context, c *client.Client, searchReq jqlSearchRequest, see
 	return jrerrors.ExitOK
 }
 
-// emitEvent writes a single NDJSON event to stdout.
-// Returns -1 when maxEvents is reached.
-func emitEvent(c *client.Client, eventType string, issueData json.RawMessage, emitted *int, maxEvents int) int {
+// emitEvent dispatches a single event either to a Handler callback (if set) or
+// to stdout as NDJSON. Returns -1 when maxEvents is reached, ExitValidation on
+// JQ error, or ExitOK.
+func emitEvent(c *client.Client, eventType string, issueData json.RawMessage, emitted *int, maxEvents int, handler func(Event) error) int {
 	event := Event{
 		Type:  eventType,
 		Issue: issueData,
 	}
+
+	if handler != nil {
+		// Callback path — bypass NDJSON output entirely.
+		if err := handler(event); err != nil {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "handler_error",
+				Message:   err.Error(),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitError
+		}
+		*emitted++
+		if maxEvents > 0 && *emitted >= maxEvents {
+			return -1 // sentinel: maxEvents reached
+		}
+		return jrerrors.ExitOK
+	}
+
+	// Default path — write NDJSON to stdout.
 	data, _ := marshalNoEscape(event)
 
 	// Apply JQ filter if set.
