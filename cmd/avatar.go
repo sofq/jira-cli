@@ -21,6 +21,7 @@ import (
 // avatarNeedsClient lists the subcommand names that require an authenticated
 // Jira client. All others are local-only operations.
 var avatarNeedsClient = map[string]bool{
+	"act":     true,
 	"extract": true,
 	"build":   true,
 	"refresh": true,
@@ -124,6 +125,7 @@ func init() {
 	avatarCmd.AddCommand(avatarEditCmd)
 	avatarCmd.AddCommand(avatarRefreshCmd)
 	avatarCmd.AddCommand(avatarStatusCmd)
+	avatarCmd.AddCommand(avatarActCmd)
 }
 
 // resolveAvatarDir resolves the avatar directory for the given user flag.
