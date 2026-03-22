@@ -20,7 +20,7 @@ import (
 
 // skipClientCommands are command names that do not require a configured client.
 var skipClientCommands = map[string]bool{
-	"configure":  true,
+	"configure": true,
 	"version":    true,
 	"completion": true,
 	"help":       true,
@@ -28,6 +28,8 @@ var skipClientCommands = map[string]bool{
 	"preset":     true,
 	"doctor":     true,
 	"explain":    true,
+	"character":  true,
+	"yolo":       true,
 }
 
 var rootCmd = &cobra.Command{
@@ -229,6 +231,8 @@ func init() {
 	pf.String("audit-file", "", "path to audit log file (implies --audit)")
 	pf.Int("retry", 0, "number of retries for transient errors (429, 5xx)")
 	pf.String("format", "", "additional output format written to stderr: table or csv")
+	pf.Bool("yolo", false, "enable yolo mode for this invocation")
+	pf.String("character", "", "override active character for this invocation")
 
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
@@ -246,6 +250,8 @@ func init() {
 	rootCmd.AddCommand(rawCmd)
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(diffCmd)
+	rootCmd.AddCommand(characterCmd)
+	rootCmd.AddCommand(yoloCmd)
 
 	// Override cobra's default help output so that "jr" with no args and
 	// "jr help <resource>" emit JSON errors to stderr instead of plain text
