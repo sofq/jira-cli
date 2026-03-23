@@ -50,9 +50,9 @@ func captureYoloCmd(t *testing.T, cmd *cobra.Command, args []string) (stdout, st
 	os.Stderr = origStderr
 
 	var sbOut bytes.Buffer
-	sbOut.ReadFrom(r)
+	_, _ = sbOut.ReadFrom(r)
 	var sbErr bytes.Buffer
-	sbErr.ReadFrom(re)
+	_, _ = sbErr.ReadFrom(re)
 
 	return sbOut.String(), sbErr.String(), err
 }

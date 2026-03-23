@@ -146,7 +146,7 @@ func TestFormatPrompt_SectionFilterMultiple(t *testing.T) {
 
 func TestFormatPrompt_NoExamples(t *testing.T) {
 	c := sampleComposed()
-	c.Character.Examples = nil
+	c.Examples = nil
 	got := FormatPrompt(c, PromptOptions{Format: "prose"})
 
 	if strings.Contains(got, "## Examples") {

@@ -244,7 +244,7 @@ func runCharacterEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	editorParts := strings.Fields(editor)
-	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], charPath)...) // #nosec G204 -- editor comes from $EDITOR, standard Unix pattern
+	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], charPath)...) //nolint:gosec // #nosec G204 G702 -- editor comes from $EDITOR, standard Unix pattern
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr

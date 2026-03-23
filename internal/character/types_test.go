@@ -154,7 +154,7 @@ func TestComposedCharacterFields(t *testing.T) {
 	if c.Overrides["writing"] != "override-writing" {
 		t.Errorf("Overrides[writing]: got %q", c.Overrides["writing"])
 	}
-	if c.Character.Name != "composed" {
-		t.Errorf("Character.Name: got %q", c.Character.Name)
+	if c.Name != "composed" {
+		t.Errorf("Character.Name: got %q", c.Name)
 	}
 }
