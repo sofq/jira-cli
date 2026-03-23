@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -189,32 +190,70 @@ func TestReadCacheFile_CorruptJSON(t *testing.T) {
 	}
 }
 
+// writeErrorTempFile is a tempFile that fails on Write.
+type writeErrorTempFile struct {
+	name string
+}
+
+func (f *writeErrorTempFile) Name() string              { return f.name }
+func (f *writeErrorTempFile) Write([]byte) (int, error) { return 0, fmt.Errorf("injected write error") }
+func (f *writeErrorTempFile) Close() error              { return nil }
+
 // TestWriteCacheFile_TmpWriteError verifies that writeCacheFile returns an
-// error when tmp.Write fails (read-only file descriptor).
+// error when tmp.Write fails.
 func TestWriteCacheFile_TmpWriteError(t *testing.T) {
 	dir := t.TempDir()
 	targetPath := filepath.Join(dir, "cache.json")
 
 	orig := openTempFile
-	openTempFile = func(dir, pattern string) (*os.File, error) {
-		// Create a real temp file for its name, then reopen read-only.
-		realTmp, err := os.CreateTemp(dir, pattern)
+	openTempFile = func(d, pattern string) (tempFile, error) {
+		realTmp, err := os.CreateTemp(d, pattern)
 		if err != nil {
 			return nil, err
 		}
-		tmpName := realTmp.Name()
+		name := realTmp.Name()
 		realTmp.Close()
-		ro, err := os.Open(tmpName)
-		if err != nil {
-			return nil, err
-		}
-		return ro, nil
+		return &writeErrorTempFile{name: name}, nil
 	}
 	defer func() { openTempFile = orig }()
 
 	err := writeCacheFile(targetPath, oauth2CacheFile{"k": {Token: "t", ExpiresAt: time.Now().Add(time.Hour)}})
 	if err == nil {
-		t.Fatal("expected error from Write to read-only fd, got nil")
+		t.Fatal("expected error from Write, got nil")
+	}
+}
+
+// closeErrorTempFile is a tempFile that succeeds on Write but fails on Close.
+type closeErrorTempFile struct {
+	name string
+}
+
+func (f *closeErrorTempFile) Name() string              { return f.name }
+func (f *closeErrorTempFile) Write(p []byte) (int, error) { return len(p), nil }
+func (f *closeErrorTempFile) Close() error              { return fmt.Errorf("injected close error") }
+
+// TestWriteCacheFile_CloseError verifies that writeCacheFile returns an error
+// when tmp.Close fails (Write succeeds but Close returns an error).
+func TestWriteCacheFile_CloseError(t *testing.T) {
+	dir := t.TempDir()
+	targetPath := filepath.Join(dir, "cache.json")
+
+	orig := openTempFile
+	openTempFile = func(d, pattern string) (tempFile, error) {
+		// Create a real temp file for its name, then close it and return our mock.
+		realTmp, err := os.CreateTemp(d, pattern)
+		if err != nil {
+			return nil, err
+		}
+		name := realTmp.Name()
+		realTmp.Close()
+		return &closeErrorTempFile{name: name}, nil
+	}
+	defer func() { openTempFile = orig }()
+
+	err := writeCacheFile(targetPath, oauth2CacheFile{"k": {Token: "t", ExpiresAt: time.Now().Add(time.Hour)}})
+	if err == nil {
+		t.Fatal("expected error from Close, got nil")
 	}
 }
 

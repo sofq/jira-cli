@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,6 +20,13 @@ import (
 
 // validTemplateName matches safe template names: alphanumeric, hyphens, underscores.
 var validTemplateName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
+
+// openFileFunc is used by Save to create new template files. Tests can override
+// it to inject write/close errors. The returned io.WriteCloser is used for
+// writing template data.
+var openFileFunc = func(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
+	return os.OpenFile(name, flag, perm)
+}
 
 //go:embed builtin/*.yaml
 var embeddedFS embed.FS
@@ -278,7 +286,7 @@ func Save(tmpl *Template, overwrite bool) (string, error) {
 
 	if !overwrite {
 		// Use O_EXCL for atomic create — avoids TOCTOU race with Stat+WriteFile.
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		f, err := openFileFunc(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err != nil {
 			if errors.Is(err, os.ErrExist) {
 				return "", fmt.Errorf("template %q already exists at %s; use --overwrite to replace", tmpl.Name, path)
