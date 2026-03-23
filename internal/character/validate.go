@@ -4,7 +4,6 @@ import "fmt"
 
 // validSources is the set of recognised source values.
 var validSources = map[string]bool{
-	SourceAvatar:   true,
 	SourceClone:    true,
 	SourceManual:   true,
 	SourceTemplate: true,

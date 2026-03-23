@@ -225,19 +225,6 @@ jr project search --format table
 jr project search --format csv
 ```
 
-### Avatar — user style profiling
-```bash
-jr avatar extract     # extract Jira activity data for current user
-jr avatar build       # build profile from extracted data
-jr avatar prompt      # output profile as agent-consumable prompt text
-jr avatar show        # display the current profile (YAML)
-jr avatar edit        # open profile in $EDITOR
-jr avatar refresh     # re-extract and rebuild in one step
-jr avatar status      # show extraction/build status
-```
-
-Avatar analyzes Jira activity (writing patterns, workflow habits, interactions) to build behavioral profiles that agents can use to adapt to the user's working style.
-
 ### List projects
 ```bash
 jr project search --jq '[.values[] | {key, name}]'

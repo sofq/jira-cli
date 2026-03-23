@@ -27,8 +27,6 @@ features:
     details: "jr pipe 'search ...' 'workflow transition --to Done' --parallel 5. Chain commands together. Source → extract → target."
   - title: Retry & Resilience
     details: "--retry 3 for exponential backoff on 429/5xx. --parallel for concurrent batch. Built-in fault tolerance."
-  - title: Avatar
-    details: "jr avatar build — analyze Jira activity to build user style profiles. Agents adapt to how you work."
 ---
 
 <!-- Why jr section -->

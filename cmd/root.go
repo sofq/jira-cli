@@ -241,10 +241,9 @@ func init() {
 	// with hand-written ones while preserving generated subcommands.
 	generated.RegisterAll(rootCmd)
 
-	// Merge hand-written version/workflow/avatar with their generated subcommands.
+	// Merge hand-written version/workflow with their generated subcommands.
 	mergeCommand(rootCmd, versionCmd)
 	mergeCommand(rootCmd, workflowCmd)
-	mergeCommand(rootCmd, avatarCmd)
 
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)

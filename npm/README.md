@@ -71,12 +71,6 @@ jr doctor                                          # health check
 jr explain '{"error_type":"auth_failed",...}'       # error remediation
 ```
 
-### Avatar — user style profiling
-
-```bash
-jr avatar extract && jr avatar build && jr avatar prompt
-```
-
 ### Watch mode
 
 ```bash

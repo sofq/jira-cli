@@ -377,7 +377,7 @@ func runCharacterPrompt(cmd *cobra.Command, args []string) error {
 	if cc == nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "not_found",
-			Message:   "no active character; run `jr character use <name>` or `jr avatar build`",
+			Message:   "no active character; run `jr character use <name>`",
 		}
 		apiErr.WriteJSON(os.Stderr)
 		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitNotFound}

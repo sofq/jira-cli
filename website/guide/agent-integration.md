@@ -19,7 +19,6 @@
 | **Error remediation** | `jr explain` parses error JSON and returns actionable fix advice |
 | **Human-readable output** | `--format table\|csv` renders output to stderr alongside JSON on stdout |
 | **Cache presets** | Metadata endpoints auto-cache with sensible TTLs — no manual `--cache` needed |
-| **User style profiling** | `jr avatar` extracts and manages your Jira writing style for AI agents |
 | **Security controls** | Per-profile operation allowlist/denylist, batch limits, audit logging |
 | **600+ commands** | Auto-generated from Jira's OpenAPI spec, always up to date |
 
@@ -220,37 +219,6 @@ Metadata endpoints that change infrequently are automatically cached with sensib
 
 Automatic caching reduces redundant API calls and rate limit consumption without requiring agents to pass `--cache` manually. You can still use `--cache` to override the default TTL for any endpoint.
 
-## Avatar — User Style Profiling
-
-`jr avatar` manages a Jira writing style profile that AI agents can use to match your tone, terminology, and formatting when creating issues or comments on your behalf.
-
-```bash
-# Extract style from your recent Jira activity
-jr avatar extract
-
-# Build a style profile from extracted data
-jr avatar build
-
-# Get the style prompt (for feeding to an LLM)
-jr avatar prompt
-
-# Show the current profile
-jr avatar show
-
-# Edit the profile manually
-jr avatar edit
-
-# Refresh the profile from latest activity
-jr avatar refresh
-
-# Check profile status
-jr avatar status
-```
-
-::: tip
-Run `jr avatar extract` and `jr avatar build` once during setup. After that, agents can call `jr avatar prompt` to get your style instructions and include them in their LLM prompts.
-:::
-
 ## Token Efficiency
 
 Jira responses can be enormous. A single issue response can consume ~10,000 tokens. Several mechanisms solve this:
@@ -408,22 +376,6 @@ The `--format` flag renders JSON as a human-readable table or CSV to stderr, whi
 jr project search --format table   # table on stderr, JSON on stdout
 jr project search --format csv     # CSV on stderr, JSON on stdout
 ```
-
-## Avatar — User Style Profiling
-
-`jr avatar` analyzes Jira activity (writing patterns, workflow habits, interactions) to build behavioral profiles:
-
-```bash
-jr avatar extract     # extract Jira activity data
-jr avatar build       # build profile from extracted data
-jr avatar prompt      # output profile as agent-consumable prompt text
-jr avatar show        # display the current profile
-jr avatar edit        # open profile in $EDITOR
-jr avatar refresh     # re-extract and rebuild
-jr avatar status      # show extraction/build status
-```
-
-Agents can use `jr avatar prompt` to adapt their communication style and workflow suggestions to match the user's patterns.
 
 ## Error Handling for Agents
 

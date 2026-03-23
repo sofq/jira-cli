@@ -80,7 +80,7 @@ func TestValidate_InvalidSource(t *testing.T) {
 }
 
 func TestValidate_AllValidSources(t *testing.T) {
-	sources := []string{SourceAvatar, SourceClone, SourceManual, SourceTemplate, SourcePersona}
+	sources := []string{SourceClone, SourceManual, SourceTemplate, SourcePersona}
 	for _, src := range sources {
 		c := validCharacter()
 		c.Source = src

@@ -43,8 +43,7 @@ type stateEntry struct {
 //  1. FlagCharacter (+ FlagCompose)
 //  2. ConfigChar (+ ConfigCompose)
 //  3. State file entry for ProfileName
-//  4. First character with source == "avatar"
-//  5. nil (no character configured)
+//  4. nil (no character configured)
 func ResolveActive(opts ResolveOptions) (*ComposedCharacter, error) {
 	// Priority 1: explicit flag.
 	if opts.FlagCharacter != "" {
@@ -64,23 +63,7 @@ func ResolveActive(opts ResolveOptions) (*ComposedCharacter, error) {
 		}
 	}
 
-	// Priority 4: any character whose source is "avatar".
-	names, err := List(opts.CharDir)
-	if err != nil {
-		return nil, err
-	}
-	for _, name := range names {
-		c, err := Load(opts.CharDir, name)
-		if err != nil {
-			continue
-		}
-		if c.Source == SourceAvatar {
-			cc := Compose(c, nil)
-			return &cc, nil
-		}
-	}
-
-	// Priority 5: nothing found.
+	// Priority 4: nothing found.
 	return nil, nil
 }
 

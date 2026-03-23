@@ -5,7 +5,6 @@ package character
 
 // Source constants describe where a Character originated.
 const (
-	SourceAvatar   = "avatar"
 	SourceClone    = "clone"
 	SourceManual   = "manual"
 	SourceTemplate = "template"

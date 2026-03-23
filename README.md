@@ -127,16 +127,6 @@ jr doctor                                            # check config, auth, conne
 jr explain '{"error_type":"auth_failed","status":401,"message":"..."}'  # remediation advice
 ```
 
-### Avatar — user style profiling
-
-```bash
-jr avatar extract && jr avatar build    # analyze Jira activity
-jr avatar prompt                        # output profile for agent consumption
-jr avatar show                          # display profile
-```
-
-Analyzes writing patterns, workflow habits, and interactions to build behavioral profiles.
-
 ### Error contract agents can branch on
 
 ```json

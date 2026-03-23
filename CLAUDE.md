@@ -95,23 +95,6 @@ jr diff --issue PROJ-123 --since 2h                # changes in last 2 hours
 jr diff --issue PROJ-123 --since 2025-01-01        # changes since date
 jr diff --issue PROJ-123 --field status            # only status changes
 
-# Avatar — user style profiling
-jr avatar extract                                  # extract Jira activity data for current user
-jr avatar build                                    # build profile from extracted data (also saves character file)
-jr avatar prompt                                   # output profile as agent-consumable prompt text
-jr avatar show                                     # display the current profile (YAML)
-jr avatar edit                                     # open profile in $EDITOR
-jr avatar refresh                                  # re-extract and rebuild in one step
-jr avatar status                                   # show extraction/build status
-
-# Avatar — autonomous loop
-jr avatar act --jql "assignee = me" --interval 30s # watch and react to Jira events
-jr avatar act --dry-run --jql "project = PROJ"     # preview what it would do
-jr avatar act --jql "..." --once                   # one poll cycle, process all matches, exit
-jr avatar act --jql "..." --character formal-pm    # use specific character
-jr avatar act --jql "..." --react-to "assigned,comment_mention"  # filter events
-jr avatar act --jql "..." --max-actions 10         # stop after 10 actions
-
 # Character — persona management
 jr character list                                  # list all characters
 jr character show <name>                           # display character YAML
@@ -168,8 +151,6 @@ jr preset list                # list available output presets
 jr template list              # list available issue templates
 jr template show <name>       # show a template's variables and fields
 jr diff --issue <key>         # show changelog for an issue
-jr avatar status              # check avatar profile status
-jr avatar prompt              # get avatar profile for agent use
 jr character list             # list available characters
 jr character show <name>      # show a character's definition
 jr yolo status                # check yolo execution policy state

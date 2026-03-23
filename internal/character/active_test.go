@@ -130,7 +130,7 @@ func TestResolveActive_StateFile(t *testing.T) {
 func TestResolveActive_StateFileWrongProfile(t *testing.T) {
 	dir := t.TempDir()
 	c := &Character{
-		Version: "1", Name: "state-char", Source: SourceAvatar,
+		Version: "1", Name: "state-char", Source: SourceManual,
 		StyleGuide: StyleGuide{Writing: "w", Workflow: "wf", Interaction: "i"},
 	}
 	writeCharFile(t, dir, c)
@@ -144,30 +144,9 @@ func TestResolveActive_StateFileWrongProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// state file has no entry for "default" — should fall through to avatar
-	// state-char has Source=avatar so it may be found via avatar fallback
-	_ = got
-}
-
-func TestResolveActive_AvatarFallback(t *testing.T) {
-	dir := t.TempDir()
-	c := &Character{
-		Version: "1", Name: "my-avatar", Source: SourceAvatar,
-		StyleGuide: StyleGuide{Writing: "w", Workflow: "wf", Interaction: "i"},
-	}
-	writeCharFile(t, dir, c)
-
-	got, err := ResolveActive(ResolveOptions{
-		CharDir: dir,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got == nil {
-		t.Fatal("expected avatar fallback to find character, got nil")
-	}
-	if got.Source != SourceAvatar {
-		t.Errorf("expected source avatar, got %q", got.Source)
+	// state file has no entry for "default" — should fall through to nil
+	if got != nil {
+		t.Errorf("expected nil when no state entry for profile, got %v", got)
 	}
 }
 

@@ -12,14 +12,12 @@ func TestSourceConstants(t *testing.T) {
 		name string
 		val  string
 	}{
-		{"SourceAvatar", SourceAvatar},
 		{"SourceClone", SourceClone},
 		{"SourceManual", SourceManual},
 		{"SourceTemplate", SourceTemplate},
 		{"SourcePersona", SourcePersona},
 	}
 	expected := map[string]string{
-		"SourceAvatar":   "avatar",
 		"SourceClone":    "clone",
 		"SourceManual":   "manual",
 		"SourceTemplate": "template",

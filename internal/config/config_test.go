@@ -1111,66 +1111,6 @@ func TestResolveReturnsProfileName(t *testing.T) {
 	}
 }
 
-// TestAvatarConfigRoundTrip verifies that AvatarConfig fields survive a
-// SaveTo/LoadFrom roundtrip.
-func TestAvatarConfigRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.json")
-
-	cfg := &config.Config{
-		DefaultProfile: "default",
-		Profiles: map[string]config.Profile{
-			"default": {
-				BaseURL: "https://example.com",
-				Auth:    config.AuthConfig{Type: "basic", Token: "tok"},
-				Avatar: &config.AvatarConfig{
-					Enabled:     true,
-					Engine:      "claude-3-5-sonnet",
-					LLMCmd:      "llm",
-					MinComments: 20,
-					MinUpdates:  5,
-					MaxWindow:   "90d",
-					Overrides:   map[string]string{"greeting": "Hi"},
-				},
-			},
-		},
-	}
-	if err := config.SaveTo(cfg, cfgPath); err != nil {
-		t.Fatalf("SaveTo: %v", err)
-	}
-
-	loaded, err := config.LoadFrom(cfgPath)
-	if err != nil {
-		t.Fatalf("LoadFrom: %v", err)
-	}
-
-	p := loaded.Profiles["default"]
-	if p.Avatar == nil {
-		t.Fatal("expected Avatar to be non-nil after roundtrip")
-	}
-	if !p.Avatar.Enabled {
-		t.Error("Avatar.Enabled should be true")
-	}
-	if p.Avatar.Engine != "claude-3-5-sonnet" {
-		t.Errorf("Avatar.Engine = %q, want %q", p.Avatar.Engine, "claude-3-5-sonnet")
-	}
-	if p.Avatar.LLMCmd != "llm" {
-		t.Errorf("Avatar.LLMCmd = %q, want %q", p.Avatar.LLMCmd, "llm")
-	}
-	if p.Avatar.MinComments != 20 {
-		t.Errorf("Avatar.MinComments = %d, want 20", p.Avatar.MinComments)
-	}
-	if p.Avatar.MinUpdates != 5 {
-		t.Errorf("Avatar.MinUpdates = %d, want 5", p.Avatar.MinUpdates)
-	}
-	if p.Avatar.MaxWindow != "90d" {
-		t.Errorf("Avatar.MaxWindow = %q, want 90d", p.Avatar.MaxWindow)
-	}
-	if v, ok := p.Avatar.Overrides["greeting"]; !ok || v != "Hi" {
-		t.Errorf("Avatar.Overrides[greeting] = %q, want Hi", v)
-	}
-}
-
 // TestResolveReturnsPolicyFields verifies that Resolve carries allow/deny lists.
 func TestResolveReturnsPolicyFields(t *testing.T) {
 	dir := t.TempDir()

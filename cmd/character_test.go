@@ -423,11 +423,11 @@ func TestCharacterPrompt_WithActive(t *testing.T) {
 	dir := t.TempDir()
 	setTempCharacterBase(t, dir)
 
-	// Save a character with source=avatar so ResolveActive finds it automatically.
+	// Save a character and set it as active via state file.
 	ch := &character.Character{
 		Version:     "1",
-		Name:        "myavatar",
-		Source:      character.SourceAvatar,
+		Name:        "mychar",
+		Source:      character.SourceManual,
 		Description: "test",
 		StyleGuide: character.StyleGuide{
 			Writing:     "Be concise.",
@@ -437,6 +437,11 @@ func TestCharacterPrompt_WithActive(t *testing.T) {
 	}
 	if err := character.Save(dir, ch); err != nil {
 		t.Fatalf("setup: %v", err)
+	}
+	// Set as active via state file.
+	stateFile := filepath.Join(dir, "state.json")
+	if err := character.SaveState(stateFile, "default", "mychar", nil); err != nil {
+		t.Fatalf("setup state: %v", err)
 	}
 
 	root := &cobra.Command{Use: "jr"}
@@ -449,7 +454,7 @@ func TestCharacterPrompt_WithActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "myavatar") {
+	if !strings.Contains(out, "mychar") {
 		t.Errorf("expected character name in output, got: %s", out)
 	}
 }
