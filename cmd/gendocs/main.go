@@ -389,8 +389,8 @@ func run(outDir string) error {
 		}
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") && !generated[e.Name()] {
-				stale := filepath.Join(commandsDir, e.Name())
-				if err := os.Remove(stale); err == nil {
+				stale := filepath.Join(commandsDir, filepath.Base(e.Name()))
+				if err := os.Remove(stale); err == nil { // #nosec G703 -- e.Name() comes from os.ReadDir on a known directory
 					fmt.Printf("  removed stale %s\n", stale)
 				}
 			}
