@@ -16,7 +16,7 @@ features:
   - title: Diff & Changelog
     details: "jr diff --issue PROJ-1 --since 2h. See exactly what changed, when, and by whom. Structured JSON, not a wall of text."
   - title: Batch Operations
-    details: "Pipe a JSON array of commands into jr batch. Run 50 operations in one call. Parallel by default."
+    details: "Pipe a JSON array of commands into jr batch. Run 50 operations in one call. One process, no subprocess overhead."
   - title: Security Built In
     details: "Operation policies per profile. Audit logging. Batch limits. Lock down what agents can do — allowed_operations or denied_operations with glob patterns."
   - title: 600+ Commands
@@ -80,8 +80,8 @@ jr watch --jql "project = PROJ AND status changed" --interval 30s
 ```
 
 ```json
-{"event":"changed","key":"PROJ-1","field":"status","from":"Open","to":"In Progress","time":"14:32:01"}
-{"event":"changed","key":"PROJ-5","field":"assignee","from":"null","to":"alice","time":"14:32:30"}
+{"type":"initial","issue":{"key":"PROJ-1","fields":{"summary":"Fix login","status":{"name":"Open"}}}}
+{"type":"updated","issue":{"key":"PROJ-1","fields":{"summary":"Fix login","status":{"name":"In Progress"}}}}
 ```
 
   </div>
@@ -99,14 +99,13 @@ jr watch --jql "project = PROJ AND status changed" --interval 30s
     <div class="terminal-body">
 
 ```bash
-jr diff --issue PROJ-123 --since 2h --field status,assignee
+jr diff --issue PROJ-123 --since 2h --field status
 ```
 
 ```json
-[
-  {"field":"status","from":"Open","to":"In Progress","author":"alice","time":"14:20:00"},
-  {"field":"assignee","from":"null","to":"alice","time":"14:20:00"}
-]
+{"issue":"PROJ-123","changes":[
+  {"timestamp":"2026-03-25T14:20:00Z","author":"alice","field":"status","from":"Open","to":"In Progress"}
+]}
 ```
 
   </div>
