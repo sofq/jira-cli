@@ -380,6 +380,23 @@ func run(outDir string) error {
 	guideDir := filepath.Join(outDir, "guide")
 	vitepressDir := filepath.Join(outDir, ".vitepress")
 
+	// 0. Clean stale generated command pages so removed commands don't linger.
+	if entries, err := os.ReadDir(commandsDir); err == nil {
+		generated := make(map[string]bool, len(pages))
+		generated["index.md"] = true
+		for _, p := range pages {
+			generated[p.Resource+".md"] = true
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") && !generated[e.Name()] {
+				stale := filepath.Join(commandsDir, e.Name())
+				if err := os.Remove(stale); err == nil {
+					fmt.Printf("  removed stale %s\n", stale)
+				}
+			}
+		}
+	}
+
 	// 1. Per-resource pages.
 	for _, page := range pages {
 		data, err := renderTemplate("resource", resourcePageTmpl, page)
