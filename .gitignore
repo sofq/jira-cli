@@ -34,3 +34,6 @@ coverage.out
 
 # Skill workspace
 jira-cli-workspace/
+
+# Superpowers
+.superpower/
