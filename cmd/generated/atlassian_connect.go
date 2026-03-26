@@ -41,7 +41,7 @@ var atlassian_connectCmd = &cobra.Command{
 var atlassian_connect_addon_properties_resource_get_addon_properties_get = &cobra.Command{
 	Use:   "addon-properties-resource.get-addon-properties_get",
 	Short: "Get app properties",
-	Long:  "Gets all the properties of an app.\n\n**[Permissions](#permissions) required:** Only a Connect app whose key matches `addonKey` can make this request.\nAdditionally, Forge apps can access Connect app properties (stored against the same `app.connect.key`).",
+	Long:  "Gets all the properties of an app. The reserved key `connect_client_key_019cdff3-8bfb-71fe-9628-875b700aebb8` is not returned.\n\n**[Permissions](#permissions) required:** Only a Connect app whose key matches `addonKey` can make this request.\nAdditionally, Forge apps can access Connect app properties (stored against the same `app.connect.key`).",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.FromContext(cmd.Context())
 		if err != nil {
@@ -71,7 +71,7 @@ var atlassian_connect_addon_properties_resource_get_addon_properties_get = &cobr
 var atlassian_connect_addon_properties_resource_get_addon_property_get = &cobra.Command{
 	Use:   "addon-properties-resource.get-addon-property_get",
 	Short: "Get app property",
-	Long:  "Returns the key and value of an app's property.\n\n**[Permissions](#permissions) required:** Only a Connect app whose key matches `addonKey` can make this request.\nAdditionally, Forge apps can access Connect app properties (stored against the same `app.connect.key`).",
+	Long:  "Returns the key and value of an app's property. The property key `connect_client_key_019cdff3-8bfb-71fe-9628-875b700aebb8`\nis reserved. It returns a synthetic, read-only property containing the Connect `clientKey` for the requested tenant.\nThis is intended for Forge apps with `app.connect.key` to retrieve the Connect client key during migration.\n\n**[Permissions](#permissions) required:** Only a Connect app whose key matches `addonKey` can make this request.\nAdditionally, Forge apps can access Connect app properties (stored against the same `app.connect.key`).",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.FromContext(cmd.Context())
 		if err != nil {
