@@ -379,6 +379,31 @@ func TestRenderFields_EmptyOverrideKeepsDefault(t *testing.T) {
 	}
 }
 
+// TestRenderFields_RequiredEmptyStringNoDefault verifies that explicitly passing
+// an empty string for a required variable that has NO default is treated as
+// missing. This exercises the else-if branch at template.go:203-205.
+func TestRenderFields_RequiredEmptyStringNoDefault(t *testing.T) {
+	tmpl := &Template{
+		Variables: []Variable{
+			{Name: "summary", Required: true}, // no default
+		},
+		Fields: map[string]string{
+			"summary": "{{.summary}}",
+		},
+	}
+
+	_, err := RenderFields(tmpl, map[string]string{"summary": ""})
+	if err == nil {
+		t.Fatal("expected error when required variable is explicitly set to empty string with no default")
+	}
+	if !strings.Contains(err.Error(), "missing required variables") {
+		t.Errorf("expected 'missing required variables' in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "summary") {
+		t.Errorf("expected 'summary' in error, got: %v", err)
+	}
+}
+
 func TestRenderFields_BadTemplateSyntax(t *testing.T) {
 	tmpl := &Template{
 		Variables: []Variable{
