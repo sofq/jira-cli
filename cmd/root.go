@@ -10,6 +10,7 @@ import (
 
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/audit"
+	"github.com/sofq/jira-cli/internal/cache"
 	"github.com/sofq/jira-cli/internal/client"
 	"github.com/sofq/jira-cli/internal/config"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
@@ -193,6 +194,17 @@ var rootCmd = &cobra.Command{
 		cmd.SetContext(client.NewContext(cmd.Context(), c))
 		return nil
 	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		// Close the audit logger so buffered writes are flushed.
+		c, err := client.FromContext(cmd.Context())
+		if err != nil || c == nil {
+			return nil // no client in context (e.g. configure, version)
+		}
+		if c.AuditLogger != nil {
+			c.AuditLogger.Close()
+		}
+		return nil
+	},
 }
 
 func init() {
@@ -260,6 +272,9 @@ func RootCommand() *cobra.Command {
 
 // Execute runs the root command and returns an exit code.
 func Execute() int {
+	// Evict stale cache entries in the background so it never delays command execution.
+	go cache.Evict()
+
 	if err := rootCmd.Execute(); err != nil {
 		if aw, ok := err.(*jrerrors.AlreadyWrittenError); ok {
 			return aw.Code

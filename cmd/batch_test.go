@@ -61,7 +61,7 @@ func TestBatchTransition_Success(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -88,7 +88,7 @@ func TestBatchTransition_NoMatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Nonexistent")
+	code := doTransition(t.Context(), c, "TEST-1", "Nonexistent")
 	if code != jrerrors.ExitValidation {
 		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
 	}
@@ -112,7 +112,7 @@ func TestBatchTransition_SubstringMatch(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
 	// Substring match: "progress" should match "In Progress".
-	code := batchTransition(t.Context(), c, "TEST-1", "progress")
+	code := doTransition(t.Context(), c, "TEST-1", "progress")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -134,7 +134,7 @@ func TestBatchTransition_PostError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitAuth {
 		t.Fatalf("expected exit %d (auth), got %d; stderr=%s", jrerrors.ExitAuth, code, stderr.String())
 	}
@@ -150,7 +150,7 @@ func TestBatchTransition_GetTransitionsError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "NOPE-999", "Done")
+	code := doTransition(t.Context(), c, "NOPE-999", "Done")
 	if code != jrerrors.ExitNotFound {
 		t.Fatalf("expected exit %d (not_found), got %d", jrerrors.ExitNotFound, code)
 	}
@@ -166,7 +166,7 @@ func TestBatchTransition_InvalidTransitionsJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitError {
 		t.Fatalf("expected exit %d (error), got %d", jrerrors.ExitError, code)
 	}
@@ -195,7 +195,7 @@ func TestBatchTransition_JSONSafe(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -220,7 +220,7 @@ func TestBatchTransition_JQFilter(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.JQFilter = ".issue"
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -250,7 +250,7 @@ func TestBatchTransition_PrettyPrint(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.Pretty = true
 
-	code := batchTransition(t.Context(), c, "TEST-1", "In Progress")
+	code := doTransition(t.Context(), c, "TEST-1", "In Progress")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -268,7 +268,7 @@ func TestBatchTransition_DryRun_JQ(t *testing.T) {
 	c.DryRun = true
 	c.JQFilter = ".method"
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -284,7 +284,7 @@ func TestBatchTransition_DryRun_Pretty(t *testing.T) {
 	c.DryRun = true
 	c.Pretty = true
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -314,7 +314,7 @@ func TestBatchAssign_Me(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -341,7 +341,7 @@ func TestBatchAssign_None(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "none")
+	code := doAssign(t.Context(), c, "TEST-1", "none")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -373,7 +373,7 @@ func TestBatchAssign_UserSearch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "Test User")
+	code := doAssign(t.Context(), c, "TEST-1", "Test User")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -397,7 +397,7 @@ func TestBatchAssign_UserNotFound(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "nonexistent@example.com")
+	code := doAssign(t.Context(), c, "TEST-1", "nonexistent@example.com")
 	if code != jrerrors.ExitNotFound {
 		t.Fatalf("expected exit %d, got %d", jrerrors.ExitNotFound, code)
 	}
@@ -418,7 +418,7 @@ func TestBatchAssign_ParseError_ReturnsExitError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "someuser@example.com")
+	code := doAssign(t.Context(), c, "TEST-1", "someuser@example.com")
 	// Parse errors should return ExitError (1), not ExitNotFound (3).
 	if code != jrerrors.ExitError {
 		t.Fatalf("expected exit %d (error) for parse failure, got %d", jrerrors.ExitError, code)
@@ -438,7 +438,7 @@ func TestBatchAssign_InvalidMyselfJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitError {
 		t.Fatalf("expected exit %d for invalid /myself JSON, got %d", jrerrors.ExitError, code)
 	}
@@ -458,7 +458,7 @@ func TestBatchAssign_EmptyAccountId(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitError {
 		t.Fatalf("expected exit %d for empty accountId, got %d", jrerrors.ExitError, code)
 	}
@@ -477,7 +477,7 @@ func TestBatchAssign_MyselfHTTPError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitAuth {
 		t.Fatalf("expected exit %d (auth), got %d", jrerrors.ExitAuth, code)
 	}
@@ -493,7 +493,7 @@ func TestBatchAssign_UserSearchHTTPError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "someuser")
+	code := doAssign(t.Context(), c, "TEST-1", "someuser")
 	if code != jrerrors.ExitServer {
 		t.Fatalf("expected exit %d (server), got %d", jrerrors.ExitServer, code)
 	}
@@ -518,7 +518,7 @@ func TestBatchAssign_PutAssigneeHTTPError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitAuth {
 		t.Fatalf("expected exit %d (auth), got %d", jrerrors.ExitAuth, code)
 	}
@@ -534,7 +534,7 @@ func TestBatchAssign_Unassign_HTTPError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "none")
+	code := doAssign(t.Context(), c, "TEST-1", "none")
 	if code != jrerrors.ExitValidation {
 		t.Fatalf("expected exit %d (validation), got %d", jrerrors.ExitValidation, code)
 	}
@@ -560,7 +560,7 @@ func TestBatchAssign_JSONSafe(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -585,7 +585,7 @@ func TestBatchAssign_JQFilter(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.JQFilter = ".issue"
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -610,7 +610,7 @@ func TestBatchAssign_None_JQFilter(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.JQFilter = ".status"
 
-	code := batchAssign(t.Context(), c, "TEST-1", "none")
+	code := doAssign(t.Context(), c, "TEST-1", "none")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -640,7 +640,7 @@ func TestBatchAssign_PrettyPrint(t *testing.T) {
 	c := newTestClient(ts.URL, &stdout, &stderr)
 	c.Pretty = true
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -657,7 +657,7 @@ func TestBatchAssign_DryRun_JQ(t *testing.T) {
 	c.DryRun = true
 	c.JQFilter = ".method"
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -673,7 +673,7 @@ func TestBatchAssign_DryRun_Pretty(t *testing.T) {
 	c.DryRun = true
 	c.Pretty = true
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -747,7 +747,7 @@ func TestWorkflowTransition_DryRun(t *testing.T) {
 	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchTransition(t.Context(), c, "TEST-1", "Done")
+	code := doTransition(t.Context(), c, "TEST-1", "Done")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -772,7 +772,7 @@ func TestWorkflowAssign_DryRun(t *testing.T) {
 	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchAssign(t.Context(), c, "TEST-1", "me")
+	code := doAssign(t.Context(), c, "TEST-1", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -1919,7 +1919,7 @@ func TestBatchMove_Success_NoAssign(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "TEST-1", "In Progress", "")
+	code := doMove(t.Context(), c, "TEST-1", "In Progress", "")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -1965,7 +1965,7 @@ func TestBatchMove_Success_WithAssignMe(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "me")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2003,7 +2003,7 @@ func TestBatchMove_Success_WithUnassign(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "none")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "none")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2021,7 +2021,7 @@ func TestBatchMove_DryRun_NoAssign(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2042,7 +2042,7 @@ func TestBatchMove_DryRun_WithAssign(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "me")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "me")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2071,7 +2071,7 @@ func TestBatchComment_Success(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchComment(t.Context(), c, "TEST-1", "Great work!")
+	code := doComment(t.Context(), c, "TEST-1", "Great work!")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2092,7 +2092,7 @@ func TestBatchComment_DryRun(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchComment(t.Context(), c, "TEST-1", "A comment")
+	code := doComment(t.Context(), c, "TEST-1", "A comment")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2131,7 +2131,7 @@ func TestBatchLink_Success(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
+	code := doLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2155,7 +2155,7 @@ func TestBatchLink_DryRun(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
+	code := doLink(t.Context(), c, "TEST-1", "TEST-2", "blocks")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2204,7 +2204,7 @@ func TestBatchCreateIssue_MissingArgs(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			c := newTestClient("http://unused", &stdout, &stderr)
 
-			code := batchCreateIssue(t.Context(), c, tt.args)
+			code := doCreateIssue(t.Context(), c, tt.args)
 			if code != jrerrors.ExitValidation {
 				t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
 			}
@@ -2229,7 +2229,7 @@ func TestBatchCreateIssue_Success_Minimal(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchCreateIssue(t.Context(), c, map[string]string{
+	code := doCreateIssue(t.Context(), c, map[string]string{
 		"project": "PROJ",
 		"type":    "Bug",
 		"summary": "Login broken",
@@ -2251,7 +2251,7 @@ func TestBatchCreateIssue_DryRun_AllFields(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchCreateIssue(t.Context(), c, map[string]string{
+	code := doCreateIssue(t.Context(), c, map[string]string{
 		"project":     "PROJ",
 		"type":        "Bug",
 		"summary":     "Login broken",
@@ -2293,7 +2293,7 @@ func TestBatchCreateIssue_Success_WithAssignMe(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchCreateIssue(t.Context(), c, map[string]string{
+	code := doCreateIssue(t.Context(), c, map[string]string{
 		"project": "PROJ",
 		"type":    "Task",
 		"summary": "Do the thing",
@@ -2318,7 +2318,7 @@ func TestBatchSprint_DryRun(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	code := doSprint(t.Context(), c, "TEST-1", "Sprint 5")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2357,7 +2357,7 @@ func TestBatchSprint_Success(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	code := doSprint(t.Context(), c, "TEST-1", "Sprint 5")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2379,7 +2379,7 @@ func TestBatchLogWork_InvalidDuration(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient("http://unused", &stdout, &stderr)
 
-	code := batchLogWork(t.Context(), c, "TEST-1", "not-a-duration", "")
+	code := doLogWork(t.Context(), c, "TEST-1", "not-a-duration", "")
 	if code != jrerrors.ExitValidation {
 		t.Fatalf("expected exit %d, got %d", jrerrors.ExitValidation, code)
 	}
@@ -2393,7 +2393,7 @@ func TestBatchLogWork_DryRun(t *testing.T) {
 	c := newTestClient("http://unused", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchLogWork(t.Context(), c, "TEST-1", "2h30m", "debugging")
+	code := doLogWork(t.Context(), c, "TEST-1", "2h30m", "debugging")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2427,7 +2427,7 @@ func TestBatchLogWork_Success(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLogWork(t.Context(), c, "TEST-1", "1h", "debugging session")
+	code := doLogWork(t.Context(), c, "TEST-1", "1h", "debugging session")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -2990,7 +2990,7 @@ func TestBatchMove_TransitionFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "NOPE-1", "Done", "")
+	code := doMove(t.Context(), c, "NOPE-1", "Done", "")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for failed transition")
 	}
@@ -3021,7 +3021,7 @@ func TestBatchMove_AssignResolveError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "nonexistent@user.com")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "nonexistent@user.com")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for unresolved assignee")
 	}
@@ -3039,7 +3039,7 @@ func TestBatchComment_FetchError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchComment(t.Context(), c, "TEST-1", "Hello")
+	code := doComment(t.Context(), c, "TEST-1", "Hello")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for forbidden")
 	}
@@ -3061,7 +3061,7 @@ func TestBatchLink_ResolveTypeError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLink(t.Context(), c, "A-1", "B-2", "nonexistent-type")
+	code := doLink(t.Context(), c, "A-1", "B-2", "nonexistent-type")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for unresolved link type")
 	}
@@ -3086,7 +3086,7 @@ func TestBatchLink_PostError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLink(t.Context(), c, "A-1", "B-2", "Blocks")
+	code := doLink(t.Context(), c, "A-1", "B-2", "Blocks")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for POST error")
 	}
@@ -3123,7 +3123,7 @@ func TestBatchCreateIssue_WithAllOptionalFields(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchCreateIssue(t.Context(), c, map[string]string{
+	code := doCreateIssue(t.Context(), c, map[string]string{
 		"project":     "PROJ",
 		"type":        "Sub-task",
 		"summary":     "Full fields",
@@ -3147,7 +3147,7 @@ func TestBatchCreateIssue_FetchError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchCreateIssue(t.Context(), c, map[string]string{
+	code := doCreateIssue(t.Context(), c, map[string]string{
 		"project": "PROJ",
 		"type":    "Bug",
 		"summary": "Will fail",
@@ -3178,7 +3178,7 @@ func TestBatchSprint_ResolveFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchSprint(t.Context(), c, "TEST-1", "Nonexistent Sprint 999")
+	code := doSprint(t.Context(), c, "TEST-1", "Nonexistent Sprint 999")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for unresolved sprint")
 	}
@@ -3208,7 +3208,7 @@ func TestBatchSprint_PostFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchSprint(t.Context(), c, "TEST-1", "Sprint 5")
+	code := doSprint(t.Context(), c, "TEST-1", "Sprint 5")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for POST failure")
 	}
@@ -3226,7 +3226,7 @@ func TestBatchLogWork_FetchError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLogWork(t.Context(), c, "TEST-1", "2h", "working")
+	code := doLogWork(t.Context(), c, "TEST-1", "2h", "working")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit for forbidden")
 	}
@@ -3251,7 +3251,7 @@ func TestBatchLogWork_SuccessWithComment(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchLogWork(t.Context(), c, "TEST-1", "1h 30m", "debugging session")
+	code := doLogWork(t.Context(), c, "TEST-1", "1h 30m", "debugging session")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -3267,7 +3267,7 @@ func TestBatchMove_DryRun_WithAssign_Output(t *testing.T) {
 	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
 	c.DryRun = true
 
-	code := batchMove(t.Context(), c, "TEST-1", "Done", "john@example.com")
+	code := doMove(t.Context(), c, "TEST-1", "Done", "john@example.com")
 	if code != jrerrors.ExitOK {
 		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
 	}
@@ -3637,7 +3637,7 @@ func TestBatchMove_PostTransitionFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "PROJ-1", "Done", "")
+	code := doMove(t.Context(), c, "PROJ-1", "Done", "")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit when POST transitions returns 403")
 	}
@@ -3668,7 +3668,7 @@ func TestBatchMove_UnassignPUTFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "PROJ-1", "Done", "none")
+	code := doMove(t.Context(), c, "PROJ-1", "Done", "none")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit when unassign PUT returns 500")
 	}
@@ -3703,7 +3703,7 @@ func TestBatchMove_AssignPUTFails(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	c := newTestClient(ts.URL, &stdout, &stderr)
 
-	code := batchMove(t.Context(), c, "PROJ-1", "Done", "me")
+	code := doMove(t.Context(), c, "PROJ-1", "Done", "me")
 	if code == jrerrors.ExitOK {
 		t.Fatal("expected non-zero exit when assign PUT returns 403")
 	}

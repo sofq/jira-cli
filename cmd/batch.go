@@ -13,7 +13,6 @@ import (
 	"github.com/sofq/jira-cli/cmd/generated"
 	"github.com/sofq/jira-cli/internal/adf"
 	"github.com/sofq/jira-cli/internal/client"
-	"github.com/sofq/jira-cli/internal/duration"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/changelog"
 	"github.com/sofq/jira-cli/internal/jq"
@@ -326,413 +325,72 @@ func executeBatchOp(
 	return buildBatchResult(index, exitCode, &stdoutBuf, &stderrBuf, baseClient.Verbose)
 }
 
-// batchValidationError writes a validation error to the client's stderr and returns ExitValidation.
-func batchValidationError(c *client.Client, message string) int {
-	apiErr := &jrerrors.APIError{
-		ErrorType: "validation_error",
-		Message:   message,
-	}
-	apiErr.WriteJSON(c.Stderr)
-	return jrerrors.ExitValidation
-}
-
 // executeBatchWorkflow runs workflow commands (transition, assign, comment, create, link) as a batch operation.
 func executeBatchWorkflow(ctx context.Context, c *client.Client, bop BatchOp) int {
 	switch bop.Command {
 	case "workflow create":
-		return batchCreateIssue(ctx, c, bop.Args)
+		return doCreateIssue(ctx, c, bop.Args)
 	case "workflow link":
 		from := bop.Args["from"]
 		if from == "" {
-			return batchValidationError(c, "workflow link requires a 'from' arg")
+			return writeValidationError(c, "workflow link requires a 'from' arg")
 		}
 		to := bop.Args["to"]
 		if to == "" {
-			return batchValidationError(c, "workflow link requires a 'to' arg")
+			return writeValidationError(c, "workflow link requires a 'to' arg")
 		}
 		linkType := bop.Args["type"]
 		if linkType == "" {
-			return batchValidationError(c, "workflow link requires a 'type' arg")
+			return writeValidationError(c, "workflow link requires a 'type' arg")
 		}
-		return batchLink(ctx, c, from, to, linkType)
+		return doLink(ctx, c, from, to, linkType)
 	}
 
 	issueKey := bop.Args["issue"]
 	if issueKey == "" {
-		return batchValidationError(c, "workflow commands require an 'issue' arg")
+		return writeValidationError(c, "workflow commands require an 'issue' arg")
 	}
 
 	switch bop.Command {
 	case "workflow transition":
 		to := bop.Args["to"]
 		if to == "" {
-			return batchValidationError(c, "workflow transition requires a 'to' arg")
+			return writeValidationError(c, "workflow transition requires a 'to' arg")
 		}
-		return batchTransition(ctx, c, issueKey, to)
+		return doTransition(ctx, c, issueKey, to)
 	case "workflow move":
 		to := bop.Args["to"]
 		if to == "" {
-			return batchValidationError(c, "workflow move requires a 'to' arg")
+			return writeValidationError(c, "workflow move requires a 'to' arg")
 		}
-		return batchMove(ctx, c, issueKey, to, bop.Args["assign"])
+		return doMove(ctx, c, issueKey, to, bop.Args["assign"])
 	case "workflow assign":
 		to := bop.Args["to"]
 		if to == "" {
-			return batchValidationError(c, "workflow assign requires a 'to' arg")
+			return writeValidationError(c, "workflow assign requires a 'to' arg")
 		}
-		return batchAssign(ctx, c, issueKey, to)
+		return doAssign(ctx, c, issueKey, to)
 	case "workflow comment":
 		text := bop.Args["text"]
 		if text == "" {
-			return batchValidationError(c, "workflow comment requires a 'text' arg")
+			return writeValidationError(c, "workflow comment requires a 'text' arg")
 		}
-		return batchComment(ctx, c, issueKey, text)
+		return doComment(ctx, c, issueKey, text)
 	case "workflow log-work":
 		timeStr := bop.Args["time"]
 		if timeStr == "" {
-			return batchValidationError(c, "workflow log-work requires a 'time' arg")
+			return writeValidationError(c, "workflow log-work requires a 'time' arg")
 		}
-		return batchLogWork(ctx, c, issueKey, timeStr, bop.Args["comment"])
+		return doLogWork(ctx, c, issueKey, timeStr, bop.Args["comment"])
 	case "workflow sprint":
 		to := bop.Args["to"]
 		if to == "" {
-			return batchValidationError(c, "workflow sprint requires a 'to' arg")
+			return writeValidationError(c, "workflow sprint requires a 'to' arg")
 		}
-		return batchSprint(ctx, c, issueKey, to)
+		return doSprint(ctx, c, issueKey, to)
 	default:
-		return batchValidationError(c, fmt.Sprintf("unknown workflow command %q", bop.Command))
+		return writeValidationError(c, fmt.Sprintf("unknown workflow command %q", bop.Command))
 	}
-}
-
-// batchTransition executes a workflow transition within a batch operation.
-func batchTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) int {
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
-			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
-		})
-		return c.WriteOutput(out)
-	}
-
-	match, code := resolveTransition(ctx, c, issueKey, toStatus)
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
-	_, code = c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
-		bytes.NewReader(transBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{
-		"status":     "transitioned",
-		"issue":      issueKey,
-		"transition": match.Name,
-	})
-	return c.WriteOutput(out)
-}
-
-// batchMove executes a workflow move (transition + optional assign) within a batch operation.
-func batchMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign string) int {
-	if c.DryRun {
-		dryOut := map[string]any{
-			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
-			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
-		}
-		if assign != "" {
-			dryOut["assign"] = fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, assign)
-		}
-		out, _ := marshalNoEscape(dryOut)
-		return c.WriteOutput(out)
-	}
-
-	match, code := resolveTransition(ctx, c, issueKey, toStatus)
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
-	_, code = c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
-		bytes.NewReader(transBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	result := map[string]any{
-		"status":     "moved",
-		"issue":      issueKey,
-		"transition": match.Name,
-	}
-
-	if assign != "" {
-		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
-		if code != jrerrors.ExitOK {
-			return code
-		}
-
-		if isUnassign {
-			assignBody := `{"accountId":null}`
-			_, code = c.Fetch(ctx, "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
-				strings.NewReader(assignBody))
-			if code != jrerrors.ExitOK {
-				return code
-			}
-			result["assigned"] = "unassigned"
-		} else {
-			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-			_, code = c.Fetch(ctx, "PUT",
-				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
-				bytes.NewReader(marshaledAssign))
-			if code != jrerrors.ExitOK {
-				return code
-			}
-			result["assigned"] = assign
-		}
-	}
-
-	out, _ := marshalNoEscape(result)
-	return c.WriteOutput(out)
-}
-
-// batchAssign executes a workflow assign within a batch operation.
-func batchAssign(ctx context.Context, c *client.Client, issueKey, to string) int {
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "PUT",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
-			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
-		})
-		return c.WriteOutput(out)
-	}
-
-	accountID, isUnassign, code := resolveAssignee(ctx, c, to)
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	if isUnassign {
-		assignBody := `{"accountId":null}`
-		_, code := c.Fetch(ctx, "PUT",
-			fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
-			strings.NewReader(assignBody))
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		out, _ := marshalNoEscape(map[string]string{"status": "unassigned", "issue": issueKey})
-		return c.WriteOutput(out)
-	}
-
-	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-	_, code = c.Fetch(ctx, "PUT",
-		fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
-		bytes.NewReader(marshaledAssign))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{"status": "assigned", "issue": issueKey, "to": to})
-	return c.WriteOutput(out)
-}
-
-// batchComment executes a workflow comment within a batch operation.
-func batchComment(ctx context.Context, c *client.Client, issueKey, text string) int {
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "POST",
-			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
-			"note":   fmt.Sprintf("would add comment to %s", issueKey),
-		})
-		return c.WriteOutput(out)
-	}
-
-	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
-	_, code := c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
-		bytes.NewReader(commentBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{
-		"status": "commented",
-		"issue":  issueKey,
-	})
-	return c.WriteOutput(out)
-}
-
-// batchLink executes a workflow link within a batch operation.
-func batchLink(ctx context.Context, c *client.Client, from, to, linkType string) int {
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "POST",
-			"url":    c.BaseURL + "/rest/api/3/issueLink",
-			"note":   fmt.Sprintf("would link %s -> %s with type %q (link type ID resolved at runtime)", from, to, linkType),
-		})
-		return c.WriteOutput(out)
-	}
-
-	resolvedType, code := resolveLinkType(ctx, c, linkType)
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	linkBody, _ := json.Marshal(map[string]any{
-		"type":         map[string]string{"name": resolvedType},
-		"inwardIssue":  map[string]string{"key": to},
-		"outwardIssue": map[string]string{"key": from},
-	})
-	_, code = c.Fetch(ctx, "POST", "/rest/api/3/issueLink", bytes.NewReader(linkBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{
-		"status": "linked",
-		"from":   from,
-		"to":     to,
-		"type":   resolvedType,
-	})
-	return c.WriteOutput(out)
-}
-
-// batchCreateIssue executes a workflow create within a batch operation.
-func batchCreateIssue(ctx context.Context, c *client.Client, args map[string]string) int {
-	project := args["project"]
-	if project == "" {
-		return batchValidationError(c, "workflow create requires a 'project' arg")
-	}
-	issueType := args["type"]
-	if issueType == "" {
-		return batchValidationError(c, "workflow create requires a 'type' arg")
-	}
-	summary := args["summary"]
-	if summary == "" {
-		return batchValidationError(c, "workflow create requires a 'summary' arg")
-	}
-
-	fields := map[string]any{
-		"project":   map[string]string{"key": project},
-		"issuetype": map[string]string{"name": issueType},
-		"summary":   summary,
-	}
-	if description := args["description"]; description != "" {
-		fields["description"] = adf.FromText(description)
-	}
-	if priority := args["priority"]; priority != "" {
-		fields["priority"] = map[string]string{"name": priority}
-	}
-	if labels := args["labels"]; labels != "" {
-		fields["labels"] = strings.Split(labels, ",")
-	}
-	if parent := args["parent"]; parent != "" {
-		fields["parent"] = map[string]string{"key": parent}
-	}
-
-	if c.DryRun {
-		bodyPreview, _ := marshalNoEscape(map[string]any{"fields": fields})
-		out, _ := marshalNoEscape(map[string]any{
-			"method": "POST",
-			"url":    c.BaseURL + "/rest/api/3/issue",
-			"body":   json.RawMessage(bodyPreview),
-		})
-		return c.WriteOutput(out)
-	}
-
-	if assign := args["assign"]; assign != "" {
-		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
-		if code != jrerrors.ExitOK {
-			return code
-		}
-		if !isUnassign {
-			fields["assignee"] = map[string]string{"accountId": accountID}
-		}
-	}
-
-	createBody, _ := json.Marshal(map[string]any{"fields": fields})
-	respBody, code := c.Fetch(ctx, "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	return c.WriteOutput(respBody)
-}
-
-// batchSprint executes a workflow sprint (move issue to sprint) within a batch operation.
-func batchSprint(ctx context.Context, c *client.Client, issueKey, sprintName string) int {
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]string{
-			"method": "POST",
-			"url":    c.BaseURL + "/rest/agile/1.0/sprint/{sprintId}/issue",
-			"note":   fmt.Sprintf("would move %s to sprint %q (sprint ID resolved at runtime)", issueKey, sprintName),
-		})
-		return c.WriteOutput(out)
-	}
-
-	sprint, code := resolveSprint(ctx, c, sprintName)
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	sprintBody, _ := json.Marshal(map[string]any{"issues": []string{issueKey}})
-	_, code = c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/agile/1.0/sprint/%d/issue", sprint.ID),
-		bytes.NewReader(sprintBody))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{
-		"status": "sprint_set",
-		"issue":  issueKey,
-		"sprint": sprint.Name,
-	})
-	return c.WriteOutput(out)
-}
-
-// batchLogWork executes a workflow log-work within a batch operation.
-func batchLogWork(ctx context.Context, c *client.Client, issueKey, timeStr, comment string) int {
-	seconds, err := duration.Parse(timeStr)
-	if err != nil {
-		return batchValidationError(c, "invalid duration: "+err.Error())
-	}
-
-	if c.DryRun {
-		out, _ := marshalNoEscape(map[string]any{
-			"method":           "POST",
-			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
-			"timeSpentSeconds": seconds,
-		})
-		return c.WriteOutput(out)
-	}
-
-	worklogBody := map[string]any{
-		"timeSpentSeconds": seconds,
-	}
-	if comment != "" {
-		worklogBody["comment"] = adf.FromText(comment)
-	}
-
-	body, _ := json.Marshal(worklogBody)
-	_, code := c.Fetch(ctx, "POST",
-		fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
-		bytes.NewReader(body))
-	if code != jrerrors.ExitOK {
-		return code
-	}
-
-	out, _ := marshalNoEscape(map[string]string{
-		"status": "logged",
-		"issue":  issueKey,
-		"time":   timeStr,
-	})
-	return c.WriteOutput(out)
 }
 
 // stripVerboseLogs separates verbose log lines from error lines in captured stderr.
@@ -829,7 +487,7 @@ func executeBatchTemplate(ctx context.Context, c *client.Client, bop BatchOp) in
 	case "template apply":
 		return batchTemplateApply(ctx, c, bop.Args)
 	default:
-		return batchValidationError(c, fmt.Sprintf("unknown template command %q in batch; only 'template apply' is supported", bop.Command))
+		return writeValidationError(c, fmt.Sprintf("unknown template command %q in batch; only 'template apply' is supported", bop.Command))
 	}
 }
 
@@ -837,11 +495,11 @@ func executeBatchTemplate(ctx context.Context, c *client.Client, bop BatchOp) in
 func batchTemplateApply(ctx context.Context, c *client.Client, args map[string]string) int {
 	templateName := args["name"]
 	if templateName == "" {
-		return batchValidationError(c, "template apply requires a 'name' arg")
+		return writeValidationError(c, "template apply requires a 'name' arg")
 	}
 	project := args["project"]
 	if project == "" {
-		return batchValidationError(c, "template apply requires a 'project' arg")
+		return writeValidationError(c, "template apply requires a 'project' arg")
 	}
 
 	t, ok, err := tmpl.Lookup(templateName)
@@ -869,7 +527,7 @@ func batchTemplateApply(ctx context.Context, c *client.Client, args map[string]s
 
 	rendered, err := tmpl.RenderFields(t, vars)
 	if err != nil {
-		return batchValidationError(c, err.Error())
+		return writeValidationError(c, err.Error())
 	}
 
 	fields := map[string]any{
@@ -925,7 +583,7 @@ func batchTemplateApply(ctx context.Context, c *client.Client, args map[string]s
 func executeBatchDiff(ctx context.Context, c *client.Client, bop BatchOp) int {
 	issueKey := bop.Args["issue"]
 	if issueKey == "" {
-		return batchValidationError(c, "diff requires an 'issue' arg")
+		return writeValidationError(c, "diff requires an 'issue' arg")
 	}
 
 	changelogPath := fmt.Sprintf("/rest/api/3/issue/%s/changelog", url.PathEscape(issueKey))

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +8,7 @@ import (
 	"github.com/sofq/jira-cli/cmd/generated"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
+	"github.com/sofq/jira-cli/internal/jsonutil"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/pretty"
 )
@@ -102,16 +101,8 @@ func compactSchema(ops []generated.SchemaOp) map[string][]string {
 	return compact
 }
 
-// marshalNoEscape serializes v to JSON without HTML escaping.
-func marshalNoEscape(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimRight(buf.Bytes(), "\n"), nil
-}
+// marshalNoEscape is a package-level alias for jsonutil.MarshalNoEscape.
+var marshalNoEscape = jsonutil.MarshalNoEscape
 
 // schemaOutput applies --jq and --pretty flags to schema JSON output.
 func schemaOutput(cmd *cobra.Command, data []byte) error {

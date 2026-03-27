@@ -6,17 +6,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/sofq/jira-cli/internal/client"
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/sofq/jira-cli/internal/jq"
+	"github.com/sofq/jira-cli/internal/jsonutil"
 	"github.com/tidwall/pretty"
 )
 
 // maxBackoff is the ceiling for error backoff. Exported as var for testing.
 var maxBackoff = 5 * time.Minute
+
+// issueKeyRe matches valid Jira issue keys: PROJECT-123.
+var issueKeyRe = regexp.MustCompile(`^[A-Z][A-Z0-9_]*-\d+$`)
 
 // Options configures the watch loop.
 type Options struct {
@@ -55,6 +60,14 @@ type Event struct {
 func Run(ctx context.Context, c *client.Client, opts Options) int {
 	jqlQuery := opts.JQL
 	if opts.Issue != "" {
+		if !issueKeyRe.MatchString(opts.Issue) {
+			apiErr := &jrerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   fmt.Sprintf("invalid issue key %q: must match PROJECT-123 format", opts.Issue),
+			}
+			apiErr.WriteJSON(c.Stderr)
+			return jrerrors.ExitValidation
+		}
 		jqlQuery = "key = " + opts.Issue
 	}
 
@@ -229,16 +242,8 @@ func emitEvent(c *client.Client, eventType string, issueData json.RawMessage, em
 	return jrerrors.ExitOK
 }
 
-// marshalNoEscape marshals v to JSON without HTML escaping.
-func marshalNoEscape(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimRight(buf.Bytes(), "\n"), nil
-}
+// marshalNoEscape is a package-level alias for jsonutil.MarshalNoEscape.
+var marshalNoEscape = jsonutil.MarshalNoEscape
 
 // DryRunOutput returns the request that would be made.
 func DryRunOutput(w io.Writer, baseURL string, opts Options) {

@@ -137,6 +137,16 @@ func init() {
 	workflowCmd.AddCommand(sprintCmd)
 }
 
+// writeValidationError writes a validation error to the client's stderr and returns ExitValidation.
+func writeValidationError(c *client.Client, message string) int {
+	apiErr := &jrerrors.APIError{
+		ErrorType: "validation_error",
+		Message:   message,
+	}
+	apiErr.WriteJSON(c.Stderr)
+	return jrerrors.ExitValidation
+}
+
 // transitionMatch holds a matched transition's ID and name.
 type transitionMatch struct {
 	ID   string
@@ -272,31 +282,35 @@ func runTransition(cmd *cobra.Command, args []string) error {
 	issueKey, _ := cmd.Flags().GetString("issue")
 	toStatus, _ := cmd.Flags().GetString("to")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doTransition(cmd.Context(), c, issueKey, toStatus); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doTransition is the shared core for workflow transition, used by both
+// the Cobra RunE handler and the batch executor.
+func doTransition(ctx context.Context, c *client.Client, issueKey, toStatus string) int {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would transition %s to %q (transition ID resolved at runtime)", issueKey, toStatus),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
-	match, exitCode := resolveTransition(cmd.Context(), c, issueKey, toStatus)
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	match, code := resolveTransition(ctx, c, issueKey, toStatus)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
-	// Execute transition. Use c.Fetch to avoid c.Do() writing "{}" to stdout.
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
-	_, exitCode = c.Fetch(cmd.Context(), "POST",
+	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -304,10 +318,7 @@ func runTransition(cmd *cobra.Command, args []string) error {
 		"issue":      issueKey,
 		"transition": match.Name,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 func runMove(cmd *cobra.Command, args []string) error {
@@ -322,7 +333,15 @@ func runMove(cmd *cobra.Command, args []string) error {
 	toStatus, _ := cmd.Flags().GetString("to")
 	assign, _ := cmd.Flags().GetString("assign")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doMove(cmd.Context(), c, issueKey, toStatus, assign); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doMove is the shared core for workflow move (transition + optional assign),
+// used by both the Cobra RunE handler and the batch executor.
+func doMove(ctx context.Context, c *client.Client, issueKey, toStatus, assign string) int {
 	if c.DryRun {
 		dryOut := map[string]any{
 			"method": "POST",
@@ -333,23 +352,20 @@ func runMove(cmd *cobra.Command, args []string) error {
 			dryOut["assign"] = fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, assign)
 		}
 		out, _ := marshalNoEscape(dryOut)
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
-	match, exitCode := resolveTransition(cmd.Context(), c, issueKey, toStatus)
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	match, code := resolveTransition(ctx, c, issueKey, toStatus)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	transBody, _ := json.Marshal(map[string]any{"transition": map[string]any{"id": match.ID}})
-	_, exitCode = c.Fetch(cmd.Context(), "POST",
+	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/transitions", url.PathEscape(issueKey)),
 		bytes.NewReader(transBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	result := map[string]any{
@@ -359,37 +375,34 @@ func runMove(cmd *cobra.Command, args []string) error {
 	}
 
 	if assign != "" {
-		accountID, isUnassign, code := resolveAssignee(cmd.Context(), c, assign)
+		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
 		if code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
+			return code
 		}
 
 		if isUnassign {
 			assignBody := `{"accountId":null}`
-			_, code = c.Fetch(cmd.Context(), "PUT",
+			_, code = c.Fetch(ctx, "PUT",
 				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				strings.NewReader(assignBody))
 			if code != jrerrors.ExitOK {
-				return &jrerrors.AlreadyWrittenError{Code: code}
+				return code
 			}
 			result["assigned"] = "unassigned"
 		} else {
 			marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-			_, code = c.Fetch(cmd.Context(), "PUT",
+			_, code = c.Fetch(ctx, "PUT",
 				fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 				bytes.NewReader(marshaledAssign))
 			if code != jrerrors.ExitOK {
-				return &jrerrors.AlreadyWrittenError{Code: code}
+				return code
 			}
 			result["assigned"] = assign
 		}
 	}
 
 	out, _ := marshalNoEscape(result)
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 func runAssign(cmd *cobra.Command, args []string) error {
@@ -403,48 +416,50 @@ func runAssign(cmd *cobra.Command, args []string) error {
 	issueKey, _ := cmd.Flags().GetString("issue")
 	to, _ := cmd.Flags().GetString("to")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doAssign(cmd.Context(), c, issueKey, to); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doAssign is the shared core for workflow assign, used by both the Cobra
+// RunE handler and the batch executor.
+func doAssign(ctx context.Context, c *client.Client, issueKey, to string) int {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "PUT",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would assign %s to %q (account ID resolved at runtime)", issueKey, to),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
-	accountID, isUnassign, exitCode := resolveAssignee(cmd.Context(), c, to)
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	accountID, isUnassign, code := resolveAssignee(ctx, c, to)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	if isUnassign {
 		assignBody := `{"accountId":null}`
-		_, exitCode := c.Fetch(cmd.Context(), "PUT",
+		_, code := c.Fetch(ctx, "PUT",
 			fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 			strings.NewReader(assignBody))
-		if exitCode != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: exitCode}
+		if code != jrerrors.ExitOK {
+			return code
 		}
 		out, _ := marshalNoEscape(map[string]string{
 			"status": "unassigned",
 			"issue":  issueKey,
 		})
-		if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: exitCode}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
 	marshaledAssign, _ := json.Marshal(map[string]string{"accountId": accountID})
-	_, exitCode = c.Fetch(cmd.Context(), "PUT",
+	_, code = c.Fetch(ctx, "PUT",
 		fmt.Sprintf("/rest/api/3/issue/%s/assignee", url.PathEscape(issueKey)),
 		bytes.NewReader(marshaledAssign))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -452,10 +467,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		"issue":  issueKey,
 		"to":     to,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 func runCreateIssue(cmd *cobra.Command, args []string) error {
@@ -475,6 +487,44 @@ func runCreateIssue(cmd *cobra.Command, args []string) error {
 	labels, _ := cmd.Flags().GetString("labels")
 	parent, _ := cmd.Flags().GetString("parent")
 
+	args2 := map[string]string{
+		"project":     project,
+		"type":        issueType,
+		"summary":     summary,
+		"description": description,
+		"assign":      assign,
+		"priority":    priority,
+		"labels":      labels,
+		"parent":      parent,
+	}
+
+	if code := doCreateIssue(cmd.Context(), c, args2); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doCreateIssue is the shared core for workflow create, used by both the
+// Cobra RunE handler and the batch executor.
+func doCreateIssue(ctx context.Context, c *client.Client, args map[string]string) int {
+	project := args["project"]
+	if project == "" {
+		return writeValidationError(c, "workflow create requires a 'project' arg")
+	}
+	issueType := args["type"]
+	if issueType == "" {
+		return writeValidationError(c, "workflow create requires a 'type' arg")
+	}
+	summary := args["summary"]
+	if summary == "" {
+		return writeValidationError(c, "workflow create requires a 'summary' arg")
+	}
+	description := args["description"]
+	assign := args["assign"]
+	priority := args["priority"]
+	labels := args["labels"]
+	parent := args["parent"]
+
 	fields := map[string]any{
 		"project":   map[string]string{"key": project},
 		"issuetype": map[string]string{"name": issueType},
@@ -493,7 +543,6 @@ func runCreateIssue(cmd *cobra.Command, args []string) error {
 		fields["parent"] = map[string]string{"key": parent}
 	}
 
-	// Respect --dry-run: emit the request details without executing.
 	if c.DryRun {
 		bodyPreview, _ := marshalNoEscape(map[string]any{"fields": fields})
 		out, _ := marshalNoEscape(map[string]any{
@@ -501,17 +550,14 @@ func runCreateIssue(cmd *cobra.Command, args []string) error {
 			"url":    c.BaseURL + "/rest/api/3/issue",
 			"body":   json.RawMessage(bodyPreview),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
 	// Resolve assignee if provided.
 	if assign != "" {
-		accountID, isUnassign, exitCode := resolveAssignee(cmd.Context(), c, assign)
-		if exitCode != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: exitCode}
+		accountID, isUnassign, code := resolveAssignee(ctx, c, assign)
+		if code != jrerrors.ExitOK {
+			return code
 		}
 		if !isUnassign {
 			fields["assignee"] = map[string]string{"accountId": accountID}
@@ -519,15 +565,12 @@ func runCreateIssue(cmd *cobra.Command, args []string) error {
 	}
 
 	createBody, _ := json.Marshal(map[string]any{"fields": fields})
-	respBody, exitCode := c.Fetch(cmd.Context(), "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	respBody, code := c.Fetch(ctx, "POST", "/rest/api/3/issue", bytes.NewReader(createBody))
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
-	if exitCode := c.WriteOutput(respBody); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(respBody)
 }
 
 // resolveLinkType fetches available issue link types and matches one by name.
@@ -598,22 +641,27 @@ func runLink(cmd *cobra.Command, args []string) error {
 	to, _ := cmd.Flags().GetString("to")
 	linkType, _ := cmd.Flags().GetString("type")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doLink(cmd.Context(), c, from, to, linkType); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doLink is the shared core for workflow link, used by both the Cobra RunE
+// handler and the batch executor.
+func doLink(ctx context.Context, c *client.Client, from, to, linkType string) int {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + "/rest/api/3/issueLink",
 			"note":   fmt.Sprintf("would link %s -> %s with type %q (link type ID resolved at runtime)", from, to, linkType),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
-	resolvedType, exitCode := resolveLinkType(cmd.Context(), c, linkType)
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	resolvedType, code := resolveLinkType(ctx, c, linkType)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	linkBody, _ := json.Marshal(map[string]any{
@@ -621,9 +669,9 @@ func runLink(cmd *cobra.Command, args []string) error {
 		"inwardIssue":  map[string]string{"key": to},
 		"outwardIssue": map[string]string{"key": from},
 	})
-	_, exitCode = c.Fetch(cmd.Context(), "POST", "/rest/api/3/issueLink", bytes.NewReader(linkBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	_, code = c.Fetch(ctx, "POST", "/rest/api/3/issueLink", bytes.NewReader(linkBody))
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -632,10 +680,7 @@ func runLink(cmd *cobra.Command, args []string) error {
 		"to":     to,
 		"type":   resolvedType,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 func runLogWork(cmd *cobra.Command, args []string) error {
@@ -650,27 +695,32 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 	timeStr, _ := cmd.Flags().GetString("time")
 	comment, _ := cmd.Flags().GetString("comment")
 
+	if code := doLogWork(cmd.Context(), c, issueKey, timeStr, comment); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doLogWork is the shared core for workflow log-work, used by both the Cobra
+// RunE handler and the batch executor.
+func doLogWork(ctx context.Context, c *client.Client, issueKey, timeStr, comment string) int {
 	seconds, parseErr := duration.Parse(timeStr)
 	if parseErr != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "validation_error",
 			Message:   "invalid duration: " + parseErr.Error(),
 		}
-		apiErr.WriteJSON(os.Stderr)
-		return &jrerrors.AlreadyWrittenError{Code: jrerrors.ExitValidation}
+		apiErr.WriteJSON(c.Stderr)
+		return jrerrors.ExitValidation
 	}
 
-	// Respect --dry-run: emit the request details without executing.
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]any{
 			"method":           "POST",
 			"url":              c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 			"timeSpentSeconds": seconds,
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
 	worklogBody := map[string]any{
@@ -681,11 +731,11 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 	}
 
 	body, _ := json.Marshal(worklogBody)
-	_, exitCode := c.Fetch(cmd.Context(), "POST",
+	_, code := c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/worklog", url.PathEscape(issueKey)),
 		bytes.NewReader(body))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -693,10 +743,7 @@ func runLogWork(cmd *cobra.Command, args []string) error {
 		"issue":  issueKey,
 		"time":   timeStr,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 // sprintInfo holds a matched sprint's ID and name.
@@ -792,30 +839,35 @@ func runSprint(cmd *cobra.Command, args []string) error {
 	issueKey, _ := cmd.Flags().GetString("issue")
 	sprintName, _ := cmd.Flags().GetString("to")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doSprint(cmd.Context(), c, issueKey, sprintName); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doSprint is the shared core for workflow sprint, used by both the Cobra
+// RunE handler and the batch executor.
+func doSprint(ctx context.Context, c *client.Client, issueKey, sprintName string) int {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + "/rest/agile/1.0/sprint/{sprintId}/issue",
 			"note":   fmt.Sprintf("would move %s to sprint %q (sprint ID resolved at runtime)", issueKey, sprintName),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
-	sprint, exitCode := resolveSprint(cmd.Context(), c, sprintName)
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	sprint, code := resolveSprint(ctx, c, sprintName)
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	sprintBody, _ := json.Marshal(map[string]any{"issues": []string{issueKey}})
-	_, exitCode = c.Fetch(cmd.Context(), "POST",
+	_, code = c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/agile/1.0/sprint/%d/issue", sprint.ID),
 		bytes.NewReader(sprintBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
@@ -823,10 +875,7 @@ func runSprint(cmd *cobra.Command, args []string) error {
 		"issue":  issueKey,
 		"sprint": sprint.Name,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }
 
 func runComment(cmd *cobra.Command, args []string) error {
@@ -840,33 +889,35 @@ func runComment(cmd *cobra.Command, args []string) error {
 	issueKey, _ := cmd.Flags().GetString("issue")
 	text, _ := cmd.Flags().GetString("text")
 
-	// Respect --dry-run: emit the request details without executing.
+	if code := doComment(cmd.Context(), c, issueKey, text); code != jrerrors.ExitOK {
+		return &jrerrors.AlreadyWrittenError{Code: code}
+	}
+	return nil
+}
+
+// doComment is the shared core for workflow comment, used by both the Cobra
+// RunE handler and the batch executor.
+func doComment(ctx context.Context, c *client.Client, issueKey, text string) int {
 	if c.DryRun {
 		out, _ := marshalNoEscape(map[string]string{
 			"method": "POST",
 			"url":    c.BaseURL + fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 			"note":   fmt.Sprintf("would add comment to %s", issueKey),
 		})
-		if code := c.WriteOutput(out); code != jrerrors.ExitOK {
-			return &jrerrors.AlreadyWrittenError{Code: code}
-		}
-		return nil
+		return c.WriteOutput(out)
 	}
 
 	commentBody, _ := json.Marshal(map[string]any{"body": adf.FromText(text)})
-	_, exitCode := c.Fetch(cmd.Context(), "POST",
+	_, code := c.Fetch(ctx, "POST",
 		fmt.Sprintf("/rest/api/3/issue/%s/comment", url.PathEscape(issueKey)),
 		bytes.NewReader(commentBody))
-	if exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
+	if code != jrerrors.ExitOK {
+		return code
 	}
 
 	out, _ := marshalNoEscape(map[string]string{
 		"status": "commented",
 		"issue":  issueKey,
 	})
-	if exitCode := c.WriteOutput(out); exitCode != jrerrors.ExitOK {
-		return &jrerrors.AlreadyWrittenError{Code: exitCode}
-	}
-	return nil
+	return c.WriteOutput(out)
 }

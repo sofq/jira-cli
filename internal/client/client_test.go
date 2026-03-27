@@ -2372,6 +2372,53 @@ func TestFetchPage_TransportError(t *testing.T) {
 // Ensure net package is used (via hijackBodyDropServer using http.Hijacker interface).
 var _ net.Conn
 
+// TestDo_MaxResponseSizeLimit verifies that responses exceeding MaxResponseSize
+// are truncated by io.LimitReader. We temporarily lower MaxResponseSize to a
+// small value, serve a body larger than that, and verify the client truncates it.
+func TestDo_MaxResponseSizeLimit(t *testing.T) {
+	// Save and restore the original limit.
+	origMax := client.MaxResponseSize
+	client.MaxResponseSize = 64 // 64 bytes limit
+	defer func() { client.MaxResponseSize = origMax }()
+
+	// Create a JSON body larger than 64 bytes.
+	largeBody := `{"data":"` + strings.Repeat("x", 200) + `"}`
+	te := newTestEnv(jsonHandler(largeBody))
+	defer te.Close()
+
+	code := te.Client.Do(context.Background(), "GET", "/test", nil, nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	// Output should be truncated: shorter than the full body.
+	outLen := len(strings.TrimSpace(te.Stdout.String()))
+	if outLen >= len(largeBody) {
+		t.Errorf("expected truncated output (< %d bytes), got %d bytes", len(largeBody), outLen)
+	}
+}
+
+// TestFetch_MaxResponseSizeLimit verifies that Fetch also respects MaxResponseSize.
+func TestFetch_MaxResponseSizeLimit(t *testing.T) {
+	origMax := client.MaxResponseSize
+	client.MaxResponseSize = 32 // 32 bytes limit
+	defer func() { client.MaxResponseSize = origMax }()
+
+	largeBody := `{"data":"` + strings.Repeat("y", 200) + `"}`
+	te := newTestEnv(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, largeBody)
+	})
+	defer te.Close()
+
+	body, code := te.Client.Fetch(context.Background(), "GET", "/test", nil)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d; stderr=%s", code, te.Stderr.String())
+	}
+	if len(body) >= len(largeBody) {
+		t.Errorf("expected truncated body (< %d bytes), got %d bytes", len(largeBody), len(body))
+	}
+}
+
 func TestDo_AuditLogging(t *testing.T) {
 	te := newTestEnv(jsonHandler(`{"ok":true}`))
 	defer te.Close()

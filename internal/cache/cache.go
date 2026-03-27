@@ -5,9 +5,19 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
+
+// MaxAge is the maximum age of a cache entry before it is eligible for
+// eviction. Entries older than this are removed by Evict.
+var MaxAge = 24 * time.Hour
+
+// MaxEntries is the maximum number of cache entries to keep. When Evict
+// runs and finds more entries than this, the oldest are removed first.
+// Zero means no limit on the number of entries.
+var MaxEntries = 1000
 
 var (
 	cacheDir     string
@@ -58,4 +68,59 @@ func Get(key string, ttl time.Duration) ([]byte, bool) {
 func Set(key string, data []byte) error {
 	path := filepath.Join(Dir(), key)
 	return os.WriteFile(path, data, 0o600)
+}
+
+// Evict removes stale cache entries. It deletes files older than MaxAge
+// and, if MaxEntries > 0, trims the remaining entries to that limit by
+// removing the oldest first. Returns the number of entries removed.
+func Evict() int {
+	dir := Dir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+
+	now := time.Now()
+	removed := 0
+
+	// Phase 1: remove entries older than MaxAge.
+	type surviving struct {
+		name    string
+		modTime time.Time
+	}
+	var kept []surviving
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		age := now.Sub(info.ModTime())
+		if age > MaxAge {
+			if os.Remove(filepath.Join(dir, e.Name())) == nil {
+				removed++
+			}
+		} else {
+			kept = append(kept, surviving{name: e.Name(), modTime: info.ModTime()})
+		}
+	}
+
+	// Phase 2: if MaxEntries > 0, trim to that limit.
+	if MaxEntries > 0 && len(kept) > MaxEntries {
+		// Sort oldest first.
+		sort.Slice(kept, func(i, j int) bool {
+			return kept[i].modTime.Before(kept[j].modTime)
+		})
+		toRemove := len(kept) - MaxEntries
+		for i := 0; i < toRemove; i++ {
+			if os.Remove(filepath.Join(dir, kept[i].name)) == nil {
+				removed++
+			}
+		}
+	}
+
+	return removed
 }
