@@ -2,6 +2,7 @@ package cache_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -335,4 +336,110 @@ func TestEvict_EmptyCacheDir(t *testing.T) {
 	removed := cache.Evict()
 	// We can't assert exact count since other tests may have left files.
 	_ = removed
+}
+
+// TestEvictDir_ReadDirError verifies that EvictDir returns 0 when the
+// directory does not exist (os.ReadDir fails).
+func TestEvictDir_ReadDirError(t *testing.T) {
+	removed := cache.EvictDir("/nonexistent/path/that/does/not/exist")
+	if removed != 0 {
+		t.Errorf("expected 0 removed for nonexistent dir, got %d", removed)
+	}
+}
+
+// TestEvictDir_SkipsSubdirectories verifies that EvictDir skips subdirectories
+// inside the cache directory and only processes regular files.
+func TestEvictDir_SkipsSubdirectories(t *testing.T) {
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	tmpDir := t.TempDir()
+
+	// Create a subdirectory inside the cache dir.
+	if err := os.Mkdir(tmpDir+"/subdir", 0o755); err != nil {
+		t.Fatalf("Mkdir failed: %v", err)
+	}
+
+	// Create a regular file that should be evicted.
+	oldTime := time.Now().Add(-48 * time.Hour)
+	filePath := tmpDir + "/oldfile"
+	if err := os.WriteFile(filePath, []byte("data"), 0o600); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.Chtimes(filePath, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes failed: %v", err)
+	}
+
+	cache.MaxAge = 24 * time.Hour
+	cache.MaxEntries = 0
+
+	removed := cache.EvictDir(tmpDir)
+	if removed != 1 {
+		t.Errorf("expected 1 removed (the old file), got %d", removed)
+	}
+
+	// Subdirectory should still exist.
+	if _, err := os.Stat(tmpDir + "/subdir"); err != nil {
+		t.Errorf("subdirectory should not have been removed: %v", err)
+	}
+}
+
+// TestEvictDir_InfoError verifies that EvictDir skips entries where Info()
+// returns an error (e.g. the file is removed between ReadDir and Info).
+func TestEvictDir_InfoError(t *testing.T) {
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	tmpDir := t.TempDir()
+
+	cache.MaxAge = 24 * time.Hour
+	cache.MaxEntries = 0
+
+	// Use EvictEntries with a synthetic DirEntry whose Info() returns an error.
+	entries := []os.DirEntry{
+		cache.FakeDirEntry{
+			FakeName:  "broken-entry",
+			FakeIsDir: false,
+			FakeErr:   errors.New("synthetic info error"),
+		},
+	}
+	removed := cache.EvictEntries(tmpDir, entries)
+	if removed != 0 {
+		t.Errorf("expected 0 removed when Info fails, got %d", removed)
+	}
+}
+
+// TestEvictDir_IsDirEntry verifies that EvictDir skips directory entries.
+func TestEvictDir_IsDirEntry(t *testing.T) {
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	tmpDir := t.TempDir()
+
+	cache.MaxAge = 24 * time.Hour
+	cache.MaxEntries = 0
+
+	// Use EvictEntries with a synthetic DirEntry that is a directory.
+	entries := []os.DirEntry{
+		cache.FakeDirEntry{
+			FakeName:  "subdir",
+			FakeIsDir: true,
+		},
+	}
+	removed := cache.EvictEntries(tmpDir, entries)
+	if removed != 0 {
+		t.Errorf("expected 0 removed when entry is a directory, got %d", removed)
+	}
 }

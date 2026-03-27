@@ -74,12 +74,22 @@ func Set(key string, data []byte) error {
 // and, if MaxEntries > 0, trims the remaining entries to that limit by
 // removing the oldest first. Returns the number of entries removed.
 func Evict() int {
-	dir := Dir()
+	return EvictDir(Dir())
+}
+
+// EvictDir is like Evict but operates on the given directory.
+// It is exported so tests can supply an isolated temp directory.
+func EvictDir(dir string) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
+	return evictEntries(dir, entries)
+}
 
+// evictEntries processes a list of directory entries for eviction. Separated
+// from EvictDir so that tests can inject synthetic DirEntry values.
+func evictEntries(dir string, entries []os.DirEntry) int {
 	now := time.Now()
 	removed := 0
 
