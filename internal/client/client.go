@@ -21,6 +21,11 @@ import (
 	"github.com/tidwall/pretty"
 )
 
+// MaxResponseSize is the maximum number of bytes the client will read from a
+// single HTTP response body. This prevents unbounded memory consumption from
+// malicious or misbehaving servers. Defaults to 100 MB.
+var MaxResponseSize int64 = 100 * 1024 * 1024 // 100 MB
+
 // contextKey is an unexported type for context keys in this package.
 type contextKey struct{}
 
@@ -117,7 +122,7 @@ func (c *Client) fetchOAuth2Token() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 		return "", fmt.Errorf("oauth2 token request failed: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
@@ -247,7 +252,7 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL, path string, body i
 
 	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "connection_error",
@@ -547,7 +552,7 @@ func (c *Client) fetchPage(ctx context.Context, method, rawURL, path string) ([]
 
 	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "connection_error",
@@ -638,7 +643,7 @@ func (c *Client) Fetch(ctx context.Context, method, path string, body io.Reader)
 
 	c.VerboseLog(map[string]any{"type": "response", "status": resp.StatusCode})
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		apiErr := &jrerrors.APIError{
 			ErrorType: "connection_error",

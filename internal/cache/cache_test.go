@@ -235,3 +235,104 @@ func TestCacheKeyAuthContextIsolation(t *testing.T) {
 		t.Errorf("unexpected data: %s", data)
 	}
 }
+
+// --- Eviction ---
+
+// TestEvict_RemovesOldEntries verifies that Evict removes entries older than MaxAge.
+func TestEvict_RemovesOldEntries(t *testing.T) {
+	// Save and restore globals.
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	// Create a few entries.
+	keys := make([]string, 3)
+	for i := range keys {
+		keys[i] = cache.Key("GET", "https://test.example.com/evict-old-"+t.Name()+"-"+string(rune('a'+i)))
+		if err := cache.Set(keys[i], []byte(`{"i":`+string(rune('0'+i))+`}`)); err != nil {
+			t.Fatalf("Set failed: %v", err)
+		}
+	}
+
+	// Make one entry "old" by touching its mod time.
+	oldPath := cache.Dir() + "/" + keys[0]
+	oldTime := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(oldPath, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes failed: %v", err)
+	}
+
+	cache.MaxAge = 24 * time.Hour
+	cache.MaxEntries = 0 // no entry limit
+
+	removed := cache.Evict()
+	if removed < 1 {
+		t.Errorf("expected at least 1 entry removed, got %d", removed)
+	}
+
+	// The old entry should be gone.
+	if _, ok := cache.Get(keys[0], time.Hour); ok {
+		t.Error("expected old entry to be evicted")
+	}
+	// The other entries should still be present.
+	for _, k := range keys[1:] {
+		if _, ok := cache.Get(k, time.Hour); !ok {
+			t.Error("expected recent entry to survive eviction")
+		}
+	}
+}
+
+// TestEvict_MaxEntriesLimit verifies that Evict trims entries to MaxEntries.
+func TestEvict_MaxEntriesLimit(t *testing.T) {
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	// Create 5 entries with staggered mod times.
+	keys := make([]string, 5)
+	for i := range keys {
+		keys[i] = cache.Key("GET", "https://test.example.com/evict-limit-"+t.Name()+"-"+string(rune('a'+i)))
+		if err := cache.Set(keys[i], []byte(`{}`)); err != nil {
+			t.Fatalf("Set failed: %v", err)
+		}
+		// Stagger mod times so oldest entries are deterministic.
+		modTime := time.Now().Add(time.Duration(i-5) * time.Minute)
+		path := cache.Dir() + "/" + keys[i]
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatalf("Chtimes failed: %v", err)
+		}
+	}
+
+	cache.MaxAge = 24 * time.Hour // don't evict by age
+	cache.MaxEntries = 3          // keep only 3
+
+	removed := cache.Evict()
+	// There might be other files in the cache dir from other tests,
+	// so just verify at least 2 were removed from our 5.
+	if removed < 2 {
+		t.Errorf("expected at least 2 entries removed, got %d", removed)
+	}
+}
+
+// TestEvict_EmptyCacheDir verifies that Evict handles an empty cache dir gracefully.
+func TestEvict_EmptyCacheDir(t *testing.T) {
+	origMaxAge := cache.MaxAge
+	origMaxEntries := cache.MaxEntries
+	defer func() {
+		cache.MaxAge = origMaxAge
+		cache.MaxEntries = origMaxEntries
+	}()
+
+	cache.MaxAge = time.Nanosecond
+	cache.MaxEntries = 0
+
+	// This should not panic even if the cache dir is empty or has no evictable entries.
+	removed := cache.Evict()
+	// We can't assert exact count since other tests may have left files.
+	_ = removed
+}

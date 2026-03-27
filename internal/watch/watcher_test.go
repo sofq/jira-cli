@@ -760,3 +760,58 @@ func TestEmitEvent_JQFilterMaxEvents(t *testing.T) {
 		t.Fatalf("expected -1 when maxEvents=1, got %d", code)
 	}
 }
+
+// --- Issue key validation ---
+
+func TestRun_InvalidIssueKey(t *testing.T) {
+	tests := []struct {
+		name  string
+		issue string
+	}{
+		{"injection attempt", `PROJ-1 OR key = SECRET-1`},
+		{"empty project", `-123`},
+		{"lowercase project", `proj-1`},
+		{"no dash", `PROJ123`},
+		{"special chars", `PROJ-1; DROP TABLE`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+				t.Fatal("server should not be called for invalid issue key")
+			})
+			defer te.Close()
+
+			code := Run(context.Background(), te.Client, Options{
+				Issue:    tt.issue,
+				Interval: 50 * time.Millisecond,
+			})
+			if code != jrerrors.ExitValidation {
+				t.Errorf("expected ExitValidation for issue %q, got %d", tt.issue, code)
+			}
+			if !strings.Contains(te.Stderr.String(), "validation_error") {
+				t.Errorf("expected validation_error in stderr, got %s", te.Stderr.String())
+			}
+		})
+	}
+}
+
+func TestRun_ValidIssueKeys(t *testing.T) {
+	tests := []string{"PROJ-1", "MY_PROJECT-999", "A-1", "AB2-42"}
+	for _, key := range tests {
+		t.Run(key, func(t *testing.T) {
+			te := newTestEnv(func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, searchJSON(issueJSON(key, "2025-01-01T00:00:00Z")))
+			})
+			defer te.Close()
+
+			code := Run(context.Background(), te.Client, Options{
+				Issue:     key,
+				Interval:  50 * time.Millisecond,
+				MaxEvents: 1,
+			})
+			if code != jrerrors.ExitOK {
+				t.Errorf("expected ExitOK for valid key %q, got %d; stderr=%s", key, code, te.Stderr.String())
+			}
+		})
+	}
+}

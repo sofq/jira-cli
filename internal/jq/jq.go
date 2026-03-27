@@ -1,23 +1,16 @@
 package jq
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 
 	"github.com/itchyny/gojq"
+	"github.com/sofq/jira-cli/internal/jsonutil"
 )
 
 // marshalNoHTMLEscape marshals v to JSON without HTML escaping of &, <, >.
 // gojq only emits JSON-compatible types, so encoding cannot fail.
-func marshalNoHTMLEscape(v interface{}) []byte {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(v)
-	// Encoder adds a trailing newline; trim it.
-	return bytes.TrimRight(buf.Bytes(), "\n")
-}
+var marshalNoHTMLEscape = jsonutil.MarshalNoEscape
 
 // Apply runs a jq filter expression on JSON input and returns the result as JSON bytes.
 // If filter is empty, returns input unchanged.
@@ -54,8 +47,12 @@ func Apply(input []byte, filter string) ([]byte, error) {
 	}
 
 	if len(results) == 1 {
-		return marshalNoHTMLEscape(results[0]), nil
+		// gojq only emits JSON-compatible types, so encoding cannot fail.
+		b, _ := marshalNoHTMLEscape(results[0])
+		return b, nil
 	}
 
-	return marshalNoHTMLEscape(results), nil
+	// gojq only emits JSON-compatible types, so encoding cannot fail.
+	b, _ := marshalNoHTMLEscape(results)
+	return b, nil
 }
