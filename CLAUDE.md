@@ -3,7 +3,9 @@
 ## Quick Start
 ```
 jr configure --base-url https://yoursite.atlassian.net --token YOUR_API_TOKEN --username your@email.com
-jr configure --profile myprofile --delete   # remove a profile
+jr configure --test                        # test saved credentials
+jr configure --test --profile work         # test a specific profile
+jr configure --profile myprofile --delete  # remove a profile
 ```
 
 ## Key Patterns
@@ -23,6 +25,7 @@ jr configure --profile myprofile --delete   # remove a profile
 jr issue get --issueIdOrKey PROJ-123
 
 # Search issues (use the new JQL endpoint — the old /search is deprecated)
+# NOTE: "reconsile" is NOT a typo — it matches Jira's API spec. Do not "fix" it.
 jr search search-and-reconsile-issues-using-jql --jql "project = PROJ AND status = 'In Progress'" --fields "key,summary,status" --jq '[.issues[] | {key, summary: .fields.summary}]'
 
 # Create issue
@@ -75,11 +78,10 @@ jr project search --jq '[.values[] | {key, name}]'
 # Batch operations
 echo '[{"command":"issue get","args":{"issueIdOrKey":"PROJ-1"},"jq":".key"},{"command":"issue get","args":{"issueIdOrKey":"PROJ-2"},"jq":".key"}]' | jr batch
 
-# Watch for changes (NDJSON stream)
-jr watch --jql "project = PROJ AND updated > -5m" --interval 30s
-jr watch --jql "status changed" --interval 1m --preset triage
-jr watch --issue PROJ-123 --interval 10s          # watch a single issue
-jr watch --jql "project = PROJ" --max-events 10   # stop after 10 events
+# Watch for changes (NDJSON stream — always use --max-events in automated contexts)
+jr watch --jql "project = PROJ AND updated > -5m" --interval 30s --max-events 20
+jr watch --jql "status changed" --interval 1m --preset triage --max-events 10
+jr watch --issue PROJ-123 --interval 10s --max-events 5
 
 # Templates — create issues from predefined patterns
 jr template list                                   # list all templates
@@ -88,6 +90,7 @@ jr template apply bug-report --project PROJ --var summary="Login broken" --var s
 jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=PROJ-100
 jr template create my-template                     # create empty template scaffold
 jr template create my-template --from PROJ-123     # create template from existing issue
+jr template create my-template --from PROJ-123 --overwrite  # overwrite existing
 
 # Diff / Changelog — structured change history
 jr diff --issue PROJ-123                           # all changes
@@ -109,6 +112,20 @@ jr template list              # list available issue templates
 jr template show <name>       # show a template's variables and fields
 jr diff --issue <key>         # show changelog for an issue
 ```
+
+## Batch Command Names
+
+In `jr batch`, use `"resource verb"` strings. Notable: `"diff diff"` (not just `"diff"`), `"template apply"` (args use `name`/`project` + variable names as direct keys).
+
+```bash
+echo '[
+  {"command": "workflow transition", "args": {"issue": "PROJ-1", "to": "Done"}},
+  {"command": "diff diff", "args": {"issue": "PROJ-2", "since": "2h"}},
+  {"command": "template apply", "args": {"name": "bug-report", "project": "PROJ", "summary": "Login broken"}}
+]' | jr batch --input ops.json  # or pipe to stdin
+```
+
+Batch exit code = highest-severity code from all operations.
 
 ## Global Flags
 

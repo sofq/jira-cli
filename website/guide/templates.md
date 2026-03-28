@@ -178,12 +178,12 @@ jr template apply subtask \
 
 ### Batch Template Usage
 
-Combine templates with `jr batch` for bulk creation:
+Combine templates with `jr batch` for bulk creation. In batch mode, template variables are passed as direct keys in `args` (not as `--var key=value`):
 
 ```bash
 echo '[
-  {"command":"template apply","args":{"name":"subtask","project":"PROJ","var":["summary=Design API schema","parent=PROJ-200"]}},
-  {"command":"template apply","args":{"name":"subtask","project":"PROJ","var":["summary=Write integration tests","parent=PROJ-200"]}},
-  {"command":"template apply","args":{"name":"subtask","project":"PROJ","var":["summary=Update documentation","parent=PROJ-200"]}}
+  {"command":"template apply","args":{"name":"subtask","project":"PROJ","summary":"Design API schema","parent":"PROJ-200"}},
+  {"command":"template apply","args":{"name":"subtask","project":"PROJ","summary":"Write integration tests","parent":"PROJ-200"}},
+  {"command":"template apply","args":{"name":"subtask","project":"PROJ","summary":"Update documentation","parent":"PROJ-200"}}
 ]' | jr batch
 ```
