@@ -59,6 +59,23 @@ jr configure \
 
 This writes a config file to `~/.config/jr/config.json`.
 
+To validate your credentials before saving:
+
+```bash
+jr configure \
+  --base-url https://yourorg.atlassian.net \
+  --token YOUR_API_TOKEN \
+  --username your@email.com \
+  --test
+```
+
+To test an already-saved profile:
+
+```bash
+jr configure --test                  # test default profile
+jr configure --test --profile work   # test a specific profile
+```
+
 ### Bearer token
 
 For personal access tokens or service accounts that use bearer auth:
@@ -189,7 +206,7 @@ jr workflow move --issue PROJ-123 --to "In Progress" --assign me
 jr workflow comment --issue PROJ-123 --text "This is done"
 
 # Create an issue from flags (no raw JSON)
-jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High
+jr workflow create --project PROJ --type Bug --summary "Login broken" --description "Steps to reproduce..." --priority High --assign me
 
 # Link two issues by type name
 jr workflow link --from PROJ-1 --to PROJ-2 --type blocks

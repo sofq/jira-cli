@@ -106,7 +106,11 @@ Event types:
 
 Each event is one JSON line: `{"type":"updated","issue":{...}}`
 
-Use Ctrl-C (SIGINT) to stop gracefully. Auth errors (exit code 2) cause immediate termination; transient errors retry with backoff.
+Use Ctrl-C (SIGINT) to stop gracefully, or use `--max-events` to stop after a fixed number of events.
+
+::: warning
+Always use `--max-events` when calling from an automated/agent context — agents cannot send Ctrl-C to stop the stream.
+:::
 
 ## Token Efficiency
 
@@ -194,10 +198,12 @@ Errors are structured JSON on stderr. Branch on exit codes, not error messages:
 | Exit Code | Error Type | Meaning | Agent Action |
 |-----------|-----------|---------|--------------|
 | 0 | — | Success | Parse stdout as JSON |
-| 1 | — | General error | Log and report to user |
+| 1 | `connection_error` | Network/unknown error | Check connectivity, retry |
 | 2 | `auth_failed` | Auth failed (401/403) | Check token/credentials |
-| 3 | `not_found` | Not found (404/410) | Verify issue key/resource ID |
+| 3 | `not_found` | Not found (404) | Verify issue key/resource ID |
+| 3 | `gone` | Resource gone (410) | Resource was deleted; do not retry |
 | 4 | `validation_error` | Bad request (400/422) | Fix the request payload |
+| 4 | `client_error` | Other 4xx errors | Check request parameters |
 | 5 | `rate_limited` | Rate limited (429) | Wait `retry_after` seconds, then retry |
 | 6 | `conflict` | Conflict (409) | Fetch latest and retry |
 | 7 | `server_error` | Server error (5xx) | Retry with backoff |
@@ -209,8 +215,20 @@ Example error response:
   "error_type": "not_found",
   "status": 404,
   "message": "Issue Does Not Exist",
-  "hint": "",
   "request": {"method": "GET", "path": "/rest/api/3/issue/BAD-999"}
+}
+```
+
+Error JSON may also include `hint` (actionable recovery text) and `retry_after` (integer seconds for rate limits):
+
+```json
+{
+  "error_type": "rate_limited",
+  "status": 429,
+  "message": "Rate limit exceeded",
+  "hint": "You are being rate limited. Wait before retrying.",
+  "retry_after": 30,
+  "request": {"method": "GET", "path": "/rest/api/3/search/jql"}
 }
 ```
 
@@ -240,7 +258,7 @@ go install github.com/sofq/jira-cli@latest  # Go
 Token expired or misconfigured. Verify with:
 
 ```bash
-jr raw GET /rest/api/3/myself
+jr configure --test
 ```
 
 If this fails, generate a new API token at `https://id.atlassian.com/manage-profile/security/api-tokens`.

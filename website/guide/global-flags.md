@@ -118,7 +118,7 @@ Select a named output preset that expands to a predefined set of `--fields`. Pre
 | `agent` | key, summary, status, assignee, issuetype, priority |
 | `detail` | key, summary, status, assignee, issuetype, priority, description, comment, subtasks, issuelinks |
 | `triage` | key, summary, status, priority, created, updated, reporter |
-| `board` | key, summary, status, assignee, sprint, story_points, issuetype |
+| `board` | key, summary, status, assignee, sprint (customfield_10020), story points (customfield_10028), issuetype |
 
 ```bash
 # Quick agent-friendly view
@@ -279,6 +279,8 @@ jr search search-and-reconsile-issues-using-jql \
 # Short timeout for quick checks
 jr raw GET /rest/api/3/myself --timeout 5s
 ```
+
+---
 
 ### `--audit`
 

@@ -7,6 +7,8 @@ description: "How to use `jr`, the agent-friendly Jira CLI, to interact with Jir
 
 `jr` is a Jira Cloud CLI designed for AI agents. Every command returns structured JSON on stdout, errors as JSON on stderr, and semantic exit codes — so you can parse, branch, and retry reliably.
 
+**Sections:** [Setup](#setup) · [Discovering Commands](#discovering-commands) · [Common Operations](#common-operations) · [Token Efficiency](#token-efficiency) · [Batch Operations](#batch-operations) · [Error Handling](#error-handling) · [Global Flags](#global-flags) · [Common Agent Patterns](#common-agent-patterns) · [Security](#security) · [Troubleshooting](#troubleshooting)
+
 ## Setup
 
 If `jr` is not configured yet, help the user set it up:
@@ -32,6 +34,13 @@ export JR_AUTH_TOKEN=your-api-token
 jr configure --base-url https://work.atlassian.net --token TOKEN --profile work
 jr issue get --profile work --issueIdOrKey PROJ-1
 jr configure --profile work --delete   # remove a profile
+```
+
+```bash
+# Validate credentials before saving (or test an existing profile)
+jr configure --base-url https://yoursite.atlassian.net --token TOKEN --username your@email.com --test
+jr configure --test                     # test the default profile's saved credentials
+jr configure --test --profile work      # test a specific profile
 ```
 
 If you get exit code 2 (auth error), the token is likely expired or wrong. Ask the user to generate a new API token at https://id.atlassian.com/manage-profile/security/api-tokens.
@@ -61,6 +70,7 @@ jr issue get --issueIdOrKey PROJ-123
 ### Search issues with JQL
 ```bash
 # Use the search resource (not the deprecated /search endpoint)
+# NOTE: "reconsile" is NOT a typo — it matches Jira's API spec. Do not "fix" it to "reconcile".
 jr search search-and-reconsile-issues-using-jql \
   --jql "project = PROJ AND status = 'In Progress'" \
   --jq '[.issues[] | {key, summary: .fields.summary, status: .fields.status.name}]'
@@ -69,10 +79,20 @@ jr search search-and-reconsile-issues-using-jql \
 ### Create an issue
 ```bash
 # From flags (preferred — no raw JSON needed)
-jr workflow create --project PROJ --type Bug --summary "Login broken" --priority High --labels bug,urgent
+jr workflow create --project PROJ --type Bug --summary "Login broken" --description "Steps to reproduce..." --priority High --labels bug,urgent --assign me
 
 # From raw JSON (for advanced fields)
 jr issue create-issue --body '{"fields":{"project":{"key":"PROJ"},"summary":"Bug title","issuetype":{"name":"Bug"}}}'
+```
+
+### Edit an issue
+```bash
+jr issue edit --issueIdOrKey PROJ-123 --body '{"fields":{"summary":"Updated title"}}'
+```
+
+### Delete an issue
+```bash
+jr issue delete --issueIdOrKey PROJ-123
 ```
 
 ### Transition an issue (by status name)
@@ -81,6 +101,12 @@ jr issue create-issue --body '{"fields":{"project":{"key":"PROJ"},"summary":"Bug
 jr workflow transition --issue PROJ-123 --to "Done"
 jr workflow transition --issue PROJ-123 --to "In Progress"
 ```
+
+> **Note on `--to` flag:** Multiple commands use `--to` with different semantics:
+> - `workflow transition/move --to` = target **status** name (e.g. "Done", "In Progress")
+> - `workflow assign --to` = **person** (email, display name, "me", or "none")
+> - `workflow sprint --to` = **sprint** name (e.g. "Sprint 5")
+> - `workflow link --to` = target **issue** key (e.g. "PROJ-2")
 
 ### Transition + assign in one step
 ```bash
@@ -136,7 +162,9 @@ jr watch --issue PROJ-123 --interval 10s
 jr watch --jql "project = PROJ" --max-events 10
 ```
 
-Events: `initial` (first poll), `created`, `updated`, `removed`. Use Ctrl-C to stop.
+Events: `initial` (first poll), `created`, `updated`, `removed`.
+
+**Important:** Always use `--max-events` when calling from an automated/agent context — agents cannot send Ctrl-C (SIGINT) to stop the stream.
 
 ### Create issues from templates
 ```bash
@@ -154,6 +182,9 @@ jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=P
 
 # Create a user-defined template from an existing issue
 jr template create my-template --from PROJ-123
+
+# Overwrite an existing user-defined template
+jr template create my-template --from PROJ-123 --overwrite
 ```
 
 User-defined templates are stored in `~/.config/jr/templates/` as YAML files.
@@ -204,9 +235,6 @@ jr issue get --issueIdOrKey PROJ-123 --preset board    # key, summary, status, a
 # List all available presets
 jr preset list
 
-# List all available issue creation templates
-jr template list
-
 # --fields: tell Jira to return only these fields (server-side filtering)
 jr issue get --issueIdOrKey PROJ-123 --fields key,summary,status,assignee
 
@@ -222,6 +250,19 @@ jr project search --cache 5m --jq '[.values[].key]'
 
 **Always use `--preset` or `--fields` + `--jq`.** `--preset` gives you common field sets with zero effort. `--fields` reduces what Jira sends back, `--jq` shapes the output into exactly what you need.
 
+### Preset field reference
+
+| Preset | Server-side fields requested |
+|--------|------------------------------|
+| `agent` | `key,summary,status,assignee,issuetype,priority` |
+| `detail` | `key,summary,status,assignee,issuetype,priority,description,comment,subtasks,issuelinks` |
+| `triage` | `key,summary,status,priority,created,updated,reporter` |
+| `board` | `key,summary,status,assignee,customfield_10020,customfield_10028,issuetype` |
+
+The response is standard Jira JSON with `--fields` applied — the `fields` object contains only the requested fields. Use `--jq` to further shape the output (e.g., `--jq '{key, summary: .fields.summary}'`).
+
+User-defined presets can include a `jq` filter; store them in `~/.config/jr/presets.json`.
+
 ## Batch Operations
 
 When you need multiple Jira calls, use `jr batch` to run them in a single process:
@@ -234,7 +275,41 @@ echo '[
 ]' | jr batch
 ```
 
-Output is an array of results, each with `index`, `exit_code`, and `data` (or `error`). This avoids spawning N subprocesses.
+**Batch exit code:** The process exit code is the highest-severity exit code from all operations. If one op returns 0 and another returns 5 (rate_limited), the batch process exits with 5. Check individual `exit_code` fields for per-operation status.
+
+### Batch command names
+
+Batch uses `"resource verb"` strings matching `jr schema` output. Hand-written commands use their full resource+verb name:
+
+| CLI command | Batch `"command"` string |
+|---|---|
+| `jr workflow transition` | `"workflow transition"` |
+| `jr workflow assign` | `"workflow assign"` |
+| `jr workflow move` | `"workflow move"` |
+| `jr workflow create` | `"workflow create"` |
+| `jr workflow comment` | `"workflow comment"` |
+| `jr workflow link` | `"workflow link"` |
+| `jr workflow log-work` | `"workflow log-work"` |
+| `jr workflow sprint` | `"workflow sprint"` |
+| `jr template apply` | `"template apply"` |
+| `jr diff` | `"diff diff"` |
+| `jr issue get` | `"issue get"` |
+
+Note: `"diff diff"` is correct — the resource is `diff` and the verb is `diff`.
+
+Batch args use the flag names directly (without `--`), and `template apply` uses `name`/`project` plus variable names as direct keys (not `--var key=value`):
+
+```bash
+echo '[
+  {"command": "issue get", "args": {"issueIdOrKey": "PROJ-1"}, "jq": ".key"},
+  {"command": "workflow transition", "args": {"issue": "PROJ-2", "to": "Done"}},
+  {"command": "diff diff", "args": {"issue": "PROJ-3", "since": "2h"}},
+  {"command": "template apply", "args": {"name": "bug-report", "project": "PROJ", "summary": "Login broken", "severity": "High"}}
+]' | jr batch
+
+# Or read from a file
+jr batch --input ops.json
+```
 
 ## Error Handling
 
@@ -243,22 +318,52 @@ Errors are structured JSON on stderr. Branch on `exit_code` and `error_type`:
 | Exit code | error_type | Meaning | What to do |
 |-----------|-----------|---------|------------|
 | 0 | — | Success | Parse stdout as JSON |
-| 1 | — | General error | Log and report to user |
+| 1 | `connection_error` | Network/unknown error | Check connectivity, retry |
 | 2 | `auth_failed` | Auth failed (401/403) | Check token/credentials |
-| 3 | `not_found` | Resource not found (404/410) | Verify issue key / resource ID |
+| 3 | `not_found` | Resource not found (404) | Verify issue key / resource ID |
+| 3 | `gone` | Resource gone (410) | Resource was deleted; do not retry |
 | 4 | `validation_error` | Bad request (400/422/4xx) | Fix the request payload |
+| 4 | `client_error` | Other 4xx errors | Check request parameters |
 | 5 | `rate_limited` | Rate limited (429) | Wait `retry_after` seconds, then retry |
 | 6 | `conflict` | Conflict (409) | Retry or resolve conflict |
 | 7 | `server_error` | Server error (5xx) | Retry with backoff |
 
-Example error output:
+Error JSON includes optional `hint` (actionable recovery text) and `retry_after` (integer seconds for rate limits):
+
 ```json
 {
-  "error_type": "not_found",
-  "status": 404,
-  "message": "Issue Does Not Exist",
+  "error_type": "rate_limited",
+  "status": 429,
+  "message": "Rate limit exceeded",
+  "hint": "You are being rate limited. Wait before retrying.",
+  "retry_after": 30,
+  "request": {"method": "GET", "path": "/rest/api/3/search/jql"}
+}
+```
+
+```json
+{
+  "error_type": "auth_failed",
+  "status": 401,
+  "message": "Unauthorized",
+  "hint": "Run `jr configure --base-url <url> --token <token> --username <email>` to authenticate.",
   "request": {"method": "GET", "path": "/rest/api/3/issue/BAD-999"}
 }
+```
+
+### Retry pattern for agents
+
+For rate limits (exit 5) and server errors (exit 7), retry with backoff:
+
+```
+1. Run the command
+2. If exit code is 5 (rate_limited):
+   - Parse stderr JSON, read "retry_after" (integer seconds)
+   - Wait that many seconds, then retry (max 3 retries)
+3. If exit code is 7 (server_error):
+   - Retry with exponential backoff: wait 1s, 2s, 4s (max 3 retries)
+4. If exit code is 3 (not_found/gone) or 4 (validation_error):
+   - Do NOT retry — fix the request or report to user
 ```
 
 ## Global Flags
@@ -277,6 +382,68 @@ Example error output:
 | `--profile <name>` | use a named config profile |
 | `--audit` | enable audit logging for this invocation |
 | `--audit-file <path>` | audit log file path (implies --audit) |
+
+## Common Agent Patterns
+
+### Check-then-act: update if exists, create if not
+
+```bash
+# Try to get the issue; check exit code
+jr issue get --issueIdOrKey PROJ-123 --preset agent
+
+# If exit code 0 → issue exists, update it
+jr issue edit --issueIdOrKey PROJ-123 --body '{"fields":{"summary":"Updated"}}'
+
+# If exit code 3 (not_found) → create it
+jr workflow create --project PROJ --type Task --summary "New task"
+```
+
+### Bulk status transitions
+
+Search + batch to move all matching issues:
+
+```bash
+# Step 1: Find issues
+ISSUES=$(jr search search-and-reconsile-issues-using-jql \
+  --jql "project = PROJ AND status = 'In Progress' AND assignee = currentUser()" \
+  --jq '[.issues[].key]')
+
+# Step 2: Build batch payload and execute
+# (construct a JSON array of workflow transition ops from the keys)
+echo "$ISSUES" | jr raw POST /dev/null --dry-run  # use your language to build the array
+echo '[
+  {"command": "workflow transition", "args": {"issue": "PROJ-1", "to": "Done"}},
+  {"command": "workflow transition", "args": {"issue": "PROJ-2", "to": "Done"}}
+]' | jr batch
+```
+
+### Create epic with subtasks
+
+```bash
+# Step 1: Create the epic
+EPIC=$(jr workflow create --project PROJ --type Epic --summary "Auth redesign" \
+  --jq '.key')
+
+# Step 2: Create subtasks under the epic (use batch for efficiency)
+echo "[
+  {\"command\": \"workflow create\", \"args\": {\"project\": \"PROJ\", \"type\": \"Subtask\", \"summary\": \"Design auth flow\", \"parent\": \"$EPIC\"}},
+  {\"command\": \"workflow create\", \"args\": {\"project\": \"PROJ\", \"type\": \"Subtask\", \"summary\": \"Implement OAuth\", \"parent\": \"$EPIC\"}},
+  {\"command\": \"workflow create\", \"args\": {\"project\": \"PROJ\", \"type\": \"Subtask\", \"summary\": \"Write tests\", \"parent\": \"$EPIC\"}}
+]" | jr batch
+```
+
+### Validate before executing
+
+Use `--dry-run` to preview requests before making API calls:
+
+```bash
+# Preview what would be sent (no API call made)
+jr workflow create --project PROJ --type Bug --summary "Test" --dry-run
+# Returns: {"method":"POST","url":"...","body":{"fields":{...}}}
+
+# If the output looks correct, run without --dry-run
+jr workflow create --project PROJ --type Bug --summary "Test"
+```
 
 ## Security
 
@@ -310,7 +477,7 @@ Logs to `~/.config/jr/audit.log` (JSONL). Override path with `--audit-file`.
 
 ## Pagination
 
-`jr` auto-paginates by default — it fetches all pages and merges results into a single response. Use `--no-paginate` if you want to handle pagination manually or only need the first page.
+`jr` auto-paginates by default — it fetches all pages and merges results into a single response. Use `--no-paginate` if you only need the first page.
 
 ## Troubleshooting
 
@@ -320,9 +487,9 @@ brew install sofq/tap/jr          # Homebrew
 go install github.com/sofq/jira-cli@latest  # Go
 ```
 
-**Exit code 2 (auth)** — Token expired or misconfigured. Check with:
+**Exit code 2 (auth)** — Token expired or misconfigured. Test with:
 ```bash
-jr raw GET /rest/api/3/myself
+jr configure --test
 ```
 
 **Unknown command** — Command names are auto-generated from Jira's API and can be verbose. Use `jr schema` to find the right name, or use `jr raw` as an escape hatch.
@@ -330,3 +497,7 @@ jr raw GET /rest/api/3/myself
 **Large responses filling context** — Always use `--preset` or `--fields` + `--jq` to minimize output.
 
 **"--dry-run"** — Use this to preview what `jr` will send without making the API call. Useful for debugging request bodies.
+
+---
+
+> **Note:** The project root also contains `CLAUDE.md` with a compressed quick-reference for `jr`. If both files are loaded in context, prefer this SKILL.md as the authoritative reference — `CLAUDE.md` is a contributor-oriented summary.
