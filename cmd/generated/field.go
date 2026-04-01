@@ -370,6 +370,36 @@ var field_update_custom = &cobra.Command{
 	},
 }
 
+var field_get_project_associations = &cobra.Command{
+	Use:   "get-project-associations",
+	Short: "Get field project associations",
+	Long:  "Returns a [paginated](#pagination) list of project associations for the given custom field. Each association contains the ID of a project the field is associated with.\n\n**[Permissions](#permissions) required:** *Administer Jira* [global permission](https://confluence.atlassian.com/x/x4dKLg).",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.FromContext(cmd.Context())
+		if err != nil {
+			return err
+		}
+		fieldId, _ := cmd.Flags().GetString("fieldId")
+		if strings.TrimSpace(fieldId) == "" {
+			apiErr := &jerrors.APIError{
+				ErrorType: "validation_error",
+				Message:   "--fieldId must not be empty",
+			}
+			apiErr.WriteJSON(os.Stderr)
+			return &jerrors.AlreadyWrittenError{Code: jerrors.ExitValidation}
+		}
+		path := fmt.Sprintf("/rest/api/3/field/%s/association/project", url.PathEscape(fieldId))
+		query := client.QueryFromFlags(cmd, "startAt", "maxResults")
+
+		code := c.Do(cmd.Context(), "GET", path, query, nil)
+
+		if code != 0 {
+			return &jerrors.AlreadyWrittenError{Code: code}
+		}
+		return nil
+	},
+}
+
 var field_get_contexts_for = &cobra.Command{
 	Use:   "get-contexts-for",
 	Short: "Get custom field contexts",
@@ -2099,6 +2129,12 @@ func init() {
 	field_update_custom.MarkFlagRequired("fieldId")
 	field_update_custom.Flags().String("body", "", "request body (JSON string, @file, or - for stdin)")
 	fieldCmd.AddCommand(field_update_custom)
+
+	field_get_project_associations.Flags().String("fieldId", "", "The ID of the field, for example `customfield_10000`.")
+	field_get_project_associations.MarkFlagRequired("fieldId")
+	field_get_project_associations.Flags().String("startAt", "", "The index of the first item to return in a page of results (page offset).")
+	field_get_project_associations.Flags().String("maxResults", "", "The maximum number of items to return per page.")
+	fieldCmd.AddCommand(field_get_project_associations)
 
 	field_get_contexts_for.Flags().String("fieldId", "", "The ID of the custom field.")
 	field_get_contexts_for.MarkFlagRequired("fieldId")
