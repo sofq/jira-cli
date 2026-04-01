@@ -2570,6 +2570,37 @@ func AllSchemaOps() []SchemaOp {
 		},
 		{
 			Resource: "field",
+			Verb:     "get-project-associations",
+			Method:   "GET",
+			Path:     "/rest/api/3/field/{fieldId}/association/project",
+			Summary:  "Get field project associations",
+			HasBody:  false,
+			Flags: []SchemaFlag{
+				{
+					Name:        "fieldId",
+					Required:    true,
+					Type:        "string",
+					Description: "The ID of the field, for example `customfield_10000`.",
+					In:          "path",
+				},
+				{
+					Name:        "startAt",
+					Required:    false,
+					Type:        "integer",
+					Description: "The index of the first item to return in a page of results (page offset).",
+					In:          "query",
+				},
+				{
+					Name:        "maxResults",
+					Required:    false,
+					Type:        "integer",
+					Description: "The maximum number of items to return per page.",
+					In:          "query",
+				},
+			},
+		},
+		{
+			Resource: "field",
 			Verb:     "get-contexts-for",
 			Method:   "GET",
 			Path:     "/rest/api/3/field/{fieldId}/context",
