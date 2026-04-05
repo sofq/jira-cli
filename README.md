@@ -11,6 +11,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/sofq/jira-cli?style=for-the-badge&logo=github&logoColor=white&color=4f46e5)](https://github.com/sofq/jira-cli/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/sofq/jira-cli/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI&color=06b6d4)](https://github.com/sofq/jira-cli/actions/workflows/ci.yml)
 [![codecov](https://img.shields.io/codecov/c/github/sofq/jira-cli?style=for-the-badge&logo=codecov&logoColor=white&color=22d3ee)](https://codecov.io/gh/sofq/jira-cli)
+[![Security](https://img.shields.io/github/actions/workflow/status/sofq/jira-cli/security.yml?style=for-the-badge&logo=shieldsdotio&logoColor=white&label=Security&color=10b981)](https://github.com/sofq/jira-cli/security)
 [![License](https://img.shields.io/badge/License-Apache_2.0-f59e0b?style=for-the-badge)](LICENSE)
 
 </div>
@@ -72,7 +73,7 @@
 
 ## 📦 Install
 
-**Using `brew`** &nbsp; [![Homebrew](https://img.shields.io/badge/Homebrew-FBB040?style=flat-square&logo=homebrew&logoColor=white)](#)
+**Using `brew`** &nbsp; ![Homebrew](https://img.shields.io/badge/Homebrew-FBB040?style=flat-square&logo=homebrew&logoColor=white)
 
 ```bash
 brew install sofq/tap/jr
@@ -83,25 +84,25 @@ brew install sofq/tap/jr
 
 <br>
 
-**Using `npm`** &nbsp; [![npm](https://img.shields.io/badge/npm-CB3837?style=flat-square&logo=npm&logoColor=white)](#)
+**Using `npm`** &nbsp; ![npm](https://img.shields.io/badge/npm-CB3837?style=flat-square&logo=npm&logoColor=white)
 
 ```bash
 npm install -g jira-jr
 ```
 
-**Using `pip`** &nbsp; [![PyPI](https://img.shields.io/badge/pip-3776AB?style=flat-square&logo=pypi&logoColor=white)](#)
+**Using `pip`** &nbsp; ![PyPI](https://img.shields.io/badge/pip-3776AB?style=flat-square&logo=pypi&logoColor=white)
 
 ```bash
 pip install jira-jr
 ```
 
-**Using `scoop`** &nbsp; [![Scoop](https://img.shields.io/badge/Scoop-4FC08D?style=flat-square&logoColor=white)](#)
+**Using `scoop`** &nbsp; ![Scoop](https://img.shields.io/badge/Scoop-4FC08D?style=flat-square&logoColor=white)
 
 ```bash
 scoop bucket add sofq https://github.com/sofq/scoop-bucket && scoop install jr
 ```
 
-**Using `go install`** &nbsp; [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)](#)
+**Using `go install`** &nbsp; ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
 
 ```bash
 go install github.com/sofq/jira-cli@latest
@@ -117,7 +118,7 @@ go install github.com/sofq/jira-cli@latest
 
 ```bash
 # Configure credentials
-jr configure --base-url https://yourorg.atlassian.net --token YOUR_API_TOKEN
+jr configure --base-url https://yourorg.atlassian.net --token YOUR_API_TOKEN --username your@email.com
 
 # Verify the connection
 jr configure --test
@@ -204,9 +205,12 @@ jr raw POST /rest/api/3/search/jql --body '{"jql":"project=PROJ"}'
 | Exit | Meaning | Agent action |
 |------|---------|-------------|
 | 0 | OK | Parse stdout |
+| 1 | General error | Check error message |
 | 2 | Auth failed | Re-authenticate |
 | 3 | Not found | Check issue key |
+| 4 | Validation | Fix request fields |
 | 5 | Rate limited | Wait `retry_after` |
+| 6 | Conflict | Resolve and retry |
 | 7 | Server error | Retry with backoff |
 
 </details>
