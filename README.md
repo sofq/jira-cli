@@ -73,42 +73,13 @@
 
 ## 📦 Install
 
-**Using `brew`** &nbsp; ![Homebrew](https://img.shields.io/badge/Homebrew-FBB040?style=flat-square&logo=homebrew&logoColor=white)
-
 ```bash
-brew install sofq/tap/jr
+brew install sofq/tap/jr          # macOS / Linux
+npm install -g jira-jr            # Node
+pip install jira-jr               # Python
+scoop bucket add sofq https://github.com/sofq/scoop-bucket && scoop install jr  # Windows
+go install github.com/sofq/jira-cli@latest                                      # Go
 ```
-
-<details>
-<summary><b>More install methods</b></summary>
-
-<br>
-
-**Using `npm`** &nbsp; ![npm](https://img.shields.io/badge/npm-CB3837?style=flat-square&logo=npm&logoColor=white)
-
-```bash
-npm install -g jira-jr
-```
-
-**Using `pip`** &nbsp; ![PyPI](https://img.shields.io/badge/pip-3776AB?style=flat-square&logo=pypi&logoColor=white)
-
-```bash
-pip install jira-jr
-```
-
-**Using `scoop`** &nbsp; ![Scoop](https://img.shields.io/badge/Scoop-4FC08D?style=flat-square&logoColor=white)
-
-```bash
-scoop bucket add sofq https://github.com/sofq/scoop-bucket && scoop install jr
-```
-
-**Using `go install`** &nbsp; ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
-
-```bash
-go install github.com/sofq/jira-cli@latest
-```
-
-</details>
 
 <p align="right"><a href="#table-of-contents">↑ Back to top</a></p>
 
