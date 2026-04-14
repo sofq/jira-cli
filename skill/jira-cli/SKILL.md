@@ -1,6 +1,6 @@
 ---
 name: jira-cli
-description: "How to use `jr`, the agent-friendly Jira CLI, to interact with Jira Cloud. Use this skill whenever the user asks to work with Jira issues, projects, sprints, boards, or any Jira operation — searching issues, creating tickets, transitioning statuses, assigning work, querying project data, or automating Jira workflows. Also use when you see `jr` commands in the codebase or the user mentions Jira in the context of CLI tooling. Even if the user just says 'check my Jira tickets' or 'move this to Done', this skill applies."
+description: "Use when the user asks to interact with Jira — issues, projects, sprints, boards, workflows, tickets, JQL searches, or any Jira Cloud operation. Also use when you see `jr` CLI commands in the codebase. Covers setup, discovery, batch ops, templates, and error handling."
 ---
 
 # jr — Jira CLI for AI Agents
@@ -23,17 +23,22 @@ jr configure --base-url https://yoursite.atlassian.net --token YOUR_API_TOKEN --
 
 **Auth types:** `basic` (default, username + API token), `bearer`, `oauth2`
 
+> **Note:** `oauth2` profiles cannot be set up via `jr configure` — they must be configured manually in the config file (`~/.config/jr/config.json`) with `client_id`, `client_secret`, and `token_url`.
+
 **Config resolution order:** CLI flags > environment variables > config file
 
 ```bash
 # Environment variables (useful for CI/containers)
 export JR_BASE_URL=https://yoursite.atlassian.net
 export JR_AUTH_TOKEN=your-api-token
+export JR_AUTH_TYPE=basic        # auth type (basic, bearer, oauth2)
+export JR_AUTH_USER=your@email   # username for basic auth
+export JR_CONFIG_PATH=/path/to/config.json  # override config file location
 
 # Named profiles for multiple Jira instances
 jr configure --base-url https://work.atlassian.net --token TOKEN --profile work
 jr issue get --profile work --issueIdOrKey PROJ-1
-jr configure --profile work --delete   # remove a profile
+jr configure --profile work --delete   # remove a profile (--profile is required)
 ```
 
 ```bash
@@ -175,7 +180,7 @@ jr template list
 jr template show bug-report
 
 # Create issue from a template (no raw JSON needed)
-jr template apply bug-report --project PROJ --var summary="Login broken" --var severity=High
+jr template apply bug-report --project PROJ --var summary="Login broken" --var severity=High --assign me
 
 # Create a sub-task from template
 jr template apply subtask --project PROJ --var summary="Fix auth" --var parent=PROJ-100
@@ -217,9 +222,11 @@ jr raw POST /rest/api/3/some/endpoint --body '{"key":"value"}'
 jr raw POST /rest/api/3/some/endpoint --body @request.json
 # Read body from stdin (must use --body - explicitly)
 echo '{"key":"value"}' | jr raw POST /rest/api/3/some/endpoint --body -
+# Pass query parameters (repeatable)
+jr raw GET /rest/api/3/issue --query "fields=summary" --query "expand=changelog"
 ```
 
-**Note:** POST/PUT/PATCH require `--body`. Without it, `jr raw` will error instead of hanging on stdin.
+**Note:** POST/PUT/PATCH require `--body`. Without it, `jr raw` will error instead of hanging on stdin. Use `--query key=value` (repeatable) to append query parameters to any raw request.
 
 ## Token Efficiency
 
@@ -382,6 +389,10 @@ For rate limits (exit 5) and server errors (exit 7), retry with backoff:
 | `--profile <name>` | use a named config profile |
 | `--audit` | enable audit logging for this invocation |
 | `--audit-file <path>` | audit log file path (implies --audit) |
+| `--base-url <url>` | override base URL for this invocation |
+| `--auth-token <token>` | override auth token for this invocation |
+| `--auth-user <email>` | override auth username for this invocation |
+| `--auth-type <type>` | override auth type for this invocation |
 
 ## Common Agent Patterns
 
