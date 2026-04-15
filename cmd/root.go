@@ -229,14 +229,6 @@ func init() {
 	// Override --version template to output JSON.
 	rootCmd.SetVersionTemplate(`{"version":"{{.Version}}"}` + "\n")
 
-	// Register generated commands first, then replace version/workflow parents
-	// with hand-written ones while preserving generated subcommands.
-	generated.RegisterAll(rootCmd)
-
-	// Merge hand-written version/workflow with their generated subcommands.
-	mergeCommand(rootCmd, versionCmd)
-	mergeCommand(rootCmd, workflowCmd)
-
 	rootCmd.AddCommand(configureCmd)
 	rootCmd.AddCommand(rawCmd)
 	rootCmd.AddCommand(watchCmd)
@@ -272,6 +264,15 @@ func RootCommand() *cobra.Command {
 
 // Execute runs the root command and returns an exit code.
 func Execute() int {
+	// Register generated commands, then merge hand-written parents
+	// (version, workflow) with their generated subcommands.
+	// This runs here rather than in init() so that all package-level
+	// init() functions have completed and hand-written subcommands
+	// (e.g. workflow create) are already registered.
+	generated.RegisterAll(rootCmd)
+	mergeCommand(rootCmd, versionCmd)
+	mergeCommand(rootCmd, workflowCmd)
+
 	// Evict stale cache entries in the background so it never delays command execution.
 	go cache.Evict()
 
