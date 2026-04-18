@@ -338,7 +338,7 @@ func TestRootHelp_JSONForRoot(t *testing.T) {
 	rootCmd.HelpFunc()(rootCmd, nil)
 	w.Close()
 	os.Stdout = origOut
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 
 	if !strings.Contains(buf.String(), "hint") {
 		t.Errorf("expected hint in root help JSON, got: %s", buf.String())

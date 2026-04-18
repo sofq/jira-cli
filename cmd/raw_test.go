@@ -554,8 +554,8 @@ func TestRawCmd_StdinBody(t *testing.T) {
 	defer func() { os.Stdin = origStdin }()
 
 	go func() {
-		w.Write([]byte(`{"from":"piped"}`))
-		w.Close()
+		_, _ = w.Write([]byte(`{"from":"piped"}`))
+		_ = w.Close()
 	}()
 
 	var stdout, stderr bytes.Buffer
