@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
+	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -154,5 +156,270 @@ func TestMergeCommand_HandWrittenSubNotDuplicated(t *testing.T) {
 				t.Errorf("expected exactly 1 'shared' subcommand, got %d", count)
 			}
 		}
+	}
+}
+
+// --- PersistentPreRunE branch coverage ---
+
+func TestPreRunE_SkippedCommandReturnsNil(t *testing.T) {
+	cmd := &cobra.Command{Use: "configure"}
+	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
+		t.Fatalf("expected skip for 'configure', got %v", err)
+	}
+}
+
+func TestPreRunE_SkippedParentReturnsNil(t *testing.T) {
+	parent := &cobra.Command{Use: "completion"}
+	child := &cobra.Command{Use: "bash"}
+	parent.AddCommand(child)
+	if err := rootCmd.PersistentPreRunE(child, nil); err != nil {
+		t.Fatalf("expected skip via parent, got %v", err)
+	}
+}
+
+// makePreRunCmd attaches a disposable subcommand to rootCmd so persistent
+// flags are inherited. Caller must call cleanup() to detach.
+func makePreRunCmd(t *testing.T, name string) (*cobra.Command, func()) {
+	t.Helper()
+	sub := &cobra.Command{Use: name, Run: func(*cobra.Command, []string) {}}
+	rootCmd.AddCommand(sub)
+	sub.InheritedFlags()
+	sub.SetContext(t.Context())
+	return sub, func() { rootCmd.RemoveCommand(sub) }
+}
+
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	f := t.TempDir() + "/config.json"
+	if err := os.WriteFile(f, []byte(body), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return f
+}
+
+func TestPreRunE_ConfigResolveError(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, "not-json"))
+	cmd, cleanup := makePreRunCmd(t, "preruntest-cfg")
+	defer cleanup()
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected config resolve error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitError {
+		t.Fatalf("expected ExitError AlreadyWrittenError, got %v", err)
+	}
+}
+
+func TestPreRunE_MissingBaseURL(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	t.Setenv("JR_BASE_URL", "")
+	cmd, cleanup := makePreRunCmd(t, "preruntest-nourl")
+	defer cleanup()
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected missing base_url error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitError {
+		t.Fatalf("expected ExitError, got %v", err)
+	}
+}
+
+func TestPreRunE_UnknownPreset(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	cmd, cleanup := makePreRunCmd(t, "preruntest-badpreset")
+	defer cleanup()
+	_ = cmd.Flags().Parse([]string{"--preset", "does-not-exist"})
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected unknown preset error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitValidation {
+		t.Fatalf("expected ExitValidation, got %v", err)
+	}
+}
+
+func TestPreRunE_PresetApplied(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	cmd, cleanup := makePreRunCmd(t, "preruntest-preset")
+	defer cleanup()
+	// 'agent' is a builtin preset that sets fields and jq.
+	_ = cmd.Flags().Parse([]string{"--preset", "agent"})
+
+	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPreRunE_PolicyBlocksOperation(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"},"denied_operations":["preruntest-blocked"]}}}`))
+	cmd, cleanup := makePreRunCmd(t, "preruntest-blocked")
+	defer cleanup()
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected policy error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitValidation {
+		t.Fatalf("expected ExitValidation, got %v", err)
+	}
+}
+
+func TestPreRunE_InvalidPolicyConfig(t *testing.T) {
+	// allowed + denied both set → invalid policy.
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"},"allowed_operations":["*"],"denied_operations":["*"]}}}`))
+	cmd, cleanup := makePreRunCmd(t, "preruntest-badpol")
+	defer cleanup()
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected invalid policy error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitValidation {
+		t.Fatalf("expected ExitValidation, got %v", err)
+	}
+}
+
+func TestPreRunE_AuditEnabledDefaultPath(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	auditDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", auditDir)
+	t.Setenv("HOME", auditDir)
+
+	cmd, cleanup := makePreRunCmd(t, "preruntest-audit")
+	defer cleanup()
+	_ = cmd.Flags().Parse([]string{"--audit"})
+
+	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Invoke PostRunE to close the audit logger.
+	_ = rootCmd.PersistentPostRunE(cmd, nil)
+}
+
+func TestPreRunE_AuditOpenFailure(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	// Point audit-file to a directory (can't be opened as log file).
+	dir := t.TempDir()
+	cmd, cleanup := makePreRunCmd(t, "preruntest-audfail")
+	defer cleanup()
+	_ = cmd.Flags().Parse([]string{"--audit-file", dir})
+
+	// Should not return error — audit failure is non-fatal.
+	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
+		t.Fatalf("audit failure should be non-fatal, got %v", err)
+	}
+}
+
+func TestPostRunE_ClosesAuditLogger(t *testing.T) {
+	// Happy path is exercised by TestPreRunE_AuditEnabledDefaultPath.
+	// Here exercise the "no client in context" branch.
+	cmd := &cobra.Command{Use: "anything"}
+	cmd.SetContext(t.Context())
+	if err := rootCmd.PersistentPostRunE(cmd, nil); err != nil {
+		t.Fatalf("expected nil for no-client path, got %v", err)
+	}
+}
+
+// --- init() coverage: the custom HelpFunc ---
+
+func TestRootHelp_JSONForRoot(t *testing.T) {
+	var buf bytes.Buffer
+	origOut := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	rootCmd.HelpFunc()(rootCmd, nil)
+	w.Close()
+	os.Stdout = origOut
+	buf.ReadFrom(r)
+
+	if !strings.Contains(buf.String(), "hint") {
+		t.Errorf("expected hint in root help JSON, got: %s", buf.String())
+	}
+}
+
+func TestRootHelp_SubcommandWritesToStderr(t *testing.T) {
+	sub, cleanup := makePreRunCmd(t, "helpsubtest")
+	defer cleanup()
+	// Should not panic; writes to stderr.
+	rootCmd.HelpFunc()(sub, nil)
+}
+
+// TestExecute exercises the Execute() entry point happy path (--version).
+// The error return path is covered implicitly via rootCmd.Execute() failures
+// in PersistentPreRunE tests, which exercise the same error handling code
+// when PreRunE returns AlreadyWrittenError.
+func TestExecute(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"jr", "--version"}
+	// Another test may have called rootCmd.SetArgs(); clear it so cobra
+	// falls back to os.Args.
+	rootCmd.SetArgs(os.Args[1:])
+	defer rootCmd.SetArgs(nil)
+
+	code := Execute()
+	if code != 0 {
+		t.Errorf("expected exit 0 for --version, got %d", code)
+	}
+}
+
+// TestExecute_GenericError covers the non-AlreadyWrittenError return branch
+// in Execute() by passing an invalid value for a typed flag (duration parse
+// error) to a subcommand that doesn't gate on config.
+func TestExecute_GenericError(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	// 'schema' is a skipClientCommand, so PreRunE returns nil and cobra itself
+	// reports the flag parse error (plain error, not AlreadyWrittenError).
+	os.Args = []string{"jr", "schema", "--cache", "not-a-duration"}
+	rootCmd.SetArgs(os.Args[1:])
+	defer rootCmd.SetArgs(nil)
+
+	origStderr := os.Stderr
+	devnull, _ := os.Open(os.DevNull)
+	os.Stderr = devnull
+	defer func() { os.Stderr = origStderr; devnull.Close() }()
+
+	code := Execute()
+	if code == 0 {
+		t.Error("expected non-zero exit for invalid flag value")
+	}
+}
+
+// TestExecute_PropagatesAlreadyWrittenError verifies that Execute() returns the
+// embedded exit code when rootCmd.Execute() returns an AlreadyWrittenError.
+// Uses a subcommand wired to fail inside PersistentPreRunE.
+func TestExecute_PropagatesAlreadyWrittenError(t *testing.T) {
+	// Write a malformed config so PreRunE returns AlreadyWrittenError(ExitError).
+	cfg := t.TempDir() + "/config.json"
+	if err := os.WriteFile(cfg, []byte("not-json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JR_CONFIG_PATH", cfg)
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	// schema is a skipClientCommand, so won't hit PreRunE. Use a real command.
+	// myself is a generated command that requires a client, so PreRunE runs.
+	os.Args = []string{"jr", "myself", "get-current-user"}
+	rootCmd.SetArgs(os.Args[1:])
+	defer rootCmd.SetArgs(nil)
+
+	origStderr := os.Stderr
+	devnull, _ := os.Open(os.DevNull)
+	os.Stderr = devnull
+	defer func() { os.Stderr = origStderr; devnull.Close() }()
+
+	code := Execute()
+	if code == 0 {
+		t.Error("expected non-zero exit when config fails to parse")
 	}
 }

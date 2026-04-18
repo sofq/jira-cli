@@ -531,3 +531,43 @@ func TestRawCmd_BodyAtWithoutFilename(t *testing.T) {
 		t.Errorf("expected ExitValidation, got %d", aw.Code)
 	}
 }
+
+// TestRawCmd_StdinBody exercises --body - (explicit stdin).
+func TestRawCmd_StdinBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := make([]byte, 1024)
+		n, _ := r.Body.Read(body)
+		if !strings.Contains(string(body[:n]), "piped") {
+			t.Errorf("expected piped body, got %q", string(body[:n]))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = origStdin }()
+
+	go func() {
+		w.Write([]byte(`{"from":"piped"}`))
+		w.Close()
+	}()
+
+	var stdout, stderr bytes.Buffer
+	c := newTestClient(ts.URL, &stdout, &stderr)
+	ctx := client.NewContext(t.Context(), c)
+	cmd := &cobra.Command{Use: "raw"}
+	cmd.Flags().String("body", "", "")
+	cmd.Flags().StringArray("query", nil, "")
+	_ = cmd.Flags().Set("body", "-")
+	cmd.SetContext(ctx)
+
+	if err := runRaw(cmd, []string{"POST", "/test"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
