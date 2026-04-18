@@ -137,3 +137,114 @@ func TestMarshalNoEscape_Error(t *testing.T) {
 		t.Error("expected error marshaling a channel")
 	}
 }
+
+// --- schemaCmd.RunE coverage ---
+
+func TestSchemaCmd_Compact(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+
+	if err := schemaCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("default (compact) RunE failed: %v", err)
+	}
+}
+
+func TestSchemaCmd_CompactFlag(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+	_ = cmd.Flags().Set("compact", "true")
+
+	if err := schemaCmd.RunE(cmd, []string{"issue"}); err != nil {
+		t.Fatalf("--compact RunE failed: %v", err)
+	}
+}
+
+func TestSchemaCmd_ListFlag(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+	_ = cmd.Flags().Set("list", "true")
+
+	if err := schemaCmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("--list RunE failed: %v", err)
+	}
+}
+
+func TestSchemaCmd_ResourceOnly(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+
+	if err := schemaCmd.RunE(cmd, []string{"issue"}); err != nil {
+		t.Fatalf("RunE with resource failed: %v", err)
+	}
+}
+
+func TestSchemaCmd_ResourceNotFound(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+
+	err := schemaCmd.RunE(cmd, []string{"definitely-nonexistent-xyz"})
+	if err == nil {
+		t.Fatal("expected not_found error")
+	}
+}
+
+func TestSchemaCmd_ResourceVerb(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+
+	// Find a real resource+verb from the generated ops.
+	allOps := generated.AllSchemaOps()
+	if len(allOps) == 0 {
+		t.Skip("no generated ops available")
+	}
+	op := allOps[0]
+
+	if err := schemaCmd.RunE(cmd, []string{op.Resource, op.Verb}); err != nil {
+		t.Fatalf("RunE with resource+verb failed: %v", err)
+	}
+}
+
+func TestSchemaCmd_ResourceVerbNotFound(t *testing.T) {
+	cmd := &cobra.Command{Use: "schema"}
+	cmd.Flags().Bool("list", false, "")
+	cmd.Flags().Bool("compact", false, "")
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+
+	err := schemaCmd.RunE(cmd, []string{"issue", "definitely-nonexistent-verb"})
+	if err == nil {
+		t.Fatal("expected not_found error")
+	}
+}
+
+// --- schemaOutput --pretty path ---
+
+func TestSchemaOutput_Pretty(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	cmd.Flags().String("jq", "", "")
+	cmd.Flags().Bool("pretty", false, "")
+	_ = cmd.Flags().Set("pretty", "true")
+
+	data, _ := json.Marshal(map[string]string{"a": "b"})
+	if err := schemaOutput(cmd, data); err != nil {
+		t.Fatalf("schemaOutput with --pretty failed: %v", err)
+	}
+}

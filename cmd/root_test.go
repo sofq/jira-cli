@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	jrerrors "github.com/sofq/jira-cli/internal/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func TestRootHelp_NoHTMLEscaping(t *testing.T) {
@@ -178,14 +180,22 @@ func TestPreRunE_SkippedParentReturnsNil(t *testing.T) {
 }
 
 // makePreRunCmd attaches a disposable subcommand to rootCmd so persistent
-// flags are inherited. Caller must call cleanup() to detach.
+// flags are inherited. Caller must call cleanup() to detach and reset any
+// persistent-flag state that parent tests may have mutated.
 func makePreRunCmd(t *testing.T, name string) (*cobra.Command, func()) {
 	t.Helper()
 	sub := &cobra.Command{Use: name, Run: func(*cobra.Command, []string) {}}
 	rootCmd.AddCommand(sub)
 	sub.InheritedFlags()
 	sub.SetContext(t.Context())
-	return sub, func() { rootCmd.RemoveCommand(sub) }
+	return sub, func() {
+		rootCmd.RemoveCommand(sub)
+		// Reset persistent flags on rootCmd so subsequent tests see defaults.
+		rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		})
+	}
 }
 
 func writeConfig(t *testing.T, body string) string {
@@ -246,13 +256,78 @@ func TestPreRunE_UnknownPreset(t *testing.T) {
 
 func TestPreRunE_PresetApplied(t *testing.T) {
 	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+
+	// Install a user preset with both Fields and JQ so both override
+	// branches in PreRunE are exercised. Write to every platform path so this
+	// works regardless of OS.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("APPDATA", home)
+	body := []byte(`{"mypreset":{"fields":"key,summary","jq":".key"}}`)
+	for _, p := range []string{
+		home + "/jr/presets.json",
+		home + "/Library/Application Support/jr/presets.json",
+	} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	cmd, cleanup := makePreRunCmd(t, "preruntest-preset")
 	defer cleanup()
-	// 'agent' is a builtin preset that sets fields and jq.
-	_ = cmd.Flags().Parse([]string{"--preset", "agent"})
+	_ = cmd.Flags().Parse([]string{"--preset", "mypreset"})
 
 	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPreRunE_PresetLookupError(t *testing.T) {
+	t.Setenv("JR_CONFIG_PATH", writeConfig(t, `{"default_profile":"p","profiles":{"p":{"base_url":"http://x","auth":{"type":"basic","username":"u","token":"t"}}}}`))
+	writeBrokenUserPresets(t)
+
+	cmd, cleanup := makePreRunCmd(t, "preruntest-presetlookuperr")
+	defer cleanup()
+	_ = cmd.Flags().Parse([]string{"--preset", "anything"})
+
+	err := rootCmd.PersistentPreRunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected preset lookup error")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok || aw.Code != jrerrors.ExitError {
+		t.Fatalf("expected ExitError, got %v", err)
+	}
+}
+
+// writeBrokenUserPresets puts malformed JSON at every possible user-config
+// location so preset.Lookup / preset.List return an error regardless of OS.
+func writeBrokenUserPresets(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("APPDATA", home)
+
+	// Linux/XDG: $XDG_CONFIG_HOME/jr/presets.json
+	// macOS: $HOME/Library/Application Support/jr/presets.json
+	// Windows: %APPDATA%/jr/presets.json
+	paths := []string{
+		home + "/jr/presets.json",
+		home + "/Library/Application Support/jr/presets.json",
+	}
+	for _, p := range paths {
+		dir := filepath.Dir(p)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("not-json"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
