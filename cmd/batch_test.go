@@ -4027,16 +4027,24 @@ func TestRunBatch_MaxExitPropagated(t *testing.T) {
 func TestBatchTemplateApply_LookupError(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	// Pin XDG_CONFIG_HOME so os.UserConfigDir() resolves into tmpHome on Linux
+	// regardless of the runner's ambient XDG_CONFIG_HOME value.
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
 
-	// On macOS, os.UserConfigDir() returns $HOME/Library/Application Support.
-	// Create a regular file where the templates directory should be, so
-	// os.ReadDir fails with "not a directory".
-	templatesPath := filepath.Join(tmpHome, "Library", "Application Support", "jr", "templates")
-	if err := os.MkdirAll(filepath.Dir(templatesPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(templatesPath, []byte("not a dir"), 0o644); err != nil {
-		t.Fatal(err)
+	// os.UserConfigDir() is platform-specific: macOS → $HOME/Library/Application
+	// Support, Linux → $XDG_CONFIG_HOME (or $HOME/.config). Write the sentinel
+	// at both paths so os.ReadDir fails with "not a directory" regardless of OS.
+	for _, rel := range []string{
+		"Library/Application Support/jr/templates",
+		".config/jr/templates",
+	} {
+		path := filepath.Join(tmpHome, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("not a dir"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var stdout, stderr bytes.Buffer

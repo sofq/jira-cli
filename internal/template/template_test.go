@@ -160,6 +160,12 @@ func TestRenderFieldsEmptyOmitted(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	// Sandbox user templates to a clean empty dir so List() returns only
+	// builtin templates, regardless of whatever the runner's real HOME contains.
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return t.TempDir() }
+	defer func() { userTemplatesDir = origDir }()
+
 	data, err := List()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

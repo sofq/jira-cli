@@ -889,6 +889,9 @@ func TestRunTemplateShow_LookupConfigError(t *testing.T) {
 	// expected, so that os.ReadDir returns a non-ErrNotExist error.
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	// Pin XDG_CONFIG_HOME; on Linux os.UserConfigDir reads it first and would
+	// otherwise resolve outside tmpHome on CI runners.
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
 
 	// On macOS UserConfigDir returns $HOME/Library/Application Support.
 	// On Linux it returns $HOME/.config. Create a file at both possible paths
@@ -970,6 +973,7 @@ func TestRunTemplateCreate_NoClientWithFrom(t *testing.T) {
 func TestRunTemplateList_ListError(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
 	for _, rel := range []string{
 		"Library/Application Support/jr/templates",
 		".config/jr/templates",
@@ -1013,6 +1017,7 @@ func TestRunTemplateList_ListError(t *testing.T) {
 func TestRunTemplateApply_LookupError(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
 	for _, rel := range []string{
 		"Library/Application Support/jr/templates",
 		".config/jr/templates",
