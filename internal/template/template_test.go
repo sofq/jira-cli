@@ -474,6 +474,27 @@ func TestList_WithUserTemplate(t *testing.T) {
 	}
 }
 
+// TestLoadUserTemplates_MissingDir verifies that loadUserTemplates returns
+// (nil, nil) when the user templates directory does not exist — this is the
+// expected fast-path when a user has never created any templates.
+func TestLoadUserTemplates_MissingDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	missing := filepath.Join(tmpDir, "does-not-exist")
+
+	origDir := userTemplatesDir
+	userTemplatesDir = func() string { return missing }
+	defer func() { userTemplatesDir = origDir }()
+
+	// Lookup of a builtin should succeed (user dir missing is not an error).
+	_, found, err := Lookup("bug-report")
+	if err != nil {
+		t.Fatalf("unexpected error when user dir missing: %v", err)
+	}
+	if !found {
+		t.Fatal("expected builtin 'bug-report' to be found")
+	}
+}
+
 // TestLoadUserTemplates_UnreadableDir verifies that loadUserTemplates (via
 // Lookup) returns an error when the templates directory path exists but is not
 // a directory (e.g. it is a regular file). os.ReadDir on a file fails with an

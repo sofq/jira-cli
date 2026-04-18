@@ -4058,3 +4058,74 @@ func TestBatchTemplateApply_LookupError(t *testing.T) {
 		t.Errorf("expected ExitError for lookup failure, got %d", code)
 	}
 }
+
+// TestBatch_StdinStatError covers the branch where os.Stdin.Stat() fails
+// (replaced with a closed file descriptor).
+func TestBatch_StdinStatError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := batchCmd
+	cmd.ResetFlags()
+	cmd.Flags().String("input", "", "")
+	cmd.Flags().Int("max-batch", 50, "")
+	cmd.SetContext(ctx)
+
+	// Create a pipe and close it to force a stat error.
+	pr, pw, _ := os.Pipe()
+	pw.Close()
+	pr.Close()
+
+	oldStdin := os.Stdin
+	os.Stdin = pr
+	defer func() { os.Stdin = oldStdin }()
+
+	err := runBatch(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when stdin is closed")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
+	}
+}
+
+// TestBatch_StdinReadError covers io.ReadAll failure. A directory fd passes
+// Stat() (mode is ModeDir, not ModeCharDevice) but Read returns EISDIR.
+func TestBatch_StdinReadError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	c := newTestClient("http://should-not-be-called", &stdout, &stderr)
+
+	ctx := client.NewContext(t.Context(), c)
+	cmd := batchCmd
+	cmd.ResetFlags()
+	cmd.Flags().String("input", "", "")
+	cmd.Flags().Int("max-batch", 50, "")
+	cmd.SetContext(ctx)
+
+	dir, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open dir: %v", err)
+	}
+	defer dir.Close()
+
+	oldStdin := os.Stdin
+	os.Stdin = dir
+	defer func() { os.Stdin = oldStdin }()
+
+	err = runBatch(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when stdin is a directory")
+	}
+	aw, ok := err.(*jrerrors.AlreadyWrittenError)
+	if !ok {
+		t.Fatalf("expected AlreadyWrittenError, got %T", err)
+	}
+	if aw.Code != jrerrors.ExitValidation {
+		t.Errorf("expected ExitValidation, got %d", aw.Code)
+	}
+}

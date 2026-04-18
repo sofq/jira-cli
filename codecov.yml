@@ -1,0 +1,4 @@
+ignore:
+  - "cmd/generated/**"
+  - "cmd/gendocs/**"
+  - "main.go"
