@@ -14863,7 +14863,7 @@ func AllSchemaOps() []SchemaOp {
 					Name:        "draft",
 					Required:    false,
 					Type:        "boolean",
-					Description: "Whether draft or published workflows are returned. If not provided, both workflow types are returned.",
+					Description: "**Deprecated:** Whether draft or published workflows are returned. If not provided, both workflow types are returned. The 'draft' parameter will be removed from this API on [November 2, 2026](https://developer.atlassian.com/cloud/jira/platform/changelog/#CHANGE-3147).",
 					In:          "query",
 				},
 				{
