@@ -129,10 +129,56 @@ jr workflow assign --issue PROJ-123 --to "none"
 ```
 
 ### Add a comment
+
+**Important:** Jira Cloud REST v3 stores rich content as **ADF (Atlassian Document Format)** — a JSON document tree. **Markdown (`**bold**`, `- item`, `# h1`) and wiki markup (`*bold*`, `h1.`) are NOT parsed** by the API; they render as literal characters. There are two paths:
+
 ```bash
-# Plain text, auto-converted to ADF
+# Plain text — wrapped in a single ADF paragraph (no formatting, no markdown parsing).
+# Use this for simple one-line comments.
 jr workflow comment --issue PROJ-123 --text "This is done"
 ```
+
+```bash
+# Rich content — write ADF directly. REQUIRED for headings, lists, code blocks, panels, tables, links, colored text, etc.
+# Prefer --body @file.json for multi-node documents (shell-escaping large JSON is painful).
+jr issue add-comment --issueIdOrKey PROJ-123 --body @comment.adf.json
+```
+
+**Minimal ADF envelope:**
+```json
+{"body": {"type": "doc", "version": 1, "content": [ ...nodes... ]}}
+```
+
+**Rich comment example** (heading + marks + list + code block + panel):
+```json
+{"body": {"type": "doc", "version": 1, "content": [
+  {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Deploy summary"}]},
+  {"type": "paragraph", "content": [
+    {"type": "text", "text": "Shipped "},
+    {"type": "text", "text": "v1.4.2", "marks": [{"type": "strong"}]},
+    {"type": "text", "text": " at "},
+    {"type": "text", "text": "14:20 UTC", "marks": [{"type": "code"}]},
+    {"type": "text", "text": "."}
+  ]},
+  {"type": "bulletList", "content": [
+    {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "migrations applied"}]}]},
+    {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "smoke tests green"}]}]}
+  ]},
+  {"type": "codeBlock", "attrs": {"language": "bash"}, "content": [{"type": "text", "text": "kubectl rollout status deploy/api"}]},
+  {"type": "panel", "attrs": {"panelType": "info"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Monitor dashboards for the next hour."}]}]}
+]}}
+```
+
+**Common ADF node types:**
+
+| Category | Nodes |
+|----------|-------|
+| Block | `paragraph`, `heading` (`attrs.level` 1–6), `bulletList` / `orderedList` + `listItem`, `taskList` + `taskItem` (`attrs.state`: `TODO`\|`DONE`), `blockquote`, `codeBlock` (`attrs.language`), `panel` (`attrs.panelType`: `info`\|`warning`\|`success`\|`error`\|`note`), `rule`, `table` + `tableRow` + `tableHeader` / `tableCell`, `expand` (`attrs.title`) |
+| Inline | `text` with `marks` (`strong`, `em`, `strike`, `underline`, `code`, `textColor` with `attrs.color` hex, `link` with `attrs.href`), `emoji` (`attrs.shortName`), `status` (`attrs.text`, `attrs.color`), `mention` (`attrs.id`), `hardBreak` |
+
+Note: a few nodes (`status`, `expand`, `taskList`) depend on site edition / feature flags — if they render as blank, the target instance may not support them.
+
+**Converting markdown → ADF:** there is no built-in flag today. Either (a) hand-author ADF, (b) use an external converter (e.g. the Atlassian `md-to-adf` lib) and pipe the result into `--body @-`, or (c) fall back to `workflow comment` for plain text only.
 
 ### Link issues
 ```bash
@@ -294,7 +340,8 @@ Batch uses `"resource verb"` strings matching `jr schema` output. Hand-written c
 | `jr workflow assign` | `"workflow assign"` |
 | `jr workflow move` | `"workflow move"` |
 | `jr workflow create` | `"workflow create"` |
-| `jr workflow comment` | `"workflow comment"` |
+| `jr workflow comment` | `"workflow comment"` (plain text only) |
+| `jr issue add-comment` | `"issue add-comment"` (raw ADF for rich formatting) |
 | `jr workflow link` | `"workflow link"` |
 | `jr workflow log-work` | `"workflow log-work"` |
 | `jr workflow sprint` | `"workflow sprint"` |
