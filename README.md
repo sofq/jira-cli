@@ -192,10 +192,17 @@ jr raw POST /rest/api/3/search/jql --body '{"jql":"project=PROJ"}'
 
 ## 🤖 Agent Integration
 
-### Claude Code skill (included)
+### Claude Code plugin (included)
 
 ```bash
-cp -r skill/jira-cli ~/.claude/skills/    # global install
+/plugin marketplace add https://github.com/sofq/jira-cli
+/plugin install jira-cli@jira-cli
+```
+
+Or install the skill manually:
+
+```bash
+cp -r skills/jira-cli ~/.claude/skills/    # global install
 ```
 
 ### Any agent
@@ -208,7 +215,7 @@ Use `jr schema` to discover commands. Use --jq to reduce tokens.
 ```
 
 > [!NOTE]
-> See [`skill/jira-cli/SKILL.md`](skill/jira-cli/SKILL.md) for the full agent integration guide with patterns, error handling, and token optimization strategies.
+> See [`skills/jira-cli/SKILL.md`](skills/jira-cli/SKILL.md) for the full agent integration guide with patterns, error handling, and token optimization strategies.
 
 <p align="right"><a href="#table-of-contents">↑ Back to top</a></p>
 

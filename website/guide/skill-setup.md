@@ -7,19 +7,39 @@ The skill follows the [Agent Skills](https://agentskills.io) open standard, supp
 ## Download the Skill
 
 ```bash
-curl -sL https://raw.githubusercontent.com/sofq/jira-cli/main/skill/jira-cli/SKILL.md \
+curl -sL https://raw.githubusercontent.com/sofq/jira-cli/main/skills/jira-cli/SKILL.md \
   -o SKILL.md
 ```
 
 Or copy from a local `jr` install:
 
 ```bash
-cp $(brew --prefix jr)/share/jr/skill/jira-cli/SKILL.md SKILL.md
+cp $(brew --prefix jr)/share/jr/skills/jira-cli/SKILL.md SKILL.md
 ```
 
 ## Setup by Tool
 
 ### Claude Code
+
+**Plugin install (recommended)** — installs the skill and auto-updates with new releases:
+
+```
+/plugin marketplace add https://github.com/sofq/jira-cli
+/plugin install jira-cli@jira-cli
+```
+
+Grant permission to run `jr` once after install:
+
+```json
+// .claude/settings.json
+{
+  "permissions": {
+    "allow": ["Bash(jr *)"]
+  }
+}
+```
+
+**Manual install** — copy the skill file into Claude's skills directory:
 
 | Scope | Path |
 |-------|------|
@@ -29,17 +49,6 @@ cp $(brew --prefix jr)/share/jr/skill/jira-cli/SKILL.md SKILL.md
 ```bash
 mkdir -p .claude/skills/jira-cli
 cp SKILL.md .claude/skills/jira-cli/SKILL.md
-```
-
-Grant permission to run `jr`:
-
-```json
-// .claude/settings.json
-{
-  "permissions": {
-    "allow": ["Bash(jr *)"]
-  }
-}
 ```
 
 Claude loads the skill automatically when you mention Jira, or invoke it directly with `/jira-cli`.

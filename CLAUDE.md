@@ -17,6 +17,7 @@ jr configure --profile myprofile --delete  # remove a profile
 - **Use `--fields`** to limit Jira response fields: `jr issue get --issueIdOrKey PROJ-1 --fields key,summary,status`
 - **Use `jr batch`** to run multiple operations in one call
 - **Use `jr raw`** for any API endpoint not covered by generated commands
+- **Jira Cloud v3 uses ADF, not markdown.** Any rich-content field (comment body, issue description) must be an ADF JSON document. Markdown (`**bold**`, `- item`, `# h1`) and wiki markup (`*bold*`, `h1.`) are NOT parsed — they render as literal characters. `jr workflow comment --text` wraps your string in a single ADF paragraph; for anything richer, use `jr issue add-comment --body <adf-json>` (see examples below).
 
 ## Common Operations
 
@@ -43,7 +44,7 @@ jr workflow assign --issue PROJ-123 --to "none"
 # Transition + optional assign in one call
 jr workflow move --issue PROJ-123 --to "In Progress" --assign me
 
-# Add comment (plain text, auto-converted to ADF)
+# Add comment (plain text only — wrapped in a single ADF paragraph; markdown/wiki syntax is NOT parsed)
 jr workflow comment --issue PROJ-123 --text "This is done"
 
 # Create issue from flags (no raw JSON)
@@ -64,8 +65,36 @@ jr issue edit --issueIdOrKey PROJ-123 --body '{"fields":{"summary":"Updated titl
 # Delete issue
 jr issue delete --issueIdOrKey PROJ-123
 
-# Add comment (raw API — prefer `workflow comment` above)
+# Add comment (raw ADF — REQUIRED for any rich formatting: headings, lists, code blocks, panels, tables, links, etc.)
+# Jira Cloud REST v3 accepts ONLY ADF (JSON). Markdown and wiki markup are NOT parsed — they render as literal text.
+# Use `--body @/path/to/file.json` for multi-node documents.
 jr issue add-comment --issueIdOrKey PROJ-123 --body '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"text":"A comment","type":"text"}]}]}}'
+
+# Rich comment example — headings, bold/italic/code marks, bullet list, code block, info panel
+jr issue add-comment --issueIdOrKey PROJ-123 --body '{"body":{"type":"doc","version":1,"content":[
+  {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Deploy summary"}]},
+  {"type":"paragraph","content":[
+    {"type":"text","text":"Shipped "},
+    {"type":"text","text":"v1.4.2","marks":[{"type":"strong"}]},
+    {"type":"text","text":" at "},
+    {"type":"text","text":"14:20 UTC","marks":[{"type":"code"}]},
+    {"type":"text","text":"."}
+  ]},
+  {"type":"bulletList","content":[
+    {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"migrations applied"}]}]},
+    {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"smoke tests green"}]}]}
+  ]},
+  {"type":"codeBlock","attrs":{"language":"bash"},"content":[{"type":"text","text":"kubectl rollout status deploy/api"}]},
+  {"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"Monitor dashboards for the next hour."}]}]}
+]}}'
+
+# Common ADF node types to know:
+#   Block:   paragraph, heading (level 1-6), bulletList/orderedList + listItem,
+#            taskList + taskItem (attrs.state: TODO|DONE), blockquote, codeBlock (attrs.language),
+#            panel (attrs.panelType: info|warning|success|error|note), rule, table + tableRow + tableHeader/tableCell,
+#            expand (attrs.title)
+#   Inline:  text (with marks: strong, em, strike, underline, code, textColor, link),
+#            emoji (attrs.shortName), status (attrs.text, attrs.color), mention, hardBreak
 
 # Raw API call (method is positional, not a flag; POST/PUT/PATCH require --body)
 jr raw GET /rest/api/3/myself

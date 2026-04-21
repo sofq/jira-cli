@@ -1,0 +1,8 @@
+{
+  "name": "jira-cli",
+  "description": "Agent-friendly Jira CLI with JSON output, semantic exit codes, JQL search, batch operations, and workflow commands.",
+  "author": {
+    "name": "sofq"
+  },
+  "homepage": "https://github.com/sofq/jira-cli"
+}
