@@ -82,6 +82,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         id: pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+          token: ${{ secrets.GH_PAT_JIRA }}
         with:
           commit-message: "deps: update Jira OpenAPI spec"
           title: "deps: update Jira OpenAPI spec"
@@ -102,4 +103,4 @@ jobs:
         if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
         run: gh pr merge "${{ steps.pr.outputs.pull-request-url }}" --auto --squash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT_JIRA }}
