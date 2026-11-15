@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/itchyny/gojq v0.12.20
-	github.com/pb33f/libopenapi v0.42.3
+	github.com/pb33f/libopenapi v0.42.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
 	github.com/tidwall/pretty v1.2.2
@@ -17,7 +17,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/itchyny/timefmt-go v0.1.9 // indirect
 	github.com/pb33f/go-yaml v0.1.1 // indirect
-	github.com/pb33f/jsonpath v0.8.4 // indirect
+	github.com/pb33f/jsonpath v0.8.5 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 )

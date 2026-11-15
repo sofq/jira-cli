@@ -13,10 +13,10 @@ github.com/itchyny/timefmt-go v0.1.9 h1:J4j1qMqZbg5jycwT6zIKfRgZ9aqqMxqanaI6Rr9E
 github.com/itchyny/timefmt-go v0.1.9/go.mod h1:5E46Q+zj7vbTgWY8o5YkMeYb4I6GeWLFnetPy5oBrAI=
 github.com/pb33f/go-yaml v0.1.1 h1:yWGmhVdwzionRnSc/hEJwcfq6PaZL2QdYzyReXBbX7Q=
 github.com/pb33f/go-yaml v0.1.1/go.mod h1:QvWdkHP5VjFYAeHMQUkaPQqREaQnBNOXmWzAjNrnSdo=
-github.com/pb33f/jsonpath v0.8.4 h1:Yx7fxsKl8scgERL22WhKDs2c6gYNNUonPSWEG8Y194s=
-github.com/pb33f/jsonpath v0.8.4/go.mod h1:eO6mgdhw5RgzCxm/bXTi75VUs0/cCYJzdGjMCCUEI6M=
-github.com/pb33f/libopenapi v0.42.3 h1:0VXnFgz04LtWjIsmCqGYA5E2Mx0DOZcOTjy5KHYw88k=
-github.com/pb33f/libopenapi v0.42.3/go.mod h1:IlfeXtmcY38KEnGJ4OMWFA8I62BCNamuQa8omLnk6R0=
+github.com/pb33f/jsonpath v0.8.5 h1:wsbwJbz6MPUTy5fAtiIlOyQb3oblaa5M7qjtdz6orPw=
+github.com/pb33f/jsonpath v0.8.5/go.mod h1:eO6mgdhw5RgzCxm/bXTi75VUs0/cCYJzdGjMCCUEI6M=
+github.com/pb33f/libopenapi v0.42.5 h1:KXQ9kb8tCR9W3HWksYZMi5rvcdi3DmCIJIuZkcePcJc=
+github.com/pb33f/libopenapi v0.42.5/go.mod h1:fzngW6SBMO7ggf7prvQlEB3qY6Rqu5dTGMbUZcy4Ybg=
 github.com/pb33f/ordered-map/v2 v2.3.2 h1:wDyaZ2Pv9QLh64X4utCeD5Zoi9nIv2aW3lwv172O5PQ=
 github.com/pb33f/ordered-map/v2 v2.3.2/go.mod h1:1OhFrXu3OYw3kM+FXF+Ug3ugmmZ9LE8z0JfQMLvtV0w=
 github.com/pb33f/testify v0.1.1 h1:mnHe7uxKt8dyNYEGUspow72VjD264DB5rOJq4bz5tJw=
@@ -34,8 +34,8 @@ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD
 github.com/tidwall/pretty v1.2.2 h1:dz1jrRuE7or/74V490B4/GP1pZm5WKlt2bgCP5A83w8=
 github.com/tidwall/pretty v1.2.2/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
-golang.org/x/sync v0.24.0 h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA=
-golang.org/x/sync v0.24.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=
+golang.org/x/sync v0.25.0 h1:dJnifr0nMV8/SBnBvdo4eSGGnrc3O4FFx6IqvtLcmRs=
+golang.org/x/sync v0.25.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
